@@ -17,6 +17,10 @@ async fn main() {
 base_url = "https://openrouter.ai/api/v1"
 model = "google/gemini-3-flash-preview"
 
+[worker]
+# Maximum number of files to process per task (optional, defaults to 5)
+max_files_per_task = 5
+
 [[rules]]
 # Name of the rule (required)
 name = ""

@@ -4,6 +4,8 @@ use std::fs;
 #[derive(Deserialize)]
 pub struct Config {
     pub llm: LlmConfig,
+    #[serde(default)]
+    pub worker: WorkerConfig,
     pub rules: Vec<crate::rule::body::RuleBody>,
 }
 
@@ -11,6 +13,24 @@ pub struct Config {
 pub struct LlmConfig {
     pub base_url: String,
     pub model: String,
+}
+
+#[derive(Deserialize)]
+pub struct WorkerConfig {
+    #[serde(default = "default_max_files_per_task")]
+    pub max_files_per_task: usize,
+}
+
+impl Default for WorkerConfig {
+    fn default() -> Self {
+        Self {
+            max_files_per_task: default_max_files_per_task(),
+        }
+    }
+}
+
+fn default_max_files_per_task() -> usize {
+    5
 }
 
 impl Config {
