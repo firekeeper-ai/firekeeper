@@ -12,6 +12,35 @@ async fn main() {
     let cli = Cli::parse();
     
     match &cli.command {
+        Commands::Init(args) => {
+            const DEFAULT_CONFIG: &str = r#"[llm]
+base_url = "https://openrouter.ai/api/v1"
+model = "google/gemini-3-flash-preview"
+
+[[rules]]
+# Name of the rule (required)
+name = ""
+# Brief description of the rule (optional, defaults to empty string)
+description = ""
+# Detailed instructions for the LLM on how to check this rule (required)
+instruction = """
+"""
+# Glob patterns to match files this rule applies to (optional, defaults to ["**/*"])
+scope = ["**/*"]
+"#;
+            
+            if std::path::Path::new(&args.config).exists() {
+                eprintln!("Error: {} already exists", args.config);
+                std::process::exit(1);
+            }
+            
+            std::fs::write(&args.config, DEFAULT_CONFIG).unwrap_or_else(|e| {
+                eprintln!("Error writing config: {}", e);
+                std::process::exit(1);
+            });
+            
+            println!("Created {}", args.config);
+        }
         Commands::Review(args) => {
             let config = Config::load(&args.config).unwrap_or_else(|e| {
                 eprintln!("Failed to load config: {}", e);

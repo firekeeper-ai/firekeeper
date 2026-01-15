@@ -9,8 +9,17 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
+    /// Initialize a default firekeeper.toml config file
+    Init(InitArgs),
     /// Review code changes against rules
     Review(ReviewArgs),
+}
+
+#[derive(Parser)]
+pub struct InitArgs {
+    /// Path to config file
+    #[arg(long, default_value = "firekeeper.toml")]
+    pub config: String,
 }
 
 #[derive(Parser)]
@@ -19,7 +28,7 @@ pub struct ReviewArgs {
     #[arg(long, default_value = "HEAD~1..HEAD")]
     pub diff: String,
     
-    /// Path to config file (JSON/TOML)
+    /// Path to config file
     #[arg(long, default_value = "firekeeper.toml")]
     pub config: String,
     
