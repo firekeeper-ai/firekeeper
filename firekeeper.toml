@@ -1,0 +1,36 @@
+[[rules]]
+name = "No Code Duplication"
+description = "Prevent duplicate code across files"
+instruction = """
+Check if the modified content duplicates code from other files.
+Flag any duplicated logic, functions, or significant code blocks.
+"""
+scope = ["**/*"]
+
+[[rules]]
+name = "Documentation Sync"
+description = "Ensure documentation is updated with code changes"
+instruction = """
+When code is modified, verify that related documentation (README.md, docs/) in the same or parent directories is updated accordingly.
+Also ensure struct/class/method doc comments are updated to match code changes.
+Flag if documentation appears outdated.
+"""
+scope = ["**/*"]
+
+[[rules]]
+name = "No Magic Numbers"
+description = "Prevent hardcoded numeric literals"
+instruction = """
+Reject magic numbers (unexplained numeric literals).
+All numbers except 0, 1, -1 should be named constants with clear meaning.
+"""
+scope = ["**/*"]
+
+[[rules]]
+name = "No Hardcoded Credentials"
+description = "Prevent credential leaks"
+instruction = """
+Reject hardcoded credentials including API keys, passwords, tokens, and secrets.
+Email addresses and contact information are allowed.
+"""
+scope = ["**/*"]
