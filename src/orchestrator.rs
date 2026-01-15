@@ -8,15 +8,24 @@ pub async fn orchestrate_and_run(
     rules: &[RuleBody],
     diff_range: &str,
     max_files_per_task: usize,
+    base_url: &str,
+    api_key: &str,
+    model: &str,
 ) {
     let changed_files = get_changed_files(diff_range);
     let tasks = orchestrate(rules, &changed_files, max_files_per_task);
     
     let futures: Vec<_> = tasks.into_iter()
-        .map(|(rule, files)| worker::worker(rule, files))
+        .map(|(rule, files)| worker::worker(rule, files, base_url, api_key, model))
         .collect();
     
-    join_all(futures).await;
+    let results = join_all(futures).await;
+    
+    for (i, result) in results.iter().enumerate() {
+        if let Err(e) = result {
+            eprintln!("Task {} failed: {}", i, e);
+        }
+    }
 }
 
 fn orchestrate<'a>(

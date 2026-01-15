@@ -61,7 +61,14 @@ scope = ["**/*"]
             println!("rules loaded: {}", config.rules.len());
             println!("max_files_per_task: {}", config.worker.max_files_per_task);
             
-            orchestrator::orchestrate_and_run(&config.rules, &args.diff, config.worker.max_files_per_task).await;
+            orchestrator::orchestrate_and_run(
+                &config.rules,
+                &args.diff,
+                config.worker.max_files_per_task,
+                &config.llm.base_url,
+                &args.api_key,
+                &config.llm.model,
+            ).await;
         }
     }
 }
