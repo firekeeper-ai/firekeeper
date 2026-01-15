@@ -1,0 +1,139 @@
+use crate::rule::body::RuleBody;
+use crate::worker;
+use futures::future::join_all;
+use globset::{Glob, GlobSetBuilder};
+use std::process::Command;
+
+pub async fn orchestrate_and_run(
+    rules: &[RuleBody],
+    diff_range: &str,
+    max_files_per_task: usize,
+) {
+    let changed_files = get_changed_files(diff_range);
+    let tasks = orchestrate(rules, &changed_files, max_files_per_task);
+    
+    let futures: Vec<_> = tasks.into_iter()
+        .map(|(rule, files)| worker::worker(rule, files))
+        .collect();
+    
+    join_all(futures).await;
+}
+
+fn orchestrate<'a>(
+    rules: &'a [RuleBody],
+    changed_files: &[String],
+    max_files_per_task: usize,
+) -> Vec<(&'a RuleBody, Vec<String>)> {
+    rules.iter()
+        .flat_map(|rule| {
+            let matched_files = filter_files_by_scope(rule, changed_files);
+            if matched_files.is_empty() {
+                return vec![];
+            }
+            
+            split_files(&matched_files, max_files_per_task)
+                .into_iter()
+                .map(|chunk| (rule, chunk))
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+fn get_changed_files(diff_range: &str) -> Vec<String> {
+    let output = Command::new("git")
+        .args(["diff", "--name-only", diff_range])
+        .output()
+        .expect("Failed to execute git diff");
+    
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(|s| s.to_string())
+        .collect()
+}
+
+fn filter_files_by_scope(rule: &RuleBody, files: &[String]) -> Vec<String> {
+    let mut builder = GlobSetBuilder::new();
+    for pattern in &rule.scope {
+        match Glob::new(pattern) {
+            Ok(glob) => builder.add(glob),
+            Err(e) => {
+                eprintln!("Invalid glob pattern '{}' in rule '{}': {}", pattern, rule.name, e);
+                continue;
+            }
+        };
+    }
+    
+    let globset = match builder.build() {
+        Ok(gs) => gs,
+        Err(e) => {
+            eprintln!("Failed to build globset for rule '{}': {}", rule.name, e);
+            return vec![];
+        }
+    };
+    
+    files.iter()
+        .filter(|f| globset.is_match(f))
+        .cloned()
+        .collect()
+}
+
+fn split_files(files: &[String], max_per_task: usize) -> Vec<Vec<String>> {
+    if files.is_empty() {
+        return vec![];
+    }
+    
+    let total = files.len();
+    let num_chunks = (total + max_per_task - 1) / max_per_task;
+    let chunk_size = (total + num_chunks - 1) / num_chunks;
+    
+    files.chunks(chunk_size)
+        .map(|chunk| chunk.to_vec())
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_split_files_empty() {
+        let files: Vec<String> = vec![];
+        let result = split_files(&files, 5);
+        assert_eq!(result, Vec::<Vec<String>>::new());
+    }
+
+    #[test]
+    fn test_split_files_less_than_max() {
+        let files: Vec<String> = vec!["a".into(), "b".into(), "c".into()];
+        let result = split_files(&files, 5);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].len(), 3);
+    }
+
+    #[test]
+    fn test_split_files_exact_max() {
+        let files: Vec<String> = vec!["a".into(), "b".into(), "c".into(), "d".into(), "e".into()];
+        let result = split_files(&files, 5);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].len(), 5);
+    }
+
+    #[test]
+    fn test_split_files_balanced() {
+        let files: Vec<String> = (0..7).map(|i| i.to_string()).collect();
+        let result = split_files(&files, 5);
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].len(), 4);
+        assert_eq!(result[1].len(), 3);
+    }
+
+    #[test]
+    fn test_split_files_multiple_chunks() {
+        let files: Vec<String> = (0..13).map(|i| i.to_string()).collect();
+        let result = split_files(&files, 5);
+        assert_eq!(result.len(), 3);
+        assert_eq!(result[0].len(), 5);
+        assert_eq!(result[1].len(), 4);
+        assert_eq!(result[2].len(), 4);
+    }
+}

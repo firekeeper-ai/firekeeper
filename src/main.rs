@@ -1,7 +1,9 @@
 mod agent;
 mod cli;
 mod config;
+mod orchestrator;
 mod rule;
+mod worker;
 
 use clap::Parser;
 use cli::{Cli, Commands};
@@ -57,6 +59,9 @@ scope = ["**/*"]
             println!("model: {}", config.llm.model);
             println!("api_key: {}...", &args.api_key[..args.api_key.len().min(8)]);
             println!("rules loaded: {}", config.rules.len());
+            println!("max_files_per_task: {}", config.worker.max_files_per_task);
+            
+            orchestrator::orchestrate_and_run(&config.rules, &args.diff, config.worker.max_files_per_task).await;
         }
     }
 }
