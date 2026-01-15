@@ -35,4 +35,8 @@ pub struct ReviewArgs {
     /// OpenRouter API key
     #[arg(long, env = "OPENAI_API_KEY")]
     pub api_key: String,
+    
+    /// Dry run: only show tasks without executing workers
+    #[arg(long)]
+    pub dry_run: bool,
 }

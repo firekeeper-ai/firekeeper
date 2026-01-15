@@ -11,9 +11,18 @@ pub async fn orchestrate_and_run(
     base_url: &str,
     api_key: &str,
     model: &str,
+    dry_run: bool,
 ) {
     let changed_files = get_changed_files(diff_range);
     let tasks = orchestrate(rules, &changed_files, max_files_per_task);
+    
+    if dry_run {
+        println!("\nDry run - {} tasks to execute:", tasks.len());
+        for (i, (rule, files)) in tasks.iter().enumerate() {
+            println!("  Task {}: rule='{}', files={:?}", i, rule.name, files);
+        }
+        return;
+    }
     
     let futures: Vec<_> = tasks.into_iter()
         .map(|(rule, files)| worker::worker(rule, files, base_url, api_key, model))

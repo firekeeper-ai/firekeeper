@@ -68,6 +68,7 @@ scope = ["**/*"]
                 &config.llm.base_url,
                 &args.api_key,
                 &config.llm.model,
+                args.dry_run,
             ).await;
         }
     }
