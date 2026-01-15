@@ -1,3 +1,4 @@
+mod agent;
 mod cli;
 mod config;
 mod rule;
@@ -6,7 +7,8 @@ use clap::Parser;
 use cli::{Cli, Commands};
 use config::Config;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let cli = Cli::parse();
     
     match &cli.command {
@@ -18,6 +20,9 @@ fn main() {
             
             println!("diff: {}", args.diff);
             println!("config: {}", args.config);
+            println!("base_url: {}", config.llm.base_url);
+            println!("model: {}", config.llm.model);
+            println!("api_key: {}...", &args.api_key[..args.api_key.len().min(8)]);
             println!("rules loaded: {}", config.rules.len());
         }
     }

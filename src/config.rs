@@ -3,7 +3,14 @@ use std::fs;
 
 #[derive(Deserialize)]
 pub struct Config {
+    pub llm: LlmConfig,
     pub rules: Vec<crate::rule::body::RuleBody>,
+}
+
+#[derive(Deserialize)]
+pub struct LlmConfig {
+    pub base_url: String,
+    pub model: String,
 }
 
 impl Config {

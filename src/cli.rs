@@ -22,4 +22,8 @@ pub struct ReviewArgs {
     /// Path to config file (JSON/TOML)
     #[arg(long, default_value = "firekeeper.toml")]
     pub config: String,
+    
+    /// OpenRouter API key
+    #[arg(long, env = "OPENAI_API_KEY")]
+    pub api_key: String,
 }
