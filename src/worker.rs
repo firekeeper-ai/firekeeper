@@ -36,19 +36,19 @@ pub async fn worker(
         "system",
         "You are a code reviewer. Your task is to review code changes against a specific rule. \
         Focus only on the files provided and only check for violations of the given rule. \
-        You can read related files if needed, but only comment on issues related to the rule. \
-        Provide a clear review result."
+        You can read related files if needed, but only report issues related to the provided files and rule. \
+        Use the report tool to report all violations found and then exit without summary."
     );
     
     // User message with rule and files
     let files_list = files.join("\n- ");
     let user_message = format!(
-        "Review the following files against this rule:\n\n\
-        <rule>\n{}\n</rule>\n\n\
-        Files to review:\n- {}\n\n\
-        Please review these files and report any violations of the rule.",
-        rule.instruction,
-        files_list
+        "Review the following files:\n\n\
+        - {}\n\n\
+        Against this rule:\n\n\
+        <rule>\n{}\n</rule>",
+        files_list,
+        rule.instruction
     );
     trace!("Adding user message with {} files", files.len());
     trace!("User message: {}", user_message);
