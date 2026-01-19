@@ -8,7 +8,7 @@ pub fn create_web_tools() -> Vec<Tool> {
         Tool {
             tool_type: "function".to_string(),
             function: ToolFunction {
-                name: "web_fetch".to_string(),
+                name: "fetch".to_string(),
                 description: "Fetch a webpage and convert HTML to Markdown".to_string(),
                 parameters: json!({
                     "type": "object",

@@ -12,7 +12,7 @@ pub fn create_fs_tools() -> Vec<Tool> {
         Tool {
             tool_type: "function".to_string(),
             function: ToolFunction {
-                name: "fs_read_file".to_string(),
+                name: "read".to_string(),
                 description: "Read file contents with optional line range".to_string(),
                 parameters: json!({
                     "type": "object",
@@ -30,7 +30,7 @@ pub fn create_fs_tools() -> Vec<Tool> {
         Tool {
             tool_type: "function".to_string(),
             function: ToolFunction {
-                name: "fs_list_dir".to_string(),
+                name: "ls".to_string(),
                 description: "List directory contents with optional recursive depth".to_string(),
                 parameters: json!({
                     "type": "object",
@@ -45,7 +45,7 @@ pub fn create_fs_tools() -> Vec<Tool> {
         Tool {
             tool_type: "function".to_string(),
             function: ToolFunction {
-                name: "fs_grep".to_string(),
+                name: "rg".to_string(),
                 description: "Search for regex pattern in a file using ripgrep".to_string(),
                 parameters: json!({
                     "type": "object",
@@ -60,7 +60,7 @@ pub fn create_fs_tools() -> Vec<Tool> {
         Tool {
             tool_type: "function".to_string(),
             function: ToolFunction {
-                name: "fs_glob_files".to_string(),
+                name: "glob".to_string(),
                 description: "Find files matching a glob pattern".to_string(),
                 parameters: json!({
                     "type": "object",

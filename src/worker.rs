@@ -64,27 +64,27 @@ impl crate::agent::r#loop::ToolExecutor for ToolExecutor {
         };
         
         let result = match tool_call.function.name.as_str() {
-            "fs_read_file" => fs::read_file(
+            "read" => fs::read_file(
                 args["path"].as_str().unwrap_or(""),
                 args["start_line"].as_u64().map(|v| v as usize),
                 args["end_line"].as_u64().map(|v| v as usize),
                 args["show_line_numbers"].as_bool().unwrap_or(false),
                 args["limit"].as_u64().map(|v| v as usize).unwrap_or(1000),
             ).await,
-            "fs_list_dir" => fs::list_dir(
+            "ls" => fs::list_dir(
                 args["path"].as_str().unwrap_or(""),
                 args["depth"].as_u64().map(|v| v as usize),
             ).await,
-            "fs_grep" => fs::grep(
+            "rg" => fs::grep(
                 args["path"].as_str().unwrap_or(""),
                 args["pattern"].as_str().unwrap_or(""),
             ).await,
-            "fs_glob_files" => fs::glob_files(
+            "glob" => fs::glob_files(
                 args["path"].as_str().unwrap_or(""),
                 args["pattern"].as_str().unwrap_or(""),
             ).await,
-            "web_fetch" => web::fetch(args["url"].as_str().unwrap_or("")).await,
-            "report_violations" => {
+            "fetch" => web::fetch(args["url"].as_str().unwrap_or("")).await,
+            "report" => {
                 let violations: Vec<report::Violation> = match serde_json::from_value(args["violations"].clone()) {
                     Ok(v) => v,
                     Err(e) => return format!("Error parsing violations: {}", e),

@@ -15,7 +15,7 @@ pub fn create_report_tools() -> Vec<Tool> {
         Tool {
             tool_type: "function".to_string(),
             function: ToolFunction {
-                name: "report_violations".to_string(),
+                name: "report".to_string(),
                 description: "Report rule violations found during review".to_string(),
                 parameters: json!({
                     "type": "object",
