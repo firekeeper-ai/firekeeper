@@ -55,8 +55,23 @@ pub async fn worker(
     agent.add_message("user", &user_message);
     
     debug!("Starting agent loop for rule '{}'", rule.name);
-    let response = agent.run().await?;
-    info!("Agent response for rule '{}': {}", rule.name, response);
+    agent.run().await?;
+    
+    // Merge violations by file
+    let mut violations_by_file: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+    for violation in &agent.state.violations {
+        violations_by_file.entry(violation.file.clone())
+            .or_insert_with(Vec::new)
+            .push(violation.detail.clone());
+    }
+    
+    // Print violations grouped by file
+    for (file, details) in violations_by_file {
+        info!("Violations in {}:", file);
+        for detail in details {
+            info!("  - {}", detail);
+        }
+    }
     
     Ok(())
 }
