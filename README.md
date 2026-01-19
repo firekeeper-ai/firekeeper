@@ -12,10 +12,10 @@ Init a config file `firekeeper.toml`:
 firekeeper init
 ```
 
-Set environment variables:
+Set OpenRouter API key:
 
 ```bash
-export OPENAI_API_KEY=sk-xxxxxxxxxxxxxx
+export FIREKEEPER_LLM_API_KEY=sk-xxxxxxxxxxxxxx
 ```
 
 Review uncommitted changes or the last commit:
@@ -55,7 +55,11 @@ Options:
       --config <CONFIG>
           Path to config file (initialize with `firekeeper init`) [default: firekeeper.toml]
       --api-key <API_KEY>
-          OpenRouter API key [env: OPENAI_API_KEY=]
+          LLM API key [env: FIREKEEPER_LLM_API_KEY=]
+      --base-url <BASE_URL>
+          LLM base URL [default: https://openrouter.ai/api/v1]
+      --model <MODEL>
+          LLM model [default: google/gemini-3-flash-preview]
       --dry-run
           Dry run: only show tasks without executing workers
       --max-parallel-workers <MAX_PARALLEL_WORKERS>

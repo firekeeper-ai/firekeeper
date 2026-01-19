@@ -1,6 +1,9 @@
 use serde::Deserialize;
 use std::fs;
 
+pub const DEFAULT_BASE_URL: &str = "https://openrouter.ai/api/v1";
+pub const DEFAULT_MODEL: &str = "google/gemini-3-flash-preview";
+
 #[derive(Deserialize, Debug)]
 pub struct Config {
     pub llm: LlmConfig,
@@ -11,8 +14,18 @@ pub struct Config {
 
 #[derive(Deserialize, Debug)]
 pub struct LlmConfig {
+    #[serde(default = "default_base_url")]
     pub base_url: String,
+    #[serde(default = "default_model")]
     pub model: String,
+}
+
+fn default_base_url() -> String {
+    DEFAULT_BASE_URL.to_string()
+}
+
+fn default_model() -> String {
+    DEFAULT_MODEL.to_string()
 }
 
 #[derive(Deserialize, Debug)]

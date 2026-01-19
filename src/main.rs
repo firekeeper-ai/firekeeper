@@ -68,15 +68,17 @@ scope = ["**/*"]
             trace!("config: {:#?}", config);
             
             let max_parallel_workers = args.max_parallel_workers.or(config.worker.max_parallel_workers);
+            let base_url = args.base_url.as_deref().or(Some(&config.llm.base_url)).unwrap();
+            let model = args.model.as_deref().or(Some(&config.llm.model)).unwrap();
             
             orchestrator::orchestrate_and_run(
                 &config.rules,
                 &args.base,
                 config.worker.max_files_per_task,
                 max_parallel_workers,
-                &config.llm.base_url,
+                base_url,
                 &args.api_key,
-                &config.llm.model,
+                model,
                 args.dry_run,
             ).await;
         }

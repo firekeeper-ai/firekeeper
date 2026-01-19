@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand};
+use crate::config::{DEFAULT_BASE_URL, DEFAULT_MODEL};
 
 #[derive(Parser)]
 #[command(name = "firekeeper", version, about = "Code review tool that enforces custom rules", long_about = None)]
@@ -38,9 +39,17 @@ pub struct ReviewArgs {
     #[arg(long, default_value = "firekeeper.toml")]
     pub config: String,
     
-    /// OpenRouter API key
-    #[arg(long, env = "OPENAI_API_KEY")]
+    /// LLM API key
+    #[arg(long, env = "FIREKEEPER_LLM_API_KEY")]
     pub api_key: String,
+    
+    /// LLM base URL
+    #[arg(long, default_value = DEFAULT_BASE_URL)]
+    pub base_url: Option<String>,
+    
+    /// LLM model
+    #[arg(long, default_value = DEFAULT_MODEL)]
+    pub model: Option<String>,
     
     /// Dry run: only show tasks without executing workers
     #[arg(long)]
