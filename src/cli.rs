@@ -28,7 +28,7 @@ pub struct ReviewArgs {
     #[arg(long, default_value = "HEAD~1..HEAD")]
     pub diff: String,
     
-    /// Path to config file
+    /// Path to config file (initialize with `firekeeper init`)
     #[arg(long, default_value = "firekeeper.toml")]
     pub config: String,
     
