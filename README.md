@@ -18,13 +18,13 @@ Set OpenRouter API key:
 export FIREKEEPER_LLM_API_KEY=sk-xxxxxxxxxxxxxx
 ```
 
-Review uncommitted changes or the last commit:
+Review uncommitted changes or the last commit, suitable for git hooks or agent hooks:
 
 ```bash
 firekeeper review
 ```
 
-Review changes from 1 day ago:
+Review changes from 1 day ago, suitable for CI/CD pipelines:
 
 ```bash
 firekeeper review --base "@{1.day.ago}"
