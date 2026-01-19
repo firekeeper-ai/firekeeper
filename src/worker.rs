@@ -1,6 +1,6 @@
 use crate::agent::llm::openai::OpenAIProvider;
 use crate::agent::r#loop::AgentLoop;
-use crate::agent::tool::{fs, web};
+use crate::agent::tool::{fs, web, report};
 use crate::agent::types::ToolCall;
 use crate::rule::body::RuleBody;
 use tracing::{debug, info, trace};
@@ -19,6 +19,7 @@ pub async fn worker(
     let provider = OpenAIProvider::new(base_url.to_string(), api_key.to_string(), model.to_string());
     let mut tools = fs::create_fs_tools();
     tools.extend(web::create_web_tools());
+    tools.extend(report::create_report_tools());
     trace!("Created {} tools", tools.len());
     let mut agent = AgentLoop::new(provider, ToolExecutor, tools);
     
@@ -83,6 +84,13 @@ impl crate::agent::r#loop::ToolExecutor for ToolExecutor {
                 args["pattern"].as_str().unwrap_or(""),
             ).await,
             "web_fetch" => web::fetch(args["url"].as_str().unwrap_or("")).await,
+            "report_violations" => {
+                let violations: Vec<report::Violation> = match serde_json::from_value(args["violations"].clone()) {
+                    Ok(v) => v,
+                    Err(e) => return format!("Error parsing violations: {}", e),
+                };
+                report::report_violations(violations).await
+            }
             _ => return format!("Unknown tool: {}", tool_call.function.name),
         };
         
