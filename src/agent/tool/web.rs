@@ -2,7 +2,6 @@ use serde_json::json;
 use tracing::debug;
 
 use crate::agent::types::{Tool, ToolFunction};
-use crate::agent::tool::fs::FsResult;
 
 pub fn create_web_tools() -> Vec<Tool> {
     vec![
@@ -23,29 +22,20 @@ pub fn create_web_tools() -> Vec<Tool> {
     ]
 }
 
-pub async fn fetch(url: &str) -> FsResult {
+pub async fn fetch(url: &str) -> Result<String, String> {
     debug!("Fetching URL: {}", url);
     
     let response = match reqwest::get(url).await {
         Ok(r) => r,
-        Err(e) => return FsResult {
-            success: false,
-            content: format!("Error fetching URL: {}", e),
-        },
+        Err(e) => return Err(format!("Error fetching URL: {}", e)),
     };
     
     let html = match response.text().await {
         Ok(h) => h,
-        Err(e) => return FsResult {
-            success: false,
-            content: format!("Error reading response: {}", e),
-        },
+        Err(e) => return Err(format!("Error reading response: {}", e)),
     };
     
     let markdown = html2md::parse_html(&html);
     
-    FsResult {
-        success: true,
-        content: markdown,
-    }
+    Ok(markdown)
 }

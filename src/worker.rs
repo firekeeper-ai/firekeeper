@@ -80,17 +80,13 @@ impl crate::agent::r#loop::ToolExecutor for ToolExecutor {
                 args["path"].as_str().unwrap_or(""),
                 args["pattern"].as_str().unwrap_or(""),
             ).await,
-            "web_fetch" => {
-                let url = args["url"].as_str().unwrap_or("");
-                web::fetch(url).await
-            }
+            "web_fetch" => web::fetch(args["url"].as_str().unwrap_or("")).await,
             _ => return format!("Unknown tool: {}", tool_call.function.name),
         };
         
-        if result.success {
-            result.content
-        } else {
-            format!("Error: {}", result.content)
+        match result {
+            Ok(content) => content,
+            Err(error) => format!("Error: {}", error),
         }
     }
 }

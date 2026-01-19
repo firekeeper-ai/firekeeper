@@ -74,13 +74,6 @@ pub fn create_fs_tools() -> Vec<Tool> {
     ]
 }
 
-/// Result of a file system operation.
-#[derive(Debug, Serialize)]
-pub struct FsResult {
-    pub success: bool,
-    pub content: String,
-}
-
 /// Search match with line number and context.
 #[derive(Debug, Serialize)]
 struct SearchMatch {
@@ -90,7 +83,7 @@ struct SearchMatch {
 
 /// Read file contents with optional line range.
 /// Lines are 1-indexed and prefixed with line numbers.
-pub async fn read_file(path: &str, start_line: Option<usize>, end_line: Option<usize>) -> FsResult {
+pub async fn read_file(path: &str, start_line: Option<usize>, end_line: Option<usize>) -> Result<String, String> {
     debug!("Reading file: {}", path);
     match tokio::fs::read_to_string(path).await {
         Ok(content) => {
@@ -100,10 +93,7 @@ pub async fn read_file(path: &str, start_line: Option<usize>, end_line: Option<u
             let end = end_line.unwrap_or(lines.len()).min(lines.len());
             
             if start >= lines.len() {
-                return FsResult {
-                    success: false,
-                    content: format!("Start line {} is beyond file length {}", start + 1, lines.len()),
-                };
+                return Err(format!("Start line {} is beyond file length {}", start + 1, lines.len()));
             }
             
             let selected_lines: Vec<String> = lines[start..end]
@@ -112,35 +102,23 @@ pub async fn read_file(path: &str, start_line: Option<usize>, end_line: Option<u
                 .map(|(i, line)| format!("{}: {}", start + i + 1, line))
                 .collect();
             
-            FsResult {
-                success: true,
-                content: selected_lines.join("\n"),
-            }
+            Ok(selected_lines.join("\n"))
         }
-        Err(e) => FsResult {
-            success: false,
-            content: format!("Error reading file: {}", e),
-        },
+        Err(e) => Err(format!("Error reading file: {}", e)),
     }
 }
 
 /// List directory contents recursively up to specified depth.
 /// Entries are prefixed with 'd' for directories and 'f' for files.
-pub async fn list_dir(path: &str, depth: Option<usize>) -> FsResult {
+pub async fn list_dir(path: &str, depth: Option<usize>) -> Result<String, String> {
     debug!("Listing directory: {} (depth: {:?})", path, depth);
     let mut items = Vec::new();
     
     if let Err(e) = list_dir_recursive(path, depth.unwrap_or(0), 0, "", &mut items).await {
-        return FsResult {
-            success: false,
-            content: format!("Error listing directory: {}", e),
-        };
+        return Err(format!("Error listing directory: {}", e));
     }
     
-    FsResult {
-        success: true,
-        content: items.join("\n"),
-    }
+    Ok(items.join("\n"))
 }
 
 fn list_dir_recursive<'a>(
@@ -181,14 +159,11 @@ fn list_dir_recursive<'a>(
 
 /// Search for a pattern in a file with context lines (case-insensitive).
 /// Returns JSON array of SearchMatch objects.
-pub async fn search_in_file(path: &str, pattern: &str, context_lines: usize) -> FsResult {
+pub async fn search_in_file(path: &str, pattern: &str, context_lines: usize) -> Result<String, String> {
     debug!("Searching in file: {} for pattern: {}", path, pattern);
     let content = match tokio::fs::read_to_string(path).await {
         Ok(c) => c,
-        Err(e) => return FsResult {
-            success: false,
-            content: format!("Error reading file: {}", e),
-        },
+        Err(e) => return Err(format!("Error reading file: {}", e)),
     };
     
     let lines: Vec<&str> = content.lines().collect();
@@ -213,21 +188,12 @@ pub async fn search_in_file(path: &str, pattern: &str, context_lines: usize) -> 
         }
     }
     
-    match serde_json::to_string(&matches) {
-        Ok(json) => FsResult {
-            success: true,
-            content: json,
-        },
-        Err(e) => FsResult {
-            success: false,
-            content: format!("Error serializing results: {}", e),
-        },
-    }
+    serde_json::to_string(&matches).map_err(|e| format!("Error serializing results: {}", e))
 }
 
 /// Grep a path using regex pattern with ripgrep.
 /// Returns matches in format "line_number:line_content".
-pub async fn grep(path: &str, pattern: &str) -> FsResult {
+pub async fn grep(path: &str, pattern: &str) -> Result<String, String> {
     debug!("Grepping path: {} for pattern: {}", path, pattern);
     let path = path.to_string();
     let pattern = pattern.to_string();
@@ -235,10 +201,7 @@ pub async fn grep(path: &str, pattern: &str) -> FsResult {
     tokio::task::spawn_blocking(move || {
         let matcher = match RegexMatcher::new(&pattern) {
             Ok(m) => m,
-            Err(e) => return FsResult {
-                success: false,
-                content: format!("Invalid regex pattern: {}", e),
-            },
+            Err(e) => return Err(format!("Invalid regex pattern: {}", e)),
         };
         
         let mut matches = Vec::new();
@@ -254,24 +217,15 @@ pub async fn grep(path: &str, pattern: &str) -> FsResult {
         );
         
         match result {
-            Ok(_) => FsResult {
-                success: true,
-                content: matches.join("\n"),
-            },
-            Err(e) => FsResult {
-                success: false,
-                content: format!("Grep error: {}", e),
-            },
+            Ok(_) => Ok(matches.join("\n")),
+            Err(e) => Err(format!("Grep error: {}", e)),
         }
-    }).await.unwrap_or_else(|e| FsResult {
-        success: false,
-        content: format!("Task join error: {}", e),
-    })
+    }).await.unwrap_or_else(|e| Err(format!("Task join error: {}", e)))
 }
 
 /// Find files matching a glob pattern recursively.
 /// Searches up to depth 20 and returns up to 1000 matches.
-pub async fn glob_files(path: &str, pattern: &str) -> FsResult {
+pub async fn glob_files(path: &str, pattern: &str) -> Result<String, String> {
     debug!("Globbing files in: {} with pattern: {}", path, pattern);
     let path = path.to_string();
     let pattern = pattern.to_string();
@@ -279,38 +233,23 @@ pub async fn glob_files(path: &str, pattern: &str) -> FsResult {
     tokio::task::spawn_blocking(move || {
         let glob = match Glob::new(&pattern) {
             Ok(g) => g,
-            Err(e) => return FsResult {
-                success: false,
-                content: format!("Invalid glob pattern: {}", e),
-            },
+            Err(e) => return Err(format!("Invalid glob pattern: {}", e)),
         };
         
         let mut builder = GlobSetBuilder::new();
         builder.add(glob);
         let globset = match builder.build() {
             Ok(gs) => gs,
-            Err(e) => return FsResult {
-                success: false,
-                content: format!("Failed to build globset: {}", e),
-            },
+            Err(e) => return Err(format!("Failed to build globset: {}", e)),
         };
         
         let mut matches = Vec::new();
         if let Err(e) = glob_recursive(Path::new(&path), &globset, &mut matches, 0) {
-            return FsResult {
-                success: false,
-                content: format!("Error searching: {}", e),
-            };
+            return Err(format!("Error searching: {}", e));
         }
         
-        FsResult {
-            success: true,
-            content: matches.join("\n"),
-        }
-    }).await.unwrap_or_else(|e| FsResult {
-        success: false,
-        content: format!("Task join error: {}", e),
-    })
+        Ok(matches.join("\n"))
+    }).await.unwrap_or_else(|e| Err(format!("Task join error: {}", e)))
 }
 
 fn glob_recursive(
