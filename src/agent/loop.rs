@@ -5,24 +5,26 @@ pub trait LLMProvider {
     async fn call(&mut self, messages: &[Message], tools: &[Tool]) -> Result<Message, Box<dyn std::error::Error>>;
 }
 
-pub trait ToolExecutor {
-    async fn execute(&self, tool_call: &ToolCall) -> String;
+pub trait ToolExecutor<S> {
+    async fn execute(&mut self, tool_call: &ToolCall, state: &mut S) -> String;
 }
 
-pub struct AgentLoop<P: LLMProvider, T: ToolExecutor> {
+pub struct AgentLoop<P: LLMProvider, T: ToolExecutor<S>, S> {
     provider: P,
     tool_executor: T,
     messages: Vec<Message>,
     tools: Vec<Tool>,
+    pub state: S,
 }
 
-impl<P: LLMProvider, T: ToolExecutor> AgentLoop<P, T> {
-    pub fn new(provider: P, tool_executor: T, tools: Vec<Tool>) -> Self {
+impl<P: LLMProvider, T: ToolExecutor<S>, S> AgentLoop<P, T, S> {
+    pub fn new(provider: P, tool_executor: T, tools: Vec<Tool>, state: S) -> Self {
         Self {
             provider,
             tool_executor,
             messages: Vec::new(),
             tools,
+            state,
         }
     }
 
@@ -60,7 +62,7 @@ impl<P: LLMProvider, T: ToolExecutor> AgentLoop<P, T> {
                 debug!("LLM requested {} tool calls", tool_calls.len());
                 for tool_call in tool_calls {
                     trace!("Executing tool: {}", tool_call.function.name);
-                    let result = self.tool_executor.execute(tool_call).await;
+                    let result = self.tool_executor.execute(tool_call, &mut self.state).await;
                     debug!("Tool result: {}", result);
                     self.messages.push(Message {
                         role: "tool".to_string(),

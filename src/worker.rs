@@ -5,6 +5,10 @@ use crate::agent::types::ToolCall;
 use crate::rule::body::RuleBody;
 use tracing::{debug, info, trace};
 
+pub struct WorkerState {
+    pub violations: Vec<report::Violation>,
+}
+
 pub async fn worker(
     rule: &RuleBody,
     files: Vec<String>,
@@ -21,7 +25,10 @@ pub async fn worker(
     tools.extend(web::create_web_tools());
     tools.extend(report::create_report_tools());
     trace!("Created {} tools", tools.len());
-    let mut agent = AgentLoop::new(provider, ToolExecutor, tools);
+    let state = WorkerState {
+        violations: Vec::new(),
+    };
+    let mut agent = AgentLoop::new(provider, ToolExecutor, tools, state);
     
     // System message
     trace!("Adding system message to agent");
@@ -56,8 +63,8 @@ pub async fn worker(
 
 struct ToolExecutor;
 
-impl crate::agent::r#loop::ToolExecutor for ToolExecutor {
-    async fn execute(&self, tool_call: &ToolCall) -> String {
+impl crate::agent::r#loop::ToolExecutor<WorkerState> for ToolExecutor {
+    async fn execute(&mut self, tool_call: &ToolCall, state: &mut WorkerState) -> String {
         let args: serde_json::Value = match serde_json::from_str(&tool_call.function.arguments) {
             Ok(v) => v,
             Err(e) => return format!("Error parsing arguments: {}", e),
@@ -89,7 +96,7 @@ impl crate::agent::r#loop::ToolExecutor for ToolExecutor {
                     Ok(v) => v,
                     Err(e) => return format!("Error parsing violations: {}", e),
                 };
-                report::report_violations(violations).await
+                report::report_violations(violations, &mut state.violations).await
             }
             _ => return format!("Unknown tool: {}", tool_call.function.name),
         };

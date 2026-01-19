@@ -4,7 +4,7 @@ use tracing::debug;
 
 use crate::agent::types::{Tool, ToolFunction};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Violation {
     pub file: String,
     pub detail: String,
@@ -40,12 +40,13 @@ pub fn create_report_tools() -> Vec<Tool> {
     ]
 }
 
-pub async fn report_violations(violations: Vec<Violation>) -> Result<String, String> {
+pub async fn report_violations(violations: Vec<Violation>, state: &mut Vec<Violation>) -> Result<String, String> {
     debug!("Reporting {} violations", violations.len());
     
     if violations.is_empty() {
         return Err("At least 1 violation is required".to_string());
     }
     
+    state.extend(violations);
     Ok("OK".to_string())
 }
