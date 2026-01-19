@@ -35,7 +35,7 @@ pub async fn worker(
     let files_list = files.join("\n- ");
     let user_message = format!(
         "Review the following files against this rule:\n\n\
-        {}\n\n\
+        <rule>\n{}\n</rule>\n\n\
         Files to review:\n- {}\n\n\
         Please review these files and report any violations of the rule.",
         rule.instruction,
