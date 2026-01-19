@@ -3,6 +3,7 @@ use crate::worker;
 use futures::future::join_all;
 use globset::{Glob, GlobSetBuilder};
 use std::process::Command;
+use tracing::{error, info, warn};
 
 pub async fn orchestrate_and_run(
     rules: &[RuleBody],
@@ -18,9 +19,9 @@ pub async fn orchestrate_and_run(
     let tasks = orchestrate(rules, &changed_files, max_files_per_task);
     
     if dry_run {
-        println!("\nDry run - {} tasks to execute:", tasks.len());
+        info!("Dry run - {} tasks to execute:", tasks.len());
         for (i, (rule, files)) in tasks.iter().enumerate() {
-            println!("  Task {}: rule='{}', files={:?}", i, rule.name, files);
+            info!("  Task {}: rule='{}', files={:?}", i, rule.name, files);
         }
         return;
     }
@@ -60,7 +61,7 @@ pub async fn orchestrate_and_run(
     
     for (i, result) in results.iter().enumerate() {
         if let Err(e) = result {
-            eprintln!("Task {} failed: {}", i, e);
+            error!("Task {} failed: {}", i, e);
         }
     }
 }
@@ -133,7 +134,7 @@ fn filter_files_by_scope(rule: &RuleBody, files: &[String]) -> Vec<String> {
         match Glob::new(pattern) {
             Ok(glob) => builder.add(glob),
             Err(e) => {
-                eprintln!("Invalid glob pattern '{}' in rule '{}': {}", pattern, rule.name, e);
+                warn!("Invalid glob pattern '{}' in rule '{}': {}", pattern, rule.name, e);
                 continue;
             }
         };
@@ -142,7 +143,7 @@ fn filter_files_by_scope(rule: &RuleBody, files: &[String]) -> Vec<String> {
     let globset = match builder.build() {
         Ok(gs) => gs,
         Err(e) => {
-            eprintln!("Failed to build globset for rule '{}': {}", rule.name, e);
+            error!("Failed to build globset for rule '{}': {}", rule.name, e);
             return vec![];
         }
     };

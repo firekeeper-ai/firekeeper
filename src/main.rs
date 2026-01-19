@@ -9,10 +9,16 @@ mod worker;
 use clap::Parser;
 use cli::{Cli, Commands};
 use config::Config;
+use tracing::{debug, error, info};
 
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
+    
+    // Initialize tracing subscriber with log level from CLI/env
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::new(&cli.log_level))
+        .init();
     
     match &cli.command {
         Commands::Init(args) => {
@@ -39,30 +45,25 @@ scope = ["**/*"]
 "#;
             
             if std::path::Path::new(&args.config).exists() {
-                eprintln!("Error: {} already exists", args.config);
+                error!("Error: {} already exists", args.config);
                 std::process::exit(1);
             }
             
             std::fs::write(&args.config, DEFAULT_CONFIG).unwrap_or_else(|e| {
-                eprintln!("Error writing config: {}", e);
+                error!("Error writing config: {}", e);
                 std::process::exit(1);
             });
             
-            println!("Created {}", args.config);
+            info!("Created {}", args.config);
         }
         Commands::Review(args) => {
             let config = Config::load(&args.config).unwrap_or_else(|e| {
-                eprintln!("Failed to load config: {}", e);
+                error!("Failed to load config: {}", e);
                 std::process::exit(1);
             });
             
-            println!("base: {}", args.base);
-            println!("config: {}", args.config);
-            println!("base_url: {}", config.llm.base_url);
-            println!("model: {}", config.llm.model);
-            println!("api_key: {}...", &args.api_key[..args.api_key.len().min(8)]);
-            println!("rules loaded: {}", config.rules.len());
-            println!("max_files_per_task: {}", config.worker.max_files_per_task);
+            debug!("args: {:#?}", args);
+            debug!("config: {:#?}", config);
             
             let max_parallel_workers = args.max_parallel_workers.or(config.worker.max_parallel_workers);
             

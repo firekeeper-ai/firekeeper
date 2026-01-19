@@ -3,6 +3,10 @@ use clap::{Parser, Subcommand};
 #[derive(Parser)]
 #[command(name = "firekeeper", version, about = "Code review tool that enforces custom rules", long_about = None)]
 pub struct Cli {
+    /// Log level (see https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html)
+    #[arg(long, env = "FIREKEEPER_LOG", default_value = "info", global = true)]
+    pub log_level: String,
+    
     #[command(subcommand)]
     pub command: Commands,
 }
@@ -22,7 +26,7 @@ pub struct InitArgs {
     pub config: String,
 }
 
-#[derive(Parser)]
+#[derive(Parser, Debug)]
 pub struct ReviewArgs {
     /// Base commit to compare against.
     /// E.g. ~1, ^, commit hash, or HEAD for uncommitted changes

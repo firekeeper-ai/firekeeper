@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct RuleBody {
     /// Human-readable rule name, not for LLM
     /// e.g. "Prefer Async instead of Promise Chain in JS/TS"

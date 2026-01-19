@@ -3,6 +3,7 @@ use crate::agent::r#loop::AgentLoop;
 use crate::fs_tool;
 use crate::rule::body::RuleBody;
 use serde_json::json;
+use tracing::info;
 
 pub async fn worker(
     rule: &RuleBody,
@@ -11,7 +12,7 @@ pub async fn worker(
     api_key: &str,
     model: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Worker: reviewing {} files for rule '{}'", files.len(), rule.name);
+    info!("Worker: reviewing {} files for rule '{}'", files.len(), rule.name);
     
     let provider = OpenAIProvider::new(base_url.to_string(), api_key.to_string(), model.to_string());
     let tools = create_fs_tools();
@@ -39,7 +40,7 @@ pub async fn worker(
     agent.add_message("user", &user_message);
     
     let response = agent.run().await?;
-    println!("Agent response for rule '{}': {}", rule.name, response);
+    info!("Agent response for rule '{}': {}", rule.name, response);
     
     Ok(())
 }

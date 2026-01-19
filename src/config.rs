@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use std::fs;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct Config {
     pub llm: LlmConfig,
     #[serde(default)]
@@ -9,13 +9,13 @@ pub struct Config {
     pub rules: Vec<crate::rule::body::RuleBody>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct LlmConfig {
     pub base_url: String,
     pub model: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct WorkerConfig {
     #[serde(default = "default_max_files_per_task")]
     pub max_files_per_task: usize,
