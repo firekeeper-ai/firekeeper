@@ -29,7 +29,7 @@ pub struct InitArgs {
 #[derive(Parser, Debug)]
 pub struct ReviewArgs {
     /// Base commit to compare against.
-    /// E.g. ~1, ^, commit hash, or HEAD for uncommitted changes
+    /// Examples: HEAD^ or ^, HEAD~1 or ~1, commit hash, @{1.day.ago}, HEAD for uncommitted changes
     /// [default: HEAD if uncommitted changes exist, otherwise ^]
     #[arg(long, default_value = "", hide_default_value = true)]
     pub base: String,
