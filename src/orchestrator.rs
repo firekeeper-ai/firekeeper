@@ -139,12 +139,20 @@ fn get_changed_files(diff_base: &str) -> Vec<String> {
         base.to_string()
     };
     
-    // git diff <base> compares working directory to base
-    // This includes both committed changes since base AND uncommitted changes
-    let output = Command::new("git")
-        .args(["diff", "--name-only", &base])
-        .output()
-        .expect("Failed to execute git diff");
+    // Check for magic constant to review all files
+    let output = if base == "ROOT" {
+        Command::new("git")
+            .args(["ls-files"])
+            .output()
+            .expect("Failed to execute git ls-files")
+    } else {
+        // git diff <base> compares working directory to base
+        // This includes both committed changes since base AND uncommitted changes
+        Command::new("git")
+            .args(["diff", "--name-only", &base])
+            .output()
+            .expect("Failed to execute git diff")
+    };
     
     String::from_utf8_lossy(&output.stdout)
         .lines()
