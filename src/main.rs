@@ -18,6 +18,8 @@ async fn main() {
     // Initialize tracing subscriber with log level from CLI/env
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::new(&cli.log_level))
+        .without_time()
+        .with_target(false)
         .init();
     
     match &cli.command {
