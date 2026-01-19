@@ -1,6 +1,40 @@
 # Firekeeper
 
+Firekeeper reviews your current working state against a base commit using custom rules.
+
 ## Usage
+
+### Examples
+
+Init a config file `firekeeper.toml`:
+
+```bash
+firekeeper init
+```
+
+Set environment variables:
+
+```bash
+export OPENAI_API_KEY=sk-xxxxxxxxxxxxxx
+```
+
+Review uncommitted changes or the last commit:
+
+```bash
+firekeeper review
+```
+
+Review changes from 1 day ago:
+
+```bash
+firekeeper review --base "@{1.day.ago}"
+```
+
+Review all files (ensure you have sufficient LLM token budget):
+
+```bash
+firekeeper review --base ROOT
+```
 
 ### Full CLI Usage
 
