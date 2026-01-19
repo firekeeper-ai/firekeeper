@@ -24,8 +24,10 @@ pub struct InitArgs {
 
 #[derive(Parser)]
 pub struct ReviewArgs {
-    /// Base commit to compare against (HEAD is prepended to ~ or ^, e.g. ~1, ^, commit hash)
-    #[arg(long, default_value = "^")]
+    /// Base commit to compare against.
+    /// E.g. ~1, ^, commit hash, or HEAD for uncommitted changes
+    /// [default: HEAD if uncommitted changes exist, otherwise ^]
+    #[arg(long, default_value = "", hide_default_value = true)]
     pub base: String,
     
     /// Path to config file (initialize with `firekeeper init`)

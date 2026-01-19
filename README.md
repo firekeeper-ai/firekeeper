@@ -15,7 +15,7 @@ Usage: firekeeper review [OPTIONS] --api-key <API_KEY>
 
 Options:
       --base <BASE>
-          Base commit to compare against (HEAD is prepended to ~ or ^, e.g. ~1, ^, commit hash) [default: ^]
+          Base commit to compare against. E.g. ~1, ^, commit hash, or HEAD for uncommitted changes [default: HEAD if uncommitted changes exist, otherwise ^]
       --config <CONFIG>
           Path to config file (initialize with `firekeeper init`) [default: firekeeper.toml]
       --api-key <API_KEY>

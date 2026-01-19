@@ -86,18 +86,40 @@ fn orchestrate<'a>(
 }
 
 fn get_changed_files(diff_base: &str) -> Vec<String> {
-    // Prepend HEAD if base starts with ~ or ^
-    let base = if diff_base.starts_with('~') || diff_base.starts_with('^') {
-        format!("HEAD{}", diff_base)
+    // Auto-detect: if base is empty, check for uncommitted changes
+    let base = if diff_base.is_empty() {
+        let has_uncommitted = Command::new("git")
+            .args(["diff", "--quiet", "HEAD"])
+            .status()
+            .map(|s| !s.success())
+            .unwrap_or(false);
+        
+        if has_uncommitted { "HEAD" } else { "^" }
     } else {
-        diff_base.to_string()
+        diff_base
     };
     
-    let diff_range = format!("{}..HEAD", base);
-    let output = Command::new("git")
-        .args(["diff", "--name-only", &diff_range])
-        .output()
-        .expect("Failed to execute git diff");
+    // Prepend HEAD if base starts with ~ or ^
+    let base = if base.starts_with('~') || base.starts_with('^') {
+        format!("HEAD{}", base)
+    } else {
+        base.to_string()
+    };
+    
+    let output = if base == "HEAD" {
+        // Review uncommitted changes (working directory vs HEAD)
+        Command::new("git")
+            .args(["diff", "--name-only", "HEAD"])
+            .output()
+            .expect("Failed to execute git diff")
+    } else {
+        // Review committed changes (base..HEAD)
+        let diff_range = format!("{}..HEAD", base);
+        Command::new("git")
+            .args(["diff", "--name-only", &diff_range])
+            .output()
+            .expect("Failed to execute git diff")
+    };
     
     String::from_utf8_lossy(&output.stdout)
         .lines()
