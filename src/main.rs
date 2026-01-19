@@ -9,7 +9,7 @@ mod worker;
 use clap::Parser;
 use cli::{Cli, Commands};
 use config::Config;
-use tracing::{debug, error, info};
+use tracing::{trace, error, info};
 
 #[tokio::main]
 async fn main() {
@@ -62,8 +62,8 @@ scope = ["**/*"]
                 std::process::exit(1);
             });
             
-            debug!("args: {:#?}", args);
-            debug!("config: {:#?}", config);
+            trace!("args: {:#?}", args);
+            trace!("config: {:#?}", config);
             
             let max_parallel_workers = args.max_parallel_workers.or(config.worker.max_parallel_workers);
             

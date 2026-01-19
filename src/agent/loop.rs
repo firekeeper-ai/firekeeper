@@ -1,5 +1,5 @@
 use super::openai::{Message, Tool, ToolCall};
-use tracing::{debug, trace};
+use tracing::{debug, trace, trace_span};
 
 pub trait LLMProvider {
     async fn call(&mut self, messages: &[Message], tools: &[Tool]) -> Result<Message, Box<dyn std::error::Error>>;
@@ -37,15 +37,23 @@ impl<P: LLMProvider, T: ToolExecutor> AgentLoop<P, T> {
     }
 
     pub async fn run(&mut self) -> Result<String, Box<dyn std::error::Error>> {
-        debug!("Starting agent loop with {} messages", self.messages.len());
+        trace!("Starting agent loop with {} messages", self.messages.len());
         let mut iteration = 0;
         
         loop {
             iteration += 1;
-            debug!("Agent loop iteration {}", iteration);
+            trace_span!("Agent loop iteration {}", iteration);
             trace!("Calling LLM with {} messages and {} tools", self.messages.len(), self.tools.len());
             
             let message = self.provider.call(&self.messages, &self.tools).await?;
+            
+            // Log message content if present and non-empty
+            if let Some(content) = &message.content {
+                if !content.is_empty() {
+                    debug!("LLM response content: {}", content);
+                }
+            }
+            
             self.messages.push(message.clone());
 
             if let Some(tool_calls) = &message.tool_calls {
