@@ -67,6 +67,7 @@ impl crate::agent::r#loop::ToolExecutor for ToolExecutor {
                 args["path"].as_str().unwrap_or(""),
                 args["start_line"].as_u64().map(|v| v as usize),
                 args["end_line"].as_u64().map(|v| v as usize),
+                args["show_line_numbers"].as_bool().unwrap_or(false),
             ).await,
             "fs_list_dir" => fs::list_dir(
                 args["path"].as_str().unwrap_or(""),

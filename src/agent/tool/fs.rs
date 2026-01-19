@@ -19,7 +19,8 @@ pub fn create_fs_tools() -> Vec<Tool> {
                     "properties": {
                         "path": {"type": "string", "description": "File path"},
                         "start_line": {"type": "integer", "description": "Optional start line (1-indexed)"},
-                        "end_line": {"type": "integer", "description": "Optional end line (inclusive)"}
+                        "end_line": {"type": "integer", "description": "Optional end line (inclusive)"},
+                        "show_line_numbers": {"type": "boolean", "description": "Optional: show line numbers (default: false)"}
                     },
                     "required": ["path"]
                 }),
@@ -74,8 +75,8 @@ pub fn create_fs_tools() -> Vec<Tool> {
 }
 
 /// Read file contents with optional line range.
-/// Lines are 1-indexed and prefixed with line numbers.
-pub async fn read_file(path: &str, start_line: Option<usize>, end_line: Option<usize>) -> Result<String, String> {
+/// Lines are 1-indexed and prefixed with line numbers if show_line_numbers is true.
+pub async fn read_file(path: &str, start_line: Option<usize>, end_line: Option<usize>, show_line_numbers: bool) -> Result<String, String> {
     debug!("Reading file: {}", path);
     match tokio::fs::read_to_string(path).await {
         Ok(content) => {
@@ -91,7 +92,13 @@ pub async fn read_file(path: &str, start_line: Option<usize>, end_line: Option<u
             let selected_lines: Vec<String> = lines[start..end]
                 .iter()
                 .enumerate()
-                .map(|(i, line)| format!("{}: {}", start + i + 1, line))
+                .map(|(i, line)| {
+                    if show_line_numbers {
+                        format!("{}: {}", start + i + 1, line)
+                    } else {
+                        line.to_string()
+                    }
+                })
                 .collect();
             
             Ok(selected_lines.join("\n"))
