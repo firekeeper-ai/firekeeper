@@ -56,7 +56,7 @@ scope = ["**/*"]
                 std::process::exit(1);
             });
             
-            println!("diff: {}", args.diff);
+            println!("base: {}", args.base);
             println!("config: {}", args.config);
             println!("base_url: {}", config.llm.base_url);
             println!("model: {}", config.llm.model);
@@ -68,7 +68,7 @@ scope = ["**/*"]
             
             orchestrator::orchestrate_and_run(
                 &config.rules,
-                &args.diff,
+                &args.base,
                 config.worker.max_files_per_task,
                 max_parallel_workers,
                 &config.llm.base_url,

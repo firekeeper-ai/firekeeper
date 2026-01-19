@@ -14,8 +14,8 @@ Review code changes against rules
 Usage: firekeeper review [OPTIONS] --api-key <API_KEY>
 
 Options:
-      --diff <DIFF>
-          Git diff range (e.g. HEAD~1..HEAD) [default: HEAD~1..HEAD]
+      --base <BASE>
+          Base commit to compare against (HEAD is prepended to ~ or ^, e.g. ~1, ^, commit hash) [default: ^]
       --config <CONFIG>
           Path to config file (initialize with `firekeeper init`) [default: firekeeper.toml]
       --api-key <API_KEY>

@@ -24,9 +24,9 @@ pub struct InitArgs {
 
 #[derive(Parser)]
 pub struct ReviewArgs {
-    /// Git diff range (e.g. HEAD~1..HEAD)
-    #[arg(long, default_value = "HEAD~1..HEAD")]
-    pub diff: String,
+    /// Base commit to compare against (HEAD is prepended to ~ or ^, e.g. ~1, ^, commit hash)
+    #[arg(long, default_value = "^")]
+    pub base: String,
     
     /// Path to config file (initialize with `firekeeper init`)
     #[arg(long, default_value = "firekeeper.toml")]

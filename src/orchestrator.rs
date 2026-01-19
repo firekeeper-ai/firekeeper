@@ -6,7 +6,7 @@ use std::process::Command;
 
 pub async fn orchestrate_and_run(
     rules: &[RuleBody],
-    diff_range: &str,
+    diff_base: &str,
     max_files_per_task: usize,
     max_parallel_workers: Option<usize>,
     base_url: &str,
@@ -14,7 +14,7 @@ pub async fn orchestrate_and_run(
     model: &str,
     dry_run: bool,
 ) {
-    let changed_files = get_changed_files(diff_range);
+    let changed_files = get_changed_files(diff_base);
     let tasks = orchestrate(rules, &changed_files, max_files_per_task);
     
     if dry_run {
@@ -85,9 +85,17 @@ fn orchestrate<'a>(
         .collect()
 }
 
-fn get_changed_files(diff_range: &str) -> Vec<String> {
+fn get_changed_files(diff_base: &str) -> Vec<String> {
+    // Prepend HEAD if base starts with ~ or ^
+    let base = if diff_base.starts_with('~') || diff_base.starts_with('^') {
+        format!("HEAD{}", diff_base)
+    } else {
+        diff_base.to_string()
+    };
+    
+    let diff_range = format!("{}..HEAD", base);
     let output = Command::new("git")
-        .args(["diff", "--name-only", diff_range])
+        .args(["diff", "--name-only", &diff_range])
         .output()
         .expect("Failed to execute git diff");
     
