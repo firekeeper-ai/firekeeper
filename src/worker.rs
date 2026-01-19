@@ -1,6 +1,6 @@
 use crate::agent::llm::openai::OpenAIProvider;
 use crate::agent::r#loop::AgentLoop;
-use crate::agent::tool::fs;
+use crate::agent::tool::{fs, web};
 use crate::agent::types::ToolCall;
 use crate::rule::body::RuleBody;
 use tracing::{debug, info, trace};
@@ -17,9 +17,10 @@ pub async fn worker(
     
     debug!("Creating OpenAI provider with model: {}", model);
     let provider = OpenAIProvider::new(base_url.to_string(), api_key.to_string(), model.to_string());
-    let tools = fs::create_fs_tools();
-    trace!("Created {} filesystem tools", tools.len());
-    let mut agent = AgentLoop::new(provider, FsToolExecutor, tools);
+    let mut tools = fs::create_fs_tools();
+    tools.extend(web::create_web_tools());
+    trace!("Created {} tools", tools.len());
+    let mut agent = AgentLoop::new(provider, ToolExecutor, tools);
     
     // System message
     trace!("Adding system message to agent");
@@ -52,10 +53,10 @@ pub async fn worker(
     Ok(())
 }
 
-struct FsToolExecutor;
+struct ToolExecutor;
 
-impl crate::agent::r#loop::ToolExecutor for FsToolExecutor {
-    fn execute(&self, tool_call: &ToolCall) -> String {
+impl crate::agent::r#loop::ToolExecutor for ToolExecutor {
+    async fn execute(&self, tool_call: &ToolCall) -> String {
         let args: serde_json::Value = match serde_json::from_str(&tool_call.function.arguments) {
             Ok(v) => v,
             Err(e) => return format!("Error parsing arguments: {}", e),
@@ -66,19 +67,23 @@ impl crate::agent::r#loop::ToolExecutor for FsToolExecutor {
                 args["path"].as_str().unwrap_or(""),
                 args["start_line"].as_u64().map(|v| v as usize),
                 args["end_line"].as_u64().map(|v| v as usize),
-            ),
+            ).await,
             "fs_list_dir" => fs::list_dir(
                 args["path"].as_str().unwrap_or(""),
                 args["depth"].as_u64().map(|v| v as usize),
-            ),
+            ).await,
             "fs_grep" => fs::grep(
                 args["path"].as_str().unwrap_or(""),
                 args["pattern"].as_str().unwrap_or(""),
-            ),
+            ).await,
             "fs_glob_files" => fs::glob_files(
                 args["path"].as_str().unwrap_or(""),
                 args["pattern"].as_str().unwrap_or(""),
-            ),
+            ).await,
+            "web_fetch" => {
+                let url = args["url"].as_str().unwrap_or("");
+                web::fetch(url).await
+            }
             _ => return format!("Unknown tool: {}", tool_call.function.name),
         };
         

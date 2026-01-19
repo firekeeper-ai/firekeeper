@@ -6,7 +6,7 @@ pub trait LLMProvider {
 }
 
 pub trait ToolExecutor {
-    fn execute(&self, tool_call: &ToolCall) -> String;
+    async fn execute(&self, tool_call: &ToolCall) -> String;
 }
 
 pub struct AgentLoop<P: LLMProvider, T: ToolExecutor> {
@@ -60,7 +60,7 @@ impl<P: LLMProvider, T: ToolExecutor> AgentLoop<P, T> {
                 debug!("LLM requested {} tool calls", tool_calls.len());
                 for tool_call in tool_calls {
                     trace!("Executing tool: {}", tool_call.function.name);
-                    let result = self.tool_executor.execute(tool_call);
+                    let result = self.tool_executor.execute(tool_call).await;
                     debug!("Tool result: {}", result);
                     self.messages.push(Message {
                         role: "tool".to_string(),
