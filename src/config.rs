@@ -19,12 +19,15 @@ pub struct LlmConfig {
 pub struct WorkerConfig {
     #[serde(default = "default_max_files_per_task")]
     pub max_files_per_task: usize,
+    #[serde(default)]
+    pub max_parallel_workers: Option<usize>,
 }
 
 impl Default for WorkerConfig {
     fn default() -> Self {
         Self {
             max_files_per_task: default_max_files_per_task(),
+            max_parallel_workers: None,
         }
     }
 }

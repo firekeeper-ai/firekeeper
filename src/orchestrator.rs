@@ -8,6 +8,7 @@ pub async fn orchestrate_and_run(
     rules: &[RuleBody],
     diff_range: &str,
     max_files_per_task: usize,
+    max_parallel_workers: Option<usize>,
     base_url: &str,
     api_key: &str,
     model: &str,
@@ -28,7 +29,34 @@ pub async fn orchestrate_and_run(
         .map(|(rule, files)| worker::worker(rule, files, base_url, api_key, model))
         .collect();
     
-    let results = join_all(futures).await;
+    // Execute workers with optional concurrency limit
+    let results = if let Some(max_workers) = max_parallel_workers {
+        // Limit parallel execution using a worker pool
+        use futures::stream::{FuturesUnordered, StreamExt};
+        let mut stream = FuturesUnordered::new();
+        let mut results = Vec::new();
+        let mut futures_iter = futures.into_iter();
+        
+        // Fill initial pool up to max_workers
+        for _ in 0..max_workers.min(futures_iter.len()) {
+            if let Some(fut) = futures_iter.next() {
+                stream.push(fut);
+            }
+        }
+        
+        // As workers complete, spawn new ones to maintain pool size
+        while let Some(result) = stream.next().await {
+            results.push(result);
+            if let Some(fut) = futures_iter.next() {
+                stream.push(fut);
+            }
+        }
+        
+        results
+    } else {
+        // No limit - run all workers in parallel
+        join_all(futures).await
+    };
     
     for (i, result) in results.iter().enumerate() {
         if let Err(e) = result {

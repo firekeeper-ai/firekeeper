@@ -39,4 +39,8 @@ pub struct ReviewArgs {
     /// Dry run: only show tasks without executing workers
     #[arg(long)]
     pub dry_run: bool,
+    
+    /// Maximum number of parallel workers (defaults to unlimited)
+    #[arg(long)]
+    pub max_parallel_workers: Option<usize>,
 }

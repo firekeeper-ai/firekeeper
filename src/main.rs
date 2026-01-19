@@ -23,6 +23,8 @@ model = "google/gemini-3-flash-preview"
 [worker]
 # Maximum number of files to process per task (optional, defaults to 5)
 max_files_per_task = 5
+# Maximum number of parallel workers (optional, defaults to unlimited)
+# max_parallel_workers = 10
 
 [[rules]]
 # Name of the rule (required)
@@ -62,10 +64,13 @@ scope = ["**/*"]
             println!("rules loaded: {}", config.rules.len());
             println!("max_files_per_task: {}", config.worker.max_files_per_task);
             
+            let max_parallel_workers = args.max_parallel_workers.or(config.worker.max_parallel_workers);
+            
             orchestrator::orchestrate_and_run(
                 &config.rules,
                 &args.diff,
                 config.worker.max_files_per_task,
+                max_parallel_workers,
                 &config.llm.base_url,
                 &args.api_key,
                 &config.llm.model,
