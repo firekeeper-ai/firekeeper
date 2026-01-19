@@ -139,20 +139,12 @@ fn get_changed_files(diff_base: &str) -> Vec<String> {
         base.to_string()
     };
     
-    let output = if base == "HEAD" {
-        // Review uncommitted changes (working directory vs HEAD)
-        Command::new("git")
-            .args(["diff", "--name-only", "HEAD"])
-            .output()
-            .expect("Failed to execute git diff")
-    } else {
-        // Review committed changes (base..HEAD)
-        let diff_range = format!("{}..HEAD", base);
-        Command::new("git")
-            .args(["diff", "--name-only", &diff_range])
-            .output()
-            .expect("Failed to execute git diff")
-    };
+    // git diff <base> compares working directory to base
+    // This includes both committed changes since base AND uncommitted changes
+    let output = Command::new("git")
+        .args(["diff", "--name-only", &base])
+        .output()
+        .expect("Failed to execute git diff");
     
     String::from_utf8_lossy(&output.stdout)
         .lines()
