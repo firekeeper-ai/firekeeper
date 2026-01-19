@@ -1,4 +1,3 @@
-use serde::Serialize;
 use serde_json::json;
 use std::path::Path;
 use grep::regex::RegexMatcher;
@@ -72,13 +71,6 @@ pub fn create_fs_tools() -> Vec<Tool> {
             },
         },
     ]
-}
-
-/// Search match with line number and context.
-#[derive(Debug, Serialize)]
-struct SearchMatch {
-    line_number: usize,
-    context: String,
 }
 
 /// Read file contents with optional line range.
@@ -155,40 +147,6 @@ fn list_dir_recursive<'a>(
         
         Ok(())
     })
-}
-
-/// Search for a pattern in a file with context lines (case-insensitive).
-/// Returns JSON array of SearchMatch objects.
-pub async fn search_in_file(path: &str, pattern: &str, context_lines: usize) -> Result<String, String> {
-    debug!("Searching in file: {} for pattern: {}", path, pattern);
-    let content = match tokio::fs::read_to_string(path).await {
-        Ok(c) => c,
-        Err(e) => return Err(format!("Error reading file: {}", e)),
-    };
-    
-    let lines: Vec<&str> = content.lines().collect();
-    let pattern_lower = pattern.to_lowercase();
-    let mut matches = Vec::new();
-    
-    for (line_num, line) in lines.iter().enumerate() {
-        if line.to_lowercase().contains(&pattern_lower) {
-            let start = line_num.saturating_sub(context_lines);
-            let end = lines.len().min(line_num + context_lines + 1);
-            
-            let mut context_text = Vec::new();
-            for i in start..end {
-                let prefix = if i == line_num { "→ " } else { "  " };
-                context_text.push(format!("{}{}: {}", prefix, i + 1, lines[i]));
-            }
-            
-            matches.push(SearchMatch {
-                line_number: line_num + 1,
-                context: context_text.join("\n"),
-            });
-        }
-    }
-    
-    serde_json::to_string(&matches).map_err(|e| format!("Error serializing results: {}", e))
 }
 
 /// Grep a path using regex pattern with ripgrep.
