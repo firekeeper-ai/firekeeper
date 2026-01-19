@@ -77,7 +77,7 @@ impl OpenAIProvider {
     }
 }
 
-impl super::r#loop::LLMProvider for OpenAIProvider {
+impl crate::agent::r#loop::LLMProvider for OpenAIProvider {
     async fn call(&mut self, messages: &[Message], tools: &[Tool]) -> Result<Message, Box<dyn std::error::Error>> {
         trace!("Request: {} messages, {} tools", messages.len(), tools.len());
         

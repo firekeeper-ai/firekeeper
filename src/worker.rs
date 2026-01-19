@@ -1,6 +1,6 @@
-use crate::agent::openai::{OpenAIProvider, Tool, ToolFunction};
+use crate::agent::llm::openai::{OpenAIProvider, Tool, ToolFunction};
 use crate::agent::r#loop::AgentLoop;
-use crate::fs_tool;
+use crate::agent::tool::fs;
 use crate::rule::body::RuleBody;
 use serde_json::json;
 use tracing::{debug, info, trace};
@@ -121,34 +121,34 @@ fn create_fs_tools() -> Vec<Tool> {
 struct FsToolExecutor;
 
 impl crate::agent::r#loop::ToolExecutor for FsToolExecutor {
-    fn execute(&self, tool_call: &crate::agent::openai::ToolCall) -> String {
+    fn execute(&self, tool_call: &crate::agent::llm::openai::ToolCall) -> String {
         let args: serde_json::Value = match serde_json::from_str(&tool_call.function.arguments) {
             Ok(v) => v,
             Err(e) => return format!("Error parsing arguments: {}", e),
         };
         
         let operation = match tool_call.function.name.as_str() {
-            "fs_read_file" => fs_tool::FsOperation::ReadFile {
+            "fs_read_file" => fs::FsOperation::ReadFile {
                 path: args["path"].as_str().unwrap_or("").to_string(),
                 start_line: args["start_line"].as_u64().map(|v| v as usize),
                 end_line: args["end_line"].as_u64().map(|v| v as usize),
             },
-            "fs_list_dir" => fs_tool::FsOperation::ListDir {
+            "fs_list_dir" => fs::FsOperation::ListDir {
                 path: args["path"].as_str().unwrap_or("").to_string(),
                 depth: args["depth"].as_u64().map(|v| v as usize),
             },
-            "fs_grep" => fs_tool::FsOperation::Grep {
+            "fs_grep" => fs::FsOperation::Grep {
                 path: args["path"].as_str().unwrap_or("").to_string(),
                 pattern: args["pattern"].as_str().unwrap_or("").to_string(),
             },
-            "fs_glob_files" => fs_tool::FsOperation::GlobFiles {
+            "fs_glob_files" => fs::FsOperation::GlobFiles {
                 path: args["path"].as_str().unwrap_or("").to_string(),
                 pattern: args["pattern"].as_str().unwrap_or("").to_string(),
             },
             _ => return format!("Unknown tool: {}", tool_call.function.name),
         };
         
-        let result = fs_tool::execute(&operation);
+        let result = fs::execute(&operation);
         if result.success {
             result.content
         } else {
