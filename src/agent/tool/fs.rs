@@ -1,40 +1,10 @@
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::fs;
 use std::path::Path;
 use grep::regex::RegexMatcher;
 use grep::searcher::{Searcher, sinks::UTF8};
 use globset::{Glob, GlobSetBuilder};
-use tracing::{debug, trace};
-
-/// File system operations for reading files, listing directories, and searching.
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(tag = "mode")]
-pub enum FsOperation {
-    /// Read file contents with optional line range.
-    ReadFile { 
-        path: String,
-        #[serde(default)]
-        start_line: Option<usize>,
-        #[serde(default)]
-        end_line: Option<usize>,
-    },
-    /// List directory contents with optional recursive depth.
-    ListDir { 
-        path: String,
-        #[serde(default)]
-        depth: Option<usize>,
-    },
-    /// Search for a pattern in a file with context lines.
-    SearchInFile { path: String, pattern: String, #[serde(default = "default_context_lines")] context_lines: usize },
-    /// Grep a path using regex pattern with ripgrep.
-    Grep { path: String, pattern: String },
-    /// Find files matching a glob pattern.
-    GlobFiles { path: String, pattern: String },
-}
-
-fn default_context_lines() -> usize {
-    2
-}
+use tracing::debug;
 
 /// Result of a file system operation.
 #[derive(Debug, Serialize)]
@@ -50,38 +20,10 @@ struct SearchMatch {
     context: String,
 }
 
-/// Execute a file system operation.
-pub fn execute(operation: &FsOperation) -> FsResult {
-    trace!("Executing fs operation: {:?}", operation);
-    let result = match operation {
-        FsOperation::ReadFile { path, start_line, end_line } => {
-            debug!("Reading file: {}", path);
-            read_file(path, *start_line, *end_line)
-        },
-        FsOperation::ListDir { path, depth } => {
-            debug!("Listing directory: {} (depth: {:?})", path, depth);
-            list_dir(path, *depth)
-        },
-        FsOperation::SearchInFile { path, pattern, context_lines } => {
-            debug!("Searching in file: {} for pattern: {}", path, pattern);
-            search_in_file(path, pattern, *context_lines)
-        },
-        FsOperation::Grep { path, pattern } => {
-            debug!("Grepping path: {} for pattern: {}", path, pattern);
-            grep(path, pattern)
-        },
-        FsOperation::GlobFiles { path, pattern } => {
-            debug!("Globbing files in: {} with pattern: {}", path, pattern);
-            glob_files(path, pattern)
-        },
-    };
-    trace!("Fs operation result: success={}", result.success);
-    result
-}
-
 /// Read file contents with optional line range.
 /// Lines are 1-indexed and prefixed with line numbers.
-fn read_file(path: &str, start_line: Option<usize>, end_line: Option<usize>) -> FsResult {
+pub fn read_file(path: &str, start_line: Option<usize>, end_line: Option<usize>) -> FsResult {
+    debug!("Reading file: {}", path);
     match fs::read_to_string(path) {
         Ok(content) => {
             let lines: Vec<&str> = content.lines().collect();
@@ -116,7 +58,8 @@ fn read_file(path: &str, start_line: Option<usize>, end_line: Option<usize>) -> 
 
 /// List directory contents recursively up to specified depth.
 /// Entries are prefixed with 'd' for directories and 'f' for files.
-fn list_dir(path: &str, depth: Option<usize>) -> FsResult {
+pub fn list_dir(path: &str, depth: Option<usize>) -> FsResult {
+    debug!("Listing directory: {} (depth: {:?})", path, depth);
     let mut items = Vec::new();
     
     if let Err(e) = list_dir_recursive(path, depth.unwrap_or(0), 0, "", &mut items) {
@@ -164,7 +107,8 @@ fn list_dir_recursive(
 
 /// Search for a pattern in a file with context lines (case-insensitive).
 /// Returns JSON array of SearchMatch objects.
-fn search_in_file(path: &str, pattern: &str, context_lines: usize) -> FsResult {
+pub fn search_in_file(path: &str, pattern: &str, context_lines: usize) -> FsResult {
+    debug!("Searching in file: {} for pattern: {}", path, pattern);
     let content = match fs::read_to_string(path) {
         Ok(c) => c,
         Err(e) => return FsResult {
@@ -209,7 +153,8 @@ fn search_in_file(path: &str, pattern: &str, context_lines: usize) -> FsResult {
 
 /// Grep a path using regex pattern with ripgrep.
 /// Returns matches in format "line_number:line_content".
-fn grep(path: &str, pattern: &str) -> FsResult {
+pub fn grep(path: &str, pattern: &str) -> FsResult {
+    debug!("Grepping path: {} for pattern: {}", path, pattern);
     let matcher = match RegexMatcher::new(pattern) {
         Ok(m) => m,
         Err(e) => return FsResult {
@@ -244,7 +189,8 @@ fn grep(path: &str, pattern: &str) -> FsResult {
 
 /// Find files matching a glob pattern recursively.
 /// Searches up to depth 20 and returns up to 1000 matches.
-fn glob_files(path: &str, pattern: &str) -> FsResult {
+pub fn glob_files(path: &str, pattern: &str) -> FsResult {
+    debug!("Globbing files in: {} with pattern: {}", path, pattern);
     let glob = match Glob::new(pattern) {
         Ok(g) => g,
         Err(e) => return FsResult {

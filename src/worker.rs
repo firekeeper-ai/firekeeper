@@ -127,28 +127,27 @@ impl crate::agent::r#loop::ToolExecutor for FsToolExecutor {
             Err(e) => return format!("Error parsing arguments: {}", e),
         };
         
-        let operation = match tool_call.function.name.as_str() {
-            "fs_read_file" => fs::FsOperation::ReadFile {
-                path: args["path"].as_str().unwrap_or("").to_string(),
-                start_line: args["start_line"].as_u64().map(|v| v as usize),
-                end_line: args["end_line"].as_u64().map(|v| v as usize),
-            },
-            "fs_list_dir" => fs::FsOperation::ListDir {
-                path: args["path"].as_str().unwrap_or("").to_string(),
-                depth: args["depth"].as_u64().map(|v| v as usize),
-            },
-            "fs_grep" => fs::FsOperation::Grep {
-                path: args["path"].as_str().unwrap_or("").to_string(),
-                pattern: args["pattern"].as_str().unwrap_or("").to_string(),
-            },
-            "fs_glob_files" => fs::FsOperation::GlobFiles {
-                path: args["path"].as_str().unwrap_or("").to_string(),
-                pattern: args["pattern"].as_str().unwrap_or("").to_string(),
-            },
+        let result = match tool_call.function.name.as_str() {
+            "fs_read_file" => fs::read_file(
+                args["path"].as_str().unwrap_or(""),
+                args["start_line"].as_u64().map(|v| v as usize),
+                args["end_line"].as_u64().map(|v| v as usize),
+            ),
+            "fs_list_dir" => fs::list_dir(
+                args["path"].as_str().unwrap_or(""),
+                args["depth"].as_u64().map(|v| v as usize),
+            ),
+            "fs_grep" => fs::grep(
+                args["path"].as_str().unwrap_or(""),
+                args["pattern"].as_str().unwrap_or(""),
+            ),
+            "fs_glob_files" => fs::glob_files(
+                args["path"].as_str().unwrap_or(""),
+                args["pattern"].as_str().unwrap_or(""),
+            ),
             _ => return format!("Unknown tool: {}", tool_call.function.name),
         };
         
-        let result = fs::execute(&operation);
         if result.success {
             result.content
         } else {
