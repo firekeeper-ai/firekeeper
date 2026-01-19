@@ -3,7 +3,7 @@ use crate::worker;
 use futures::future::join_all;
 use globset::{Glob, GlobSetBuilder};
 use std::process::Command;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, trace, warn};
 
 pub async fn orchestrate_and_run(
     rules: &[RuleBody],
@@ -15,8 +15,14 @@ pub async fn orchestrate_and_run(
     model: &str,
     dry_run: bool,
 ) {
+    debug!("Getting changed files for base: {}", diff_base);
     let changed_files = get_changed_files(diff_base);
+    info!("Found {} changed files", changed_files.len());
+    trace!("Changed files: {:?}", changed_files);
+    
+    debug!("Orchestrating tasks with max_files_per_task: {}", max_files_per_task);
     let tasks = orchestrate(rules, &changed_files, max_files_per_task);
+    info!("Created {} tasks", tasks.len());
     
     if dry_run {
         info!("Dry run - {} tasks to execute:", tasks.len());
@@ -26,9 +32,16 @@ pub async fn orchestrate_and_run(
         return;
     }
     
+    debug!("Creating worker futures for {} tasks", tasks.len());
     let futures: Vec<_> = tasks.into_iter()
         .map(|(rule, files)| worker::worker(rule, files, base_url, api_key, model))
         .collect();
+    
+    if let Some(max) = max_parallel_workers {
+        info!("Running workers with max parallelism: {}", max);
+    } else {
+        info!("Running workers with unlimited parallelism");
+    }
     
     // Execute workers with optional concurrency limit
     let results = if let Some(max_workers) = max_parallel_workers {
@@ -62,8 +75,14 @@ pub async fn orchestrate_and_run(
     for (i, result) in results.iter().enumerate() {
         if let Err(e) = result {
             error!("Task {} failed: {}", i, e);
+        } else {
+            debug!("Task {} completed successfully", i);
         }
     }
+    
+    let failed = results.iter().filter(|r| r.is_err()).count();
+    let succeeded = results.len() - failed;
+    info!("Review complete: {} succeeded, {} failed", succeeded, failed);
 }
 
 fn orchestrate<'a>(
@@ -71,31 +90,44 @@ fn orchestrate<'a>(
     changed_files: &[String],
     max_files_per_task: usize,
 ) -> Vec<(&'a RuleBody, Vec<String>)> {
+    debug!("Orchestrating {} rules against {} files", rules.len(), changed_files.len());
+    
     rules.iter()
         .flat_map(|rule| {
+            trace!("Processing rule: {}", rule.name);
             let matched_files = filter_files_by_scope(rule, changed_files);
+            debug!("Rule '{}' matched {} files", rule.name, matched_files.len());
+            
             if matched_files.is_empty() {
                 return vec![];
             }
             
             split_files(&matched_files, max_files_per_task)
                 .into_iter()
-                .map(|chunk| (rule, chunk))
+                .map(|chunk| {
+                    trace!("Created chunk with {} files for rule '{}'", chunk.len(), rule.name);
+                    (rule, chunk)
+                })
                 .collect::<Vec<_>>()
         })
         .collect()
 }
 
 fn get_changed_files(diff_base: &str) -> Vec<String> {
+    trace!("get_changed_files called with base: {}", diff_base);
+    
     // Auto-detect: if base is empty, check for uncommitted changes
     let base = if diff_base.is_empty() {
+        debug!("Base is empty, checking for uncommitted changes");
         let has_uncommitted = Command::new("git")
             .args(["diff", "--quiet", "HEAD"])
             .status()
             .map(|s| !s.success())
             .unwrap_or(false);
         
-        if has_uncommitted { "HEAD" } else { "^" }
+        let detected = if has_uncommitted { "HEAD" } else { "^" };
+        debug!("Auto-detected base: {}", detected);
+        detected
     } else {
         diff_base
     };

@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tracing::{debug, trace};
 
 #[derive(Serialize)]
 struct ChatRequest {
@@ -78,6 +79,9 @@ impl OpenAIProvider {
 
 impl super::r#loop::LLMProvider for OpenAIProvider {
     async fn call(&mut self, messages: &[Message], tools: &[Tool]) -> Result<Message, Box<dyn std::error::Error>> {
+        debug!("Calling OpenAI API with model: {}", self.model);
+        trace!("Request: {} messages, {} tools", messages.len(), tools.len());
+        
         let request = ChatRequest {
             model: self.model.clone(),
             messages: messages.to_vec(),
@@ -94,7 +98,10 @@ impl super::r#loop::LLMProvider for OpenAIProvider {
             .send()
             .await?;
 
+        debug!("Received response from OpenAI API");
         let chat_response: ChatResponse = response.json().await?;
+        trace!("Response has {} choices", chat_response.choices.len());
+        
         Ok(chat_response.choices[0].message.clone())
     }
 }

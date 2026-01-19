@@ -1,4 +1,5 @@
 use super::openai::{Message, Tool, ToolCall};
+use tracing::{debug, trace};
 
 pub trait LLMProvider {
     async fn call(&mut self, messages: &[Message], tools: &[Tool]) -> Result<Message, Box<dyn std::error::Error>>;
@@ -26,6 +27,7 @@ impl<P: LLMProvider, T: ToolExecutor> AgentLoop<P, T> {
     }
 
     pub fn add_message(&mut self, role: &str, content: &str) {
+        trace!("Adding message: role={}, content_len={}", role, content.len());
         self.messages.push(Message {
             role: role.to_string(),
             content: Some(content.to_string()),
@@ -35,13 +37,23 @@ impl<P: LLMProvider, T: ToolExecutor> AgentLoop<P, T> {
     }
 
     pub async fn run(&mut self) -> Result<String, Box<dyn std::error::Error>> {
+        debug!("Starting agent loop with {} messages", self.messages.len());
+        let mut iteration = 0;
+        
         loop {
+            iteration += 1;
+            debug!("Agent loop iteration {}", iteration);
+            trace!("Calling LLM with {} messages and {} tools", self.messages.len(), self.tools.len());
+            
             let message = self.provider.call(&self.messages, &self.tools).await?;
             self.messages.push(message.clone());
 
             if let Some(tool_calls) = &message.tool_calls {
+                debug!("LLM requested {} tool calls", tool_calls.len());
                 for tool_call in tool_calls {
+                    trace!("Executing tool: {}", tool_call.function.name);
                     let result = self.tool_executor.execute(tool_call);
+                    trace!("Tool result length: {}", result.len());
                     self.messages.push(Message {
                         role: "tool".to_string(),
                         content: Some(result),
@@ -50,6 +62,7 @@ impl<P: LLMProvider, T: ToolExecutor> AgentLoop<P, T> {
                     });
                 }
             } else if let Some(content) = &message.content {
+                debug!("Agent loop completed after {} iterations", iteration);
                 return Ok(content.clone());
             }
         }

@@ -4,6 +4,7 @@ use std::path::Path;
 use grep::regex::RegexMatcher;
 use grep::searcher::{Searcher, sinks::UTF8};
 use globset::{Glob, GlobSetBuilder};
+use tracing::{debug, trace};
 
 /// File system operations for reading files, listing directories, and searching.
 #[derive(Debug, Serialize, Deserialize)]
@@ -51,13 +52,31 @@ struct SearchMatch {
 
 /// Execute a file system operation.
 pub fn execute(operation: &FsOperation) -> FsResult {
-    match operation {
-        FsOperation::ReadFile { path, start_line, end_line } => read_file(path, *start_line, *end_line),
-        FsOperation::ListDir { path, depth } => list_dir(path, *depth),
-        FsOperation::SearchInFile { path, pattern, context_lines } => search_in_file(path, pattern, *context_lines),
-        FsOperation::Grep { path, pattern } => grep(path, pattern),
-        FsOperation::GlobFiles { path, pattern } => glob_files(path, pattern),
-    }
+    trace!("Executing fs operation: {:?}", operation);
+    let result = match operation {
+        FsOperation::ReadFile { path, start_line, end_line } => {
+            debug!("Reading file: {}", path);
+            read_file(path, *start_line, *end_line)
+        },
+        FsOperation::ListDir { path, depth } => {
+            debug!("Listing directory: {} (depth: {:?})", path, depth);
+            list_dir(path, *depth)
+        },
+        FsOperation::SearchInFile { path, pattern, context_lines } => {
+            debug!("Searching in file: {} for pattern: {}", path, pattern);
+            search_in_file(path, pattern, *context_lines)
+        },
+        FsOperation::Grep { path, pattern } => {
+            debug!("Grepping path: {} for pattern: {}", path, pattern);
+            grep(path, pattern)
+        },
+        FsOperation::GlobFiles { path, pattern } => {
+            debug!("Globbing files in: {} with pattern: {}", path, pattern);
+            glob_files(path, pattern)
+        },
+    };
+    trace!("Fs operation result: success={}", result.success);
+    result
 }
 
 /// Read file contents with optional line range.
