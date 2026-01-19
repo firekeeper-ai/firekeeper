@@ -20,7 +20,8 @@ pub fn create_fs_tools() -> Vec<Tool> {
                         "path": {"type": "string", "description": "File path"},
                         "start_line": {"type": "integer", "description": "Optional start line (1-indexed)"},
                         "end_line": {"type": "integer", "description": "Optional end line (inclusive)"},
-                        "show_line_numbers": {"type": "boolean", "description": "Optional: show line numbers (default: false)"}
+                        "show_line_numbers": {"type": "boolean", "description": "Optional: show line numbers (default: false)"},
+                        "limit": {"type": "integer", "description": "Optional: maximum number of lines to return (default: 1000)"}
                     },
                     "required": ["path"]
                 }),
@@ -76,14 +77,15 @@ pub fn create_fs_tools() -> Vec<Tool> {
 
 /// Read file contents with optional line range.
 /// Lines are 1-indexed and prefixed with line numbers if show_line_numbers is true.
-pub async fn read_file(path: &str, start_line: Option<usize>, end_line: Option<usize>, show_line_numbers: bool) -> Result<String, String> {
+pub async fn read_file(path: &str, start_line: Option<usize>, end_line: Option<usize>, show_line_numbers: bool, limit: usize) -> Result<String, String> {
     debug!("Reading file: {}", path);
     match tokio::fs::read_to_string(path).await {
         Ok(content) => {
             let lines: Vec<&str> = content.lines().collect();
             
             let start = start_line.unwrap_or(1).saturating_sub(1);
-            let end = end_line.unwrap_or(lines.len()).min(lines.len());
+            let requested_end = end_line.unwrap_or(lines.len()).min(lines.len());
+            let end = requested_end.min(start + limit);
             
             if start >= lines.len() {
                 return Err(format!("Start line {} is beyond file length {}", start + 1, lines.len()));
@@ -101,7 +103,13 @@ pub async fn read_file(path: &str, start_line: Option<usize>, end_line: Option<u
                 })
                 .collect();
             
-            Ok(selected_lines.join("\n"))
+            let mut result = selected_lines.join("\n");
+            
+            if end < requested_end {
+                result.push_str(&format!("\n\n[Output truncated: showing {} of {} lines]", end - start, requested_end - start));
+            }
+            
+            Ok(result)
         }
         Err(e) => Err(format!("Error reading file: {}", e)),
     }
