@@ -1,8 +1,8 @@
-use crate::agent::llm::openai::{OpenAIProvider, Tool, ToolFunction};
+use crate::agent::llm::openai::OpenAIProvider;
 use crate::agent::r#loop::AgentLoop;
 use crate::agent::tool::fs;
+use crate::agent::types::ToolCall;
 use crate::rule::body::RuleBody;
-use serde_json::json;
 use tracing::{debug, info, trace};
 
 pub async fn worker(
@@ -17,7 +17,7 @@ pub async fn worker(
     
     debug!("Creating OpenAI provider with model: {}", model);
     let provider = OpenAIProvider::new(base_url.to_string(), api_key.to_string(), model.to_string());
-    let tools = create_fs_tools();
+    let tools = fs::create_fs_tools();
     trace!("Created {} filesystem tools", tools.len());
     let mut agent = AgentLoop::new(provider, FsToolExecutor, tools);
     
@@ -52,76 +52,10 @@ pub async fn worker(
     Ok(())
 }
 
-fn create_fs_tools() -> Vec<Tool> {
-    vec![
-        Tool {
-            tool_type: "function".to_string(),
-            function: ToolFunction {
-                name: "fs_read_file".to_string(),
-                description: "Read file contents with optional line range".to_string(),
-                parameters: json!({
-                    "type": "object",
-                    "properties": {
-                        "path": {"type": "string", "description": "File path"},
-                        "start_line": {"type": "integer", "description": "Optional start line (1-indexed)"},
-                        "end_line": {"type": "integer", "description": "Optional end line (inclusive)"}
-                    },
-                    "required": ["path"]
-                }),
-            },
-        },
-        Tool {
-            tool_type: "function".to_string(),
-            function: ToolFunction {
-                name: "fs_list_dir".to_string(),
-                description: "List directory contents with optional recursive depth".to_string(),
-                parameters: json!({
-                    "type": "object",
-                    "properties": {
-                        "path": {"type": "string", "description": "Directory path"},
-                        "depth": {"type": "integer", "description": "Optional recursion depth (0 for non-recursive)"}
-                    },
-                    "required": ["path"]
-                }),
-            },
-        },
-        Tool {
-            tool_type: "function".to_string(),
-            function: ToolFunction {
-                name: "fs_grep".to_string(),
-                description: "Search for regex pattern in a file using ripgrep".to_string(),
-                parameters: json!({
-                    "type": "object",
-                    "properties": {
-                        "path": {"type": "string", "description": "File path"},
-                        "pattern": {"type": "string", "description": "Regex pattern"}
-                    },
-                    "required": ["path", "pattern"]
-                }),
-            },
-        },
-        Tool {
-            tool_type: "function".to_string(),
-            function: ToolFunction {
-                name: "fs_glob_files".to_string(),
-                description: "Find files matching a glob pattern".to_string(),
-                parameters: json!({
-                    "type": "object",
-                    "properties": {
-                        "path": {"type": "string", "description": "Directory path to search"},
-                        "pattern": {"type": "string", "description": "Glob pattern (e.g., **/*.rs)"}
-                    },
-                    "required": ["path", "pattern"]
-                }),
-            },
-        },
-    ]
-}
-
 struct FsToolExecutor;
 
 impl crate::agent::r#loop::ToolExecutor for FsToolExecutor {
-    fn execute(&self, tool_call: &crate::agent::llm::openai::ToolCall) -> String {
+    fn execute(&self, tool_call: &ToolCall) -> String {
         let args: serde_json::Value = match serde_json::from_str(&tool_call.function.arguments) {
             Ok(v) => v,
             Err(e) => return format!("Error parsing arguments: {}", e),

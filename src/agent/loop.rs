@@ -1,4 +1,4 @@
-use super::llm::openai::{Message, Tool, ToolCall};
+use super::types::{Message, Tool, ToolCall};
 use tracing::{debug, trace, trace_span};
 
 pub trait LLMProvider {

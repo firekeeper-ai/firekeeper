@@ -1,10 +1,79 @@
 use serde::Serialize;
+use serde_json::json;
 use std::fs;
 use std::path::Path;
 use grep::regex::RegexMatcher;
 use grep::searcher::{Searcher, sinks::UTF8};
 use globset::{Glob, GlobSetBuilder};
 use tracing::debug;
+
+use crate::agent::types::{Tool, ToolFunction};
+
+pub fn create_fs_tools() -> Vec<Tool> {
+    vec![
+        Tool {
+            tool_type: "function".to_string(),
+            function: ToolFunction {
+                name: "fs_read_file".to_string(),
+                description: "Read file contents with optional line range".to_string(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "File path"},
+                        "start_line": {"type": "integer", "description": "Optional start line (1-indexed)"},
+                        "end_line": {"type": "integer", "description": "Optional end line (inclusive)"}
+                    },
+                    "required": ["path"]
+                }),
+            },
+        },
+        Tool {
+            tool_type: "function".to_string(),
+            function: ToolFunction {
+                name: "fs_list_dir".to_string(),
+                description: "List directory contents with optional recursive depth".to_string(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "Directory path"},
+                        "depth": {"type": "integer", "description": "Optional recursion depth (0 for non-recursive)"}
+                    },
+                    "required": ["path"]
+                }),
+            },
+        },
+        Tool {
+            tool_type: "function".to_string(),
+            function: ToolFunction {
+                name: "fs_grep".to_string(),
+                description: "Search for regex pattern in a file using ripgrep".to_string(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "File path"},
+                        "pattern": {"type": "string", "description": "Regex pattern"}
+                    },
+                    "required": ["path", "pattern"]
+                }),
+            },
+        },
+        Tool {
+            tool_type: "function".to_string(),
+            function: ToolFunction {
+                name: "fs_glob_files".to_string(),
+                description: "Find files matching a glob pattern".to_string(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "Directory path to search"},
+                        "pattern": {"type": "string", "description": "Glob pattern (e.g., **/*.rs)"}
+                    },
+                    "required": ["path", "pattern"]
+                }),
+            },
+        },
+    ]
+}
 
 /// Result of a file system operation.
 #[derive(Debug, Serialize)]
