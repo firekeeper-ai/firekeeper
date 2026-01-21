@@ -1,5 +1,6 @@
 use serde_json::json;
 use std::path::Path;
+use std::collections::HashMap;
 use grep::regex::RegexMatcher;
 use grep::searcher::{Searcher, sinks::UTF8};
 use globset::{Glob, GlobSetBuilder};
@@ -22,6 +23,20 @@ pub fn create_fs_tools() -> Vec<Tool> {
                         "end_line": {"type": "integer", "description": "Optional end line (inclusive)"},
                         "show_line_numbers": {"type": "boolean", "description": "Optional: show line numbers (default: false)"},
                         "limit": {"type": "integer", "description": "Optional: maximum number of lines to return (default: 1000)"}
+                    },
+                    "required": ["path"]
+                }),
+            },
+        },
+        Tool {
+            tool_type: "function".to_string(),
+            function: ToolFunction {
+                name: "diff".to_string(),
+                description: "Get git diff for a file. Do not use for lock files or generated files.".to_string(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "File path"}
                     },
                     "required": ["path"]
                 }),
@@ -251,4 +266,15 @@ fn glob_recursive(
     }
     
     Ok(())
+}
+
+pub async fn diff_file(
+    path: &str,
+    diffs: &HashMap<String, String>,
+) -> Result<String, String> {
+    debug!("Getting diff for file: {}", path);
+    
+    diffs.get(path)
+        .cloned()
+        .ok_or_else(|| format!("No diff available for file: {}", path))
 }

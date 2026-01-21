@@ -2,6 +2,7 @@ use crate::rule::body::RuleBody;
 use crate::worker;
 use futures::future::join_all;
 use globset::{Glob, GlobSetBuilder};
+use std::collections::HashMap;
 use std::process::Command;
 use tracing::{debug, error, info, trace, warn};
 
@@ -15,10 +16,16 @@ pub async fn orchestrate_and_run(
     model: &str,
     dry_run: bool,
 ) {
-    debug!("Getting changed files for base: {}", diff_base);
-    let changed_files = get_changed_files(diff_base);
+    let base = resolve_base(diff_base);
+    debug!("Resolved base: {}", base);
+    
+    debug!("Getting changed files for base: {}", base);
+    let changed_files = get_changed_files(&base);
     info!("Found {} changed files", changed_files.len());
     trace!("Changed files: {:?}", changed_files);
+    
+    debug!("Generating diffs for {} files", changed_files.len());
+    let diffs = get_diffs(&base, &changed_files);
     
     debug!("Orchestrating tasks with max_files_per_task: {}", max_files_per_task);
     let tasks = orchestrate(rules, &changed_files, max_files_per_task);
@@ -34,7 +41,7 @@ pub async fn orchestrate_and_run(
     
     debug!("Creating worker futures for {} tasks", tasks.len());
     let futures: Vec<_> = tasks.into_iter()
-        .map(|(rule, files)| worker::worker(rule, files, base_url, api_key, model))
+        .map(|(rule, files)| worker::worker(rule, files, base_url, api_key, model, diffs.clone()))
         .collect();
     
     if let Some(max) = max_parallel_workers {
@@ -116,10 +123,7 @@ fn orchestrate<'a>(
         .collect()
 }
 
-fn get_changed_files(diff_base: &str) -> Vec<String> {
-    trace!("get_changed_files called with base: {}", diff_base);
-    
-    // Auto-detect: if base is empty, check for uncommitted changes
+fn resolve_base(diff_base: &str) -> String {
     let base = if diff_base.is_empty() {
         debug!("Base is empty, checking for uncommitted changes");
         let has_uncommitted = Command::new("git")
@@ -127,7 +131,6 @@ fn get_changed_files(diff_base: &str) -> Vec<String> {
             .status()
             .map(|s| !s.success())
             .unwrap_or(false);
-        
         let detected = if has_uncommitted { "HEAD" } else { "^" };
         debug!("Auto-detected base: {}", detected);
         detected
@@ -135,24 +138,22 @@ fn get_changed_files(diff_base: &str) -> Vec<String> {
         diff_base
     };
     
-    // Prepend HEAD if base starts with ~ or ^
-    let base = if base.starts_with('~') || base.starts_with('^') {
+    if base.starts_with('~') || base.starts_with('^') {
         format!("HEAD{}", base)
     } else {
         base.to_string()
-    };
-    
-    // Check for magic constant to review all files
+    }
+}
+
+fn get_changed_files(base: &str) -> Vec<String> {
     let output = if base == "ROOT" {
         Command::new("git")
             .args(["ls-files"])
             .output()
             .expect("Failed to execute git ls-files")
     } else {
-        // git diff <base> compares working directory to base
-        // This includes both committed changes since base AND uncommitted changes
         Command::new("git")
-            .args(["diff", "--name-only", &base])
+            .args(["diff", "--name-only", base])
             .output()
             .expect("Failed to execute git diff")
     };
@@ -161,6 +162,32 @@ fn get_changed_files(diff_base: &str) -> Vec<String> {
         .lines()
         .map(|s| s.to_string())
         .collect()
+}
+
+fn get_diffs(base: &str, files: &[String]) -> HashMap<String, String> {
+    let mut diffs = HashMap::new();
+    
+    let diff_base = if base == "ROOT" {
+        "4b825dc642cb6eb9a060e54bf8d69288fbee4904" // git empty tree hash
+    } else {
+        base
+    };
+    
+    for file in files {
+        if let Ok(output) = Command::new("git")
+            .args(["diff", diff_base, "--", file])
+            .output()
+        {
+            if output.status.success() {
+                let diff = String::from_utf8_lossy(&output.stdout).to_string();
+                if !diff.is_empty() {
+                    diffs.insert(file.clone(), diff);
+                }
+            }
+        }
+    }
+    
+    diffs
 }
 
 fn filter_files_by_scope(rule: &RuleBody, files: &[String]) -> Vec<String> {

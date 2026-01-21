@@ -3,10 +3,12 @@ use crate::agent::r#loop::AgentLoop;
 use crate::agent::tool::{fs, web, report};
 use crate::agent::types::ToolCall;
 use crate::rule::body::RuleBody;
+use std::collections::HashMap;
 use tracing::{debug, info, trace};
 
 pub struct WorkerState {
     pub violations: Vec<report::Violation>,
+    pub diffs: HashMap<String, String>,
 }
 
 pub async fn worker(
@@ -15,6 +17,7 @@ pub async fn worker(
     base_url: &str,
     api_key: &str,
     model: &str,
+    diffs: HashMap<String, String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     info!("Worker: reviewing {} files for rule '{}'", files.len(), rule.name);
     trace!("Files to review: {:?}", files);
@@ -27,6 +30,7 @@ pub async fn worker(
     trace!("Created {} tools", tools.len());
     let state = WorkerState {
         violations: Vec::new(),
+        diffs,
     };
     let mut agent = AgentLoop::new(provider, ToolExecutor, tools, state);
     
@@ -92,6 +96,10 @@ impl crate::agent::r#loop::ToolExecutor<WorkerState> for ToolExecutor {
                 args["end_line"].as_u64().map(|v| v as usize),
                 args["show_line_numbers"].as_bool().unwrap_or(false),
                 args["limit"].as_u64().map(|v| v as usize).unwrap_or(1000),
+            ).await,
+            "diff" => fs::diff_file(
+                args["path"].as_str().unwrap_or(""),
+                &state.diffs,
             ).await,
             "ls" => fs::list_dir(
                 args["path"].as_str().unwrap_or(""),
