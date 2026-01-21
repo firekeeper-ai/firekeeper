@@ -1,6 +1,8 @@
 use crate::config::{DEFAULT_BASE_URL, DEFAULT_MODEL};
 use clap::{Parser, Subcommand};
 
+const LOG_LEVEL_DISPLAY_ORDER: usize = 100;
+
 #[derive(Parser)]
 #[command(name = "firekeeper", version, about = "Code review tool that enforces custom rules", long_about = None)]
 pub struct Cli {
@@ -13,7 +15,7 @@ pub struct Cli {
         global = true,
         hide_default_value = true,
         hide_env = true,
-        display_order = 100,
+        display_order = LOG_LEVEL_DISPLAY_ORDER,
         verbatim_doc_comment
     )]
     pub log_level: String,
@@ -37,6 +39,7 @@ pub struct InitArgs {
     pub config: String,
 }
 
+/// Arguments for the review command
 #[derive(Parser, Debug)]
 pub struct ReviewArgs {
     /// Base commit to compare against.

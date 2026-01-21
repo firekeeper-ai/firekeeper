@@ -68,6 +68,8 @@ Options:
           Dry run: only show tasks without executing workers
       --max-parallel-workers <MAX_PARALLEL_WORKERS>
           Maximum number of parallel workers (defaults to unlimited)
+      --output <OUTPUT>
+          Output file path (.md or .json)
   -h, --help
           Print help
 ```

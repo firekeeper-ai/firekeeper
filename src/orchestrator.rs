@@ -6,6 +6,14 @@ use std::collections::HashMap;
 use std::process::Command;
 use tracing::{debug, error, info, trace, warn};
 
+/// Orchestrate and run code review tasks
+///
+/// This function coordinates the entire review process:
+/// - Resolves the base commit for comparison
+/// - Gets changed files and generates diffs
+/// - Splits work into tasks based on rules and file scopes
+/// - Executes workers in parallel (with optional concurrency limit)
+/// - Collects and outputs results
 pub async fn orchestrate_and_run(
     rules: &[RuleBody],
     diff_base: &str,
@@ -125,16 +133,11 @@ pub async fn orchestrate_and_run(
 fn print_violations(violations_by_file: &HashMap<String, HashMap<String, Vec<String>>>) {
     if violations_by_file.is_empty() {
         info!("No violations found");
-    } else {
-        for (file, rules) in violations_by_file {
-            info!("# Violations in {}", file);
-            for (rule, details) in rules {
-                info!("## Rule: {}", rule);
-                for detail in details {
-                    info!("- {}", detail);
-                }
-            }
-        }
+        return;
+    }
+    
+    for line in format_violations(violations_by_file).lines() {
+        info!("{}", line);
     }
 }
 
@@ -142,7 +145,7 @@ fn write_output(path: &str, violations_by_file: &HashMap<String, HashMap<String,
     let content = if path.ends_with(".json") {
         serde_json::to_string_pretty(violations_by_file).unwrap()
     } else if path.ends_with(".md") {
-        format_markdown(violations_by_file)
+        format_violations(violations_by_file)
     } else {
         error!("Output file must end with .md or .json");
         std::process::exit(1);
@@ -156,23 +159,22 @@ fn write_output(path: &str, violations_by_file: &HashMap<String, HashMap<String,
     info!("Results written to {}", path);
 }
 
-fn format_markdown(violations_by_file: &HashMap<String, HashMap<String, Vec<String>>>) -> String {
+fn format_violations(violations_by_file: &HashMap<String, HashMap<String, Vec<String>>>) -> String {
     if violations_by_file.is_empty() {
-        return "No violations found\n".to_string();
+        return "No violations found".to_string();
     }
     
     let mut output = String::new();
     for (file, rules) in violations_by_file {
-        output.push_str(&format!("# Violations in {}\n\n", file));
+        output.push_str(&format!("# Violations in {}\n", file));
         for (rule, details) in rules {
-            output.push_str(&format!("## Rule: {}\n\n", rule));
+            output.push_str(&format!("## Rule: {}\n", rule));
             for detail in details {
                 output.push_str(&format!("- {}\n", detail));
             }
-            output.push('\n');
         }
     }
-    output
+    output.trim_end().to_string()
 }
 
 fn orchestrate<'a>(
@@ -263,7 +265,9 @@ fn get_diffs(base: &str, files: &[String]) -> HashMap<String, String> {
     let mut diffs = HashMap::new();
 
     let diff_base = if base == "ROOT" {
-        "4b825dc642cb6eb9a060e54bf8d69288fbee4904" // git empty tree hash
+        // Git empty tree hash - a stable constant representing an empty tree object.
+        // This SHA-1 hash will never change as it's the result of hashing an empty tree.
+        "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
     } else {
         base
     };
