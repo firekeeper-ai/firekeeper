@@ -86,6 +86,7 @@ scope = ["**/*"]
                 &args.api_key,
                 model,
                 args.dry_run,
+                args.output.as_deref(),
             )
             .await;
         }

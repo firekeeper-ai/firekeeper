@@ -74,4 +74,8 @@ pub struct ReviewArgs {
     /// Maximum number of parallel workers (defaults to unlimited)
     #[arg(long)]
     pub max_parallel_workers: Option<usize>,
+
+    /// Output file path (.md or .json)
+    #[arg(long)]
+    pub output: Option<String>,
 }

@@ -15,6 +15,7 @@ pub async fn orchestrate_and_run(
     api_key: &str,
     model: &str,
     dry_run: bool,
+    output: Option<&str>,
 ) {
     let base = resolve_base(diff_base);
     debug!("Resolved base: {}", base);
@@ -113,7 +114,15 @@ pub async fn orchestrate_and_run(
         }
     }
     
-    // Print formatted results
+    // Output results
+    if let Some(output_path) = output {
+        write_output(output_path, &violations_by_file);
+    } else {
+        print_violations(&violations_by_file);
+    }
+}
+
+fn print_violations(violations_by_file: &HashMap<String, HashMap<String, Vec<String>>>) {
     if violations_by_file.is_empty() {
         info!("No violations found");
     } else {
@@ -127,6 +136,43 @@ pub async fn orchestrate_and_run(
             }
         }
     }
+}
+
+fn write_output(path: &str, violations_by_file: &HashMap<String, HashMap<String, Vec<String>>>) {
+    let content = if path.ends_with(".json") {
+        serde_json::to_string_pretty(violations_by_file).unwrap()
+    } else if path.ends_with(".md") {
+        format_markdown(violations_by_file)
+    } else {
+        error!("Output file must end with .md or .json");
+        std::process::exit(1);
+    };
+    
+    if let Err(e) = std::fs::write(path, content) {
+        error!("Failed to write output file: {}", e);
+        std::process::exit(1);
+    }
+    
+    info!("Results written to {}", path);
+}
+
+fn format_markdown(violations_by_file: &HashMap<String, HashMap<String, Vec<String>>>) -> String {
+    if violations_by_file.is_empty() {
+        return "No violations found\n".to_string();
+    }
+    
+    let mut output = String::new();
+    for (file, rules) in violations_by_file {
+        output.push_str(&format!("# Violations in {}\n\n", file));
+        for (rule, details) in rules {
+            output.push_str(&format!("## Rule: {}\n\n", rule));
+            for detail in details {
+                output.push_str(&format!("- {}\n", detail));
+            }
+            output.push('\n');
+        }
+    }
+    output
 }
 
 fn orchestrate<'a>(
