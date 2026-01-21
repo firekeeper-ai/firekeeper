@@ -35,7 +35,7 @@ Exceptions:
 - Magic numbers in tests are allowed.
 - Magic numbers in configuration files are allowed.
 - Numbers with explanatory comments are allowed.
-- Common sense numbers: 0, 1, 2, -1 in array indexing, loop increments, exit codes, and simple arithmetic.
+- Common sense numbers: 0, 1, -1 in array indexing, loop increments, exit codes, and simple arithmetic.
 """
 scope = ["**/*"]
 max_files_per_task = 10
