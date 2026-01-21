@@ -5,7 +5,8 @@ use crate::config::{DEFAULT_BASE_URL, DEFAULT_MODEL};
 #[command(name = "firekeeper", version, about = "Code review tool that enforces custom rules", long_about = None)]
 pub struct Cli {
     /// Log level (see https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html)
-    #[arg(long, env = "FIREKEEPER_LOG", default_value = "info", global = true)]
+    /// [env: FIREKEEPER_LOG=] [default: info]
+    #[arg(long, env = "FIREKEEPER_LOG", default_value = "info", global = true, hide_default_value = true, hide_env = true, verbatim_doc_comment)]
     pub log_level: String,
     
     #[command(subcommand)]
@@ -30,9 +31,10 @@ pub struct InitArgs {
 #[derive(Parser, Debug)]
 pub struct ReviewArgs {
     /// Base commit to compare against.
-    /// Examples: HEAD^ or ^, HEAD~1 or ~1, commit hash, @{1.day.ago}, HEAD for uncommitted changes, ROOT for all files
+    /// Examples: HEAD^ or ^, HEAD~1 or ~1, commit hash, @{1.day.ago}.
+    /// HEAD for uncommitted changes, ROOT for all files
     /// [default: HEAD if uncommitted changes exist, otherwise ^]
-    #[arg(long, default_value = "", hide_default_value = true)]
+    #[arg(long, default_value = "", hide_default_value = true, verbatim_doc_comment)]
     pub base: String,
     
     /// Path to config file (initialize with `firekeeper init`)
