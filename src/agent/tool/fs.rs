@@ -1,9 +1,9 @@
-use serde_json::json;
-use std::path::Path;
-use std::collections::HashMap;
+use globset::{Glob, GlobSetBuilder};
 use grep::regex::RegexMatcher;
 use grep::searcher::{Searcher, sinks::UTF8};
-use globset::{Glob, GlobSetBuilder};
+use serde_json::json;
+use std::collections::HashMap;
+use std::path::Path;
 use tracing::debug;
 
 use crate::agent::types::{Tool, ToolFunction};
@@ -32,7 +32,9 @@ pub fn create_fs_tools() -> Vec<Tool> {
             tool_type: "function".to_string(),
             function: ToolFunction {
                 name: "diff".to_string(),
-                description: "Get git diff for a file. Do not use for lock files or generated files.".to_string(),
+                description:
+                    "Get git diff for a file. Do not use for lock files or generated files."
+                        .to_string(),
                 parameters: json!({
                     "type": "object",
                     "properties": {
@@ -92,20 +94,30 @@ pub fn create_fs_tools() -> Vec<Tool> {
 
 /// Read file contents with optional line range.
 /// Lines are 1-indexed and prefixed with line numbers if show_line_numbers is true.
-pub async fn read_file(path: &str, start_line: Option<usize>, end_line: Option<usize>, show_line_numbers: bool, limit: usize) -> Result<String, String> {
+pub async fn read_file(
+    path: &str,
+    start_line: Option<usize>,
+    end_line: Option<usize>,
+    show_line_numbers: bool,
+    limit: usize,
+) -> Result<String, String> {
     debug!("Reading file: {}", path);
     match tokio::fs::read_to_string(path).await {
         Ok(content) => {
             let lines: Vec<&str> = content.lines().collect();
-            
+
             let start = start_line.unwrap_or(1).saturating_sub(1);
             let requested_end = end_line.unwrap_or(lines.len()).min(lines.len());
             let end = requested_end.min(start + limit);
-            
+
             if start >= lines.len() {
-                return Err(format!("Start line {} is beyond file length {}", start + 1, lines.len()));
+                return Err(format!(
+                    "Start line {} is beyond file length {}",
+                    start + 1,
+                    lines.len()
+                ));
             }
-            
+
             let selected_lines: Vec<String> = lines[start..end]
                 .iter()
                 .enumerate()
@@ -117,13 +129,17 @@ pub async fn read_file(path: &str, start_line: Option<usize>, end_line: Option<u
                     }
                 })
                 .collect();
-            
+
             let mut result = selected_lines.join("\n");
-            
+
             if end < requested_end {
-                result.push_str(&format!("\n\n[Output truncated: showing {} of {} lines]", end - start, requested_end - start));
+                result.push_str(&format!(
+                    "\n\n[Output truncated: showing {} of {} lines]",
+                    end - start,
+                    requested_end - start
+                ));
             }
-            
+
             Ok(result)
         }
         Err(e) => Err(format!("Error reading file: {}", e)),
@@ -135,11 +151,11 @@ pub async fn read_file(path: &str, start_line: Option<usize>, end_line: Option<u
 pub async fn list_dir(path: &str, depth: Option<usize>) -> Result<String, String> {
     debug!("Listing directory: {} (depth: {:?})", path, depth);
     let mut items = Vec::new();
-    
+
     if let Err(e) = list_dir_recursive(path, depth.unwrap_or(0), 0, "", &mut items).await {
         return Err(format!("Error listing directory: {}", e));
     }
-    
+
     Ok(items.join("\n"))
 }
 
@@ -153,28 +169,35 @@ fn list_dir_recursive<'a>(
     Box::pin(async move {
         let mut entries = tokio::fs::read_dir(path).await?;
         let mut entry_list = Vec::new();
-        
+
         while let Some(entry) = entries.next_entry().await? {
             entry_list.push(entry);
         }
         entry_list.sort_by_key(|e| e.file_name());
-        
+
         for entry in entry_list {
             let file_type = entry.file_type().await?;
             let name = entry.file_name();
             let name_str = name.to_string_lossy();
-            
+
             let type_prefix = if file_type.is_dir() { "d" } else { "f" };
             items.push(format!("{}{} {}", prefix, type_prefix, name_str));
-            
+
             if file_type.is_dir() && current_depth < max_depth {
                 let new_path = entry.path();
                 if let Some(path_str) = new_path.to_str() {
-                    list_dir_recursive(path_str, max_depth, current_depth + 1, &format!("{}  ", prefix), items).await?;
+                    list_dir_recursive(
+                        path_str,
+                        max_depth,
+                        current_depth + 1,
+                        &format!("{}  ", prefix),
+                        items,
+                    )
+                    .await?;
                 }
             }
         }
-        
+
         Ok(())
     })
 }
@@ -185,16 +208,16 @@ pub async fn grep(path: &str, pattern: &str) -> Result<String, String> {
     debug!("Grepping path: {} for pattern: {}", path, pattern);
     let path = path.to_string();
     let pattern = pattern.to_string();
-    
+
     tokio::task::spawn_blocking(move || {
         let matcher = match RegexMatcher::new(&pattern) {
             Ok(m) => m,
             Err(e) => return Err(format!("Invalid regex pattern: {}", e)),
         };
-        
+
         let mut matches = Vec::new();
         let mut searcher = Searcher::new();
-        
+
         let result = searcher.search_path(
             &matcher,
             &path,
@@ -203,12 +226,14 @@ pub async fn grep(path: &str, pattern: &str) -> Result<String, String> {
                 Ok(true)
             }),
         );
-        
+
         match result {
             Ok(_) => Ok(matches.join("\n")),
             Err(e) => Err(format!("Grep error: {}", e)),
         }
-    }).await.unwrap_or_else(|e| Err(format!("Task join error: {}", e)))
+    })
+    .await
+    .unwrap_or_else(|e| Err(format!("Task join error: {}", e)))
 }
 
 /// Find files matching a glob pattern recursively.
@@ -217,27 +242,29 @@ pub async fn glob_files(path: &str, pattern: &str) -> Result<String, String> {
     debug!("Globbing files in: {} with pattern: {}", path, pattern);
     let path = path.to_string();
     let pattern = pattern.to_string();
-    
+
     tokio::task::spawn_blocking(move || {
         let glob = match Glob::new(&pattern) {
             Ok(g) => g,
             Err(e) => return Err(format!("Invalid glob pattern: {}", e)),
         };
-        
+
         let mut builder = GlobSetBuilder::new();
         builder.add(glob);
         let globset = match builder.build() {
             Ok(gs) => gs,
             Err(e) => return Err(format!("Failed to build globset: {}", e)),
         };
-        
+
         let mut matches = Vec::new();
         if let Err(e) = glob_recursive(Path::new(&path), &globset, &mut matches, 0) {
             return Err(format!("Error searching: {}", e));
         }
-        
+
         Ok(matches.join("\n"))
-    }).await.unwrap_or_else(|e| Err(format!("Task join error: {}", e)))
+    })
+    .await
+    .unwrap_or_else(|e| Err(format!("Task join error: {}", e)))
 }
 
 fn glob_recursive(
@@ -249,32 +276,30 @@ fn glob_recursive(
     if depth > 20 || matches.len() >= 1000 {
         return Ok(());
     }
-    
+
     for entry in std::fs::read_dir(path)? {
         let entry = entry?;
         let entry_path = entry.path();
-        
+
         if let Some(path_str) = entry_path.to_str() {
             if globset.is_match(path_str) {
                 matches.push(path_str.to_string());
             }
         }
-        
+
         if entry_path.is_dir() {
             glob_recursive(&entry_path, globset, matches, depth + 1)?;
         }
     }
-    
+
     Ok(())
 }
 
-pub async fn diff_file(
-    path: &str,
-    diffs: &HashMap<String, String>,
-) -> Result<String, String> {
+pub async fn diff_file(path: &str, diffs: &HashMap<String, String>) -> Result<String, String> {
     debug!("Getting diff for file: {}", path);
-    
-    diffs.get(path)
+
+    diffs
+        .get(path)
         .cloned()
         .ok_or_else(|| format!("No diff available for file: {}", path))
 }

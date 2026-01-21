@@ -2,7 +2,11 @@ use super::types::{Message, Tool, ToolCall};
 use tracing::{debug, trace, trace_span};
 
 pub trait LLMProvider {
-    async fn call(&mut self, messages: &[Message], tools: &[Tool]) -> Result<Message, Box<dyn std::error::Error>>;
+    async fn call(
+        &mut self,
+        messages: &[Message],
+        tools: &[Tool],
+    ) -> Result<Message, Box<dyn std::error::Error>>;
 }
 
 pub trait ToolExecutor<S> {
@@ -29,7 +33,11 @@ impl<P: LLMProvider, T: ToolExecutor<S>, S> AgentLoop<P, T, S> {
     }
 
     pub fn add_message(&mut self, role: &str, content: &str) {
-        trace!("Adding message: role={}, content_len={}", role, content.len());
+        trace!(
+            "Adding message: role={}, content_len={}",
+            role,
+            content.len()
+        );
         self.messages.push(Message {
             role: role.to_string(),
             content: Some(content.to_string()),
@@ -41,21 +49,25 @@ impl<P: LLMProvider, T: ToolExecutor<S>, S> AgentLoop<P, T, S> {
     pub async fn run(&mut self) -> Result<String, Box<dyn std::error::Error>> {
         trace!("Starting agent loop with {} messages", self.messages.len());
         let mut iteration = 0;
-        
+
         loop {
             iteration += 1;
             trace_span!("Agent loop iteration {}", iteration);
-            trace!("Calling LLM with {} messages and {} tools", self.messages.len(), self.tools.len());
-            
+            trace!(
+                "Calling LLM with {} messages and {} tools",
+                self.messages.len(),
+                self.tools.len()
+            );
+
             let message = self.provider.call(&self.messages, &self.tools).await?;
-            
+
             // Log message content if present and non-empty
             if let Some(content) = &message.content {
                 if !content.is_empty() {
                     debug!("LLM response content: {}", content);
                 }
             }
-            
+
             self.messages.push(message.clone());
 
             if let Some(tool_calls) = &message.tool_calls {

@@ -1,6 +1,6 @@
 use crate::agent::llm::openai::OpenAIProvider;
 use crate::agent::r#loop::AgentLoop;
-use crate::agent::tool::{fs, web, report};
+use crate::agent::tool::{fs, report, web};
 use crate::agent::types::ToolCall;
 use crate::rule::body::RuleBody;
 use std::collections::HashMap;
@@ -19,11 +19,16 @@ pub async fn worker(
     model: &str,
     diffs: HashMap<String, String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    info!("Worker: reviewing {} files for rule '{}'", files.len(), rule.name);
+    info!(
+        "Worker: reviewing {} files for rule '{}'",
+        files.len(),
+        rule.name
+    );
     trace!("Files to review: {:?}", files);
-    
+
     debug!("Creating OpenAI provider with model: {}", model);
-    let provider = OpenAIProvider::new(base_url.to_string(), api_key.to_string(), model.to_string());
+    let provider =
+        OpenAIProvider::new(base_url.to_string(), api_key.to_string(), model.to_string());
     let mut tools = fs::create_fs_tools();
     tools.extend(web::create_web_tools());
     tools.extend(report::create_report_tools());
@@ -33,7 +38,7 @@ pub async fn worker(
         diffs,
     };
     let mut agent = AgentLoop::new(provider, ToolExecutor, tools, state);
-    
+
     // System message
     trace!("Adding system message to agent");
     agent.add_message(
@@ -43,7 +48,7 @@ pub async fn worker(
         You can read related files if needed, but only report issues related to the provided files and rule. \
         Use the report tool to report all violations found and then exit without summary."
     );
-    
+
     // User message with rule and files
     let files_list = files.join("\n- ");
     let user_message = format!(
@@ -51,24 +56,25 @@ pub async fn worker(
         - {}\n\n\
         Against this rule:\n\n\
         <rule>\n{}\n</rule>",
-        files_list,
-        rule.instruction
+        files_list, rule.instruction
     );
     trace!("Adding user message with {} files", files.len());
     trace!("User message: {}", user_message);
     agent.add_message("user", &user_message);
-    
+
     debug!("Starting agent loop for rule '{}'", rule.name);
     agent.run().await?;
-    
+
     // Merge violations by file
-    let mut violations_by_file: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+    let mut violations_by_file: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
     for violation in &agent.state.violations {
-        violations_by_file.entry(violation.file.clone())
+        violations_by_file
+            .entry(violation.file.clone())
             .or_insert_with(Vec::new)
             .push(violation.detail.clone());
     }
-    
+
     // Print violations grouped by file
     for (file, details) in violations_by_file {
         info!("Violations in {}:", file);
@@ -76,7 +82,7 @@ pub async fn worker(
             info!("  - {}", detail);
         }
     }
-    
+
     Ok(())
 }
 
@@ -88,42 +94,52 @@ impl crate::agent::r#loop::ToolExecutor<WorkerState> for ToolExecutor {
             Ok(v) => v,
             Err(e) => return format!("Error parsing arguments: {}", e),
         };
-        
+
         let result = match tool_call.function.name.as_str() {
-            "read" => fs::read_file(
-                args["path"].as_str().unwrap_or(""),
-                args["start_line"].as_u64().map(|v| v as usize),
-                args["end_line"].as_u64().map(|v| v as usize),
-                args["show_line_numbers"].as_bool().unwrap_or(false),
-                args["limit"].as_u64().map(|v| v as usize).unwrap_or(1000),
-            ).await,
-            "diff" => fs::diff_file(
-                args["path"].as_str().unwrap_or(""),
-                &state.diffs,
-            ).await,
-            "ls" => fs::list_dir(
-                args["path"].as_str().unwrap_or(""),
-                args["depth"].as_u64().map(|v| v as usize),
-            ).await,
-            "rg" => fs::grep(
-                args["path"].as_str().unwrap_or(""),
-                args["pattern"].as_str().unwrap_or(""),
-            ).await,
-            "glob" => fs::glob_files(
-                args["path"].as_str().unwrap_or(""),
-                args["pattern"].as_str().unwrap_or(""),
-            ).await,
+            "read" => {
+                fs::read_file(
+                    args["path"].as_str().unwrap_or(""),
+                    args["start_line"].as_u64().map(|v| v as usize),
+                    args["end_line"].as_u64().map(|v| v as usize),
+                    args["show_line_numbers"].as_bool().unwrap_or(false),
+                    args["limit"].as_u64().map(|v| v as usize).unwrap_or(1000),
+                )
+                .await
+            }
+            "diff" => fs::diff_file(args["path"].as_str().unwrap_or(""), &state.diffs).await,
+            "ls" => {
+                fs::list_dir(
+                    args["path"].as_str().unwrap_or(""),
+                    args["depth"].as_u64().map(|v| v as usize),
+                )
+                .await
+            }
+            "rg" => {
+                fs::grep(
+                    args["path"].as_str().unwrap_or(""),
+                    args["pattern"].as_str().unwrap_or(""),
+                )
+                .await
+            }
+            "glob" => {
+                fs::glob_files(
+                    args["path"].as_str().unwrap_or(""),
+                    args["pattern"].as_str().unwrap_or(""),
+                )
+                .await
+            }
             "fetch" => web::fetch(args["url"].as_str().unwrap_or("")).await,
             "report" => {
-                let violations: Vec<report::Violation> = match serde_json::from_value(args["violations"].clone()) {
-                    Ok(v) => v,
-                    Err(e) => return format!("Error parsing violations: {}", e),
-                };
+                let violations: Vec<report::Violation> =
+                    match serde_json::from_value(args["violations"].clone()) {
+                        Ok(v) => v,
+                        Err(e) => return format!("Error parsing violations: {}", e),
+                    };
                 report::report_violations(violations, &mut state.violations).await
             }
             _ => return format!("Unknown tool: {}", tool_call.function.name),
         };
-        
+
         match result {
             Ok(content) => content,
             Err(error) => format!("Error: {}", error),

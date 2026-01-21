@@ -18,19 +18,22 @@ pub async fn orchestrate_and_run(
 ) {
     let base = resolve_base(diff_base);
     debug!("Resolved base: {}", base);
-    
+
     debug!("Getting changed files for base: {}", base);
     let changed_files = get_changed_files(&base);
     info!("Found {} changed files", changed_files.len());
     trace!("Changed files: {:?}", changed_files);
-    
+
     debug!("Generating diffs for {} files", changed_files.len());
     let diffs = get_diffs(&base, &changed_files);
-    
-    debug!("Orchestrating tasks with max_files_per_task: {}", max_files_per_task);
+
+    debug!(
+        "Orchestrating tasks with max_files_per_task: {}",
+        max_files_per_task
+    );
     let tasks = orchestrate(rules, &changed_files, max_files_per_task);
     info!("Created {} tasks", tasks.len());
-    
+
     if dry_run {
         info!("Dry run - {} tasks to execute:", tasks.len());
         for (i, (rule, files)) in tasks.iter().enumerate() {
@@ -38,18 +41,19 @@ pub async fn orchestrate_and_run(
         }
         return;
     }
-    
+
     debug!("Creating worker futures for {} tasks", tasks.len());
-    let futures: Vec<_> = tasks.into_iter()
+    let futures: Vec<_> = tasks
+        .into_iter()
         .map(|(rule, files)| worker::worker(rule, files, base_url, api_key, model, diffs.clone()))
         .collect();
-    
+
     if let Some(max) = max_parallel_workers {
         info!("Running workers with max parallelism: {}", max);
     } else {
         info!("Running workers with unlimited parallelism");
     }
-    
+
     // Execute workers with optional concurrency limit
     let results = if let Some(max_workers) = max_parallel_workers {
         // Limit parallel execution using a worker pool
@@ -57,14 +61,14 @@ pub async fn orchestrate_and_run(
         let mut stream = FuturesUnordered::new();
         let mut results = Vec::new();
         let mut futures_iter = futures.into_iter();
-        
+
         // Fill initial pool up to max_workers
         for _ in 0..max_workers.min(futures_iter.len()) {
             if let Some(fut) = futures_iter.next() {
                 stream.push(fut);
             }
         }
-        
+
         // As workers complete, spawn new ones to maintain pool size
         while let Some(result) = stream.next().await {
             results.push(result);
@@ -72,13 +76,13 @@ pub async fn orchestrate_and_run(
                 stream.push(fut);
             }
         }
-        
+
         results
     } else {
         // No limit - run all workers in parallel
         join_all(futures).await
     };
-    
+
     for (i, result) in results.iter().enumerate() {
         if let Err(e) = result {
             error!("Task {} failed: {}", i, e);
@@ -86,10 +90,13 @@ pub async fn orchestrate_and_run(
             debug!("Task {} completed successfully", i);
         }
     }
-    
+
     let failed = results.iter().filter(|r| r.is_err()).count();
     let succeeded = results.len() - failed;
-    info!("Review complete: {} succeeded, {} failed", succeeded, failed);
+    info!(
+        "Review complete: {} succeeded, {} failed",
+        succeeded, failed
+    );
 }
 
 fn orchestrate<'a>(
@@ -97,25 +104,37 @@ fn orchestrate<'a>(
     changed_files: &[String],
     global_max_files_per_task: usize,
 ) -> Vec<(&'a RuleBody, Vec<String>)> {
-    debug!("Orchestrating {} rules against {} files", rules.len(), changed_files.len());
-    
-    rules.iter()
+    debug!(
+        "Orchestrating {} rules against {} files",
+        rules.len(),
+        changed_files.len()
+    );
+
+    rules
+        .iter()
         .flat_map(|rule| {
             trace!("Processing rule: {}", rule.name);
             let matched_files = filter_files_by_scope(rule, changed_files);
             debug!("Rule '{}' matched {} files", rule.name, matched_files.len());
-            
+
             if matched_files.is_empty() {
                 return vec![];
             }
-            
+
             let max_files = rule.max_files_per_task.unwrap_or(global_max_files_per_task);
-            debug!("Rule '{}' using max_files_per_task: {}", rule.name, max_files);
-            
+            debug!(
+                "Rule '{}' using max_files_per_task: {}",
+                rule.name, max_files
+            );
+
             split_files(&matched_files, max_files)
                 .into_iter()
                 .map(|chunk| {
-                    trace!("Created chunk with {} files for rule '{}'", chunk.len(), rule.name);
+                    trace!(
+                        "Created chunk with {} files for rule '{}'",
+                        chunk.len(),
+                        rule.name
+                    );
                     (rule, chunk)
                 })
                 .collect::<Vec<_>>()
@@ -137,7 +156,7 @@ fn resolve_base(diff_base: &str) -> String {
     } else {
         diff_base
     };
-    
+
     if base.starts_with('~') || base.starts_with('^') {
         format!("HEAD{}", base)
     } else {
@@ -157,7 +176,7 @@ fn get_changed_files(base: &str) -> Vec<String> {
             .output()
             .expect("Failed to execute git diff")
     };
-    
+
     String::from_utf8_lossy(&output.stdout)
         .lines()
         .map(|s| s.to_string())
@@ -166,13 +185,13 @@ fn get_changed_files(base: &str) -> Vec<String> {
 
 fn get_diffs(base: &str, files: &[String]) -> HashMap<String, String> {
     let mut diffs = HashMap::new();
-    
+
     let diff_base = if base == "ROOT" {
         "4b825dc642cb6eb9a060e54bf8d69288fbee4904" // git empty tree hash
     } else {
         base
     };
-    
+
     for file in files {
         if let Ok(output) = Command::new("git")
             .args(["diff", diff_base, "--", file])
@@ -186,7 +205,7 @@ fn get_diffs(base: &str, files: &[String]) -> HashMap<String, String> {
             }
         }
     }
-    
+
     diffs
 }
 
@@ -196,12 +215,15 @@ fn filter_files_by_scope(rule: &RuleBody, files: &[String]) -> Vec<String> {
         match Glob::new(pattern) {
             Ok(glob) => builder.add(glob),
             Err(e) => {
-                warn!("Invalid glob pattern '{}' in rule '{}': {}", pattern, rule.name, e);
+                warn!(
+                    "Invalid glob pattern '{}' in rule '{}': {}",
+                    pattern, rule.name, e
+                );
                 continue;
             }
         };
     }
-    
+
     let globset = match builder.build() {
         Ok(gs) => gs,
         Err(e) => {
@@ -209,8 +231,9 @@ fn filter_files_by_scope(rule: &RuleBody, files: &[String]) -> Vec<String> {
             return vec![];
         }
     };
-    
-    files.iter()
+
+    files
+        .iter()
         .filter(|f| globset.is_match(f))
         .cloned()
         .collect()
@@ -220,12 +243,13 @@ fn split_files(files: &[String], max_per_task: usize) -> Vec<Vec<String>> {
     if files.is_empty() {
         return vec![];
     }
-    
+
     let total = files.len();
     let num_chunks = (total + max_per_task - 1) / max_per_task;
     let chunk_size = (total + num_chunks - 1) / num_chunks;
-    
-    files.chunks(chunk_size)
+
+    files
+        .chunks(chunk_size)
         .map(|chunk| chunk.to_vec())
         .collect()
 }

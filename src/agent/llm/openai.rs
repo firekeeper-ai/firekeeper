@@ -40,9 +40,17 @@ impl OpenAIProvider {
 }
 
 impl crate::agent::r#loop::LLMProvider for OpenAIProvider {
-    async fn call(&mut self, messages: &[Message], tools: &[Tool]) -> Result<Message, Box<dyn std::error::Error>> {
-        trace!("Request: {} messages, {} tools", messages.len(), tools.len());
-        
+    async fn call(
+        &mut self,
+        messages: &[Message],
+        tools: &[Tool],
+    ) -> Result<Message, Box<dyn std::error::Error>> {
+        trace!(
+            "Request: {} messages, {} tools",
+            messages.len(),
+            tools.len()
+        );
+
         let request = ChatRequest {
             model: self.model.clone(),
             messages: messages.to_vec(),
@@ -61,7 +69,7 @@ impl crate::agent::r#loop::LLMProvider for OpenAIProvider {
 
         let chat_response: ChatResponse = response.json().await?;
         trace!("Response has {} choices", chat_response.choices.len());
-        
+
         Ok(chat_response.choices[0].message.clone())
     }
 }

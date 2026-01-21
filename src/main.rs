@@ -9,19 +9,19 @@ mod worker;
 use clap::Parser;
 use cli::{Cli, Commands};
 use config::Config;
-use tracing::{trace, error, info};
+use tracing::{error, info, trace};
 
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
-    
+
     // Initialize tracing subscriber with log level from CLI/env
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::new(&cli.log_level))
         .without_time()
         .with_target(false)
         .init();
-    
+
     match &cli.command {
         Commands::Init(args) => {
             const DEFAULT_CONFIG: &str = r#"[llm]
@@ -45,17 +45,17 @@ instruction = """
 # Glob patterns to match files this rule applies to (optional, defaults to ["**/*"])
 scope = ["**/*"]
 "#;
-            
+
             if std::path::Path::new(&args.config).exists() {
                 error!("Error: {} already exists", args.config);
                 std::process::exit(1);
             }
-            
+
             std::fs::write(&args.config, DEFAULT_CONFIG).unwrap_or_else(|e| {
                 error!("Error writing config: {}", e);
                 std::process::exit(1);
             });
-            
+
             info!("Created {}", args.config);
         }
         Commands::Review(args) => {
@@ -63,14 +63,20 @@ scope = ["**/*"]
                 error!("Failed to load config: {}", e);
                 std::process::exit(1);
             });
-            
+
             trace!("args: {:#?}", args);
             trace!("config: {:#?}", config);
-            
-            let max_parallel_workers = args.max_parallel_workers.or(config.worker.max_parallel_workers);
-            let base_url = args.base_url.as_deref().or(Some(&config.llm.base_url)).unwrap();
+
+            let max_parallel_workers = args
+                .max_parallel_workers
+                .or(config.worker.max_parallel_workers);
+            let base_url = args
+                .base_url
+                .as_deref()
+                .or(Some(&config.llm.base_url))
+                .unwrap();
             let model = args.model.as_deref().or(Some(&config.llm.model)).unwrap();
-            
+
             orchestrator::orchestrate_and_run(
                 &config.rules,
                 &args.base,
@@ -80,7 +86,8 @@ scope = ["**/*"]
                 &args.api_key,
                 model,
                 args.dry_run,
-            ).await;
+            )
+            .await;
         }
     }
 }
