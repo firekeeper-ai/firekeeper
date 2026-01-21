@@ -18,7 +18,7 @@ pub async fn worker(
     api_key: &str,
     model: &str,
     diffs: HashMap<String, String>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(String, Vec<report::Violation>), Box<dyn std::error::Error>> {
     info!(
         "Worker: reviewing {} files for rule '{}'",
         files.len(),
@@ -65,25 +65,7 @@ pub async fn worker(
     debug!("Starting agent loop for rule '{}'", rule.name);
     agent.run().await?;
 
-    // Merge violations by file
-    let mut violations_by_file: std::collections::HashMap<String, Vec<String>> =
-        std::collections::HashMap::new();
-    for violation in &agent.state.violations {
-        violations_by_file
-            .entry(violation.file.clone())
-            .or_insert_with(Vec::new)
-            .push(violation.detail.clone());
-    }
-
-    // Print violations grouped by file
-    for (file, details) in violations_by_file {
-        info!("Violations in {}:", file);
-        for detail in details {
-            info!("  - {}", detail);
-        }
-    }
-
-    Ok(())
+    Ok((rule.name.clone(), agent.state.violations))
 }
 
 struct ToolExecutor;

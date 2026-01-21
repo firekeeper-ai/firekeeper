@@ -97,6 +97,36 @@ pub async fn orchestrate_and_run(
         "Review complete: {} succeeded, {} failed",
         succeeded, failed
     );
+    
+    // Group by file, then by rule
+    let mut violations_by_file: HashMap<String, HashMap<String, Vec<String>>> = HashMap::new();
+    for result in results {
+        if let Ok((rule_name, violations)) = result {
+            for violation in violations {
+                violations_by_file
+                    .entry(violation.file)
+                    .or_insert_with(HashMap::new)
+                    .entry(rule_name.clone())
+                    .or_insert_with(Vec::new)
+                    .push(violation.detail);
+            }
+        }
+    }
+    
+    // Print formatted results
+    if violations_by_file.is_empty() {
+        info!("No violations found");
+    } else {
+        for (file, rules) in violations_by_file {
+            info!("# Violations in {}", file);
+            for (rule, details) in rules {
+                info!("## Rule: {}", rule);
+                for detail in details {
+                    info!("- {}", detail);
+                }
+            }
+        }
+    }
 }
 
 fn orchestrate<'a>(
