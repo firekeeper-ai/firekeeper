@@ -15,6 +15,9 @@ pub struct RuleBody {
     /// e.g. ["src/**/*.ts"]
     #[serde(default = "default_scope")]
     pub scope: Vec<String>,
+    /// Maximum files per task for this rule (overrides global config)
+    #[serde(default)]
+    pub max_files_per_task: Option<usize>,
 }
 
 fn default_scope() -> Vec<String> {

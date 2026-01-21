@@ -88,7 +88,7 @@ pub async fn orchestrate_and_run(
 fn orchestrate<'a>(
     rules: &'a [RuleBody],
     changed_files: &[String],
-    max_files_per_task: usize,
+    global_max_files_per_task: usize,
 ) -> Vec<(&'a RuleBody, Vec<String>)> {
     debug!("Orchestrating {} rules against {} files", rules.len(), changed_files.len());
     
@@ -102,7 +102,10 @@ fn orchestrate<'a>(
                 return vec![];
             }
             
-            split_files(&matched_files, max_files_per_task)
+            let max_files = rule.max_files_per_task.unwrap_or(global_max_files_per_task);
+            debug!("Rule '{}' using max_files_per_task: {}", rule.name, max_files);
+            
+            split_files(&matched_files, max_files)
                 .into_iter()
                 .map(|chunk| {
                     trace!("Created chunk with {} files for rule '{}'", chunk.len(), rule.name);
