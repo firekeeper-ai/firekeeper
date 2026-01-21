@@ -55,7 +55,11 @@ pub async fn worker(
         "You are a code reviewer. Your task is to review code changes against a specific rule. \
         Focus only on the files provided and only check for violations of the given rule. \
         You can read related files if needed, but only report issues related to the provided files and rule. \
-        Use the report tool to report all violations found and then exit without summary."
+        \n\nWorkflow:\n\
+        1. Get diffs for the provided files to see what changed\n\
+        2. Search/read related files if needed for context\n\
+        3. Use the 'think' tool to reason about whether the changes violate the rule\n\
+        4. Use the 'report' tool to report all violations found, then exit without summary"
     );
 
     // User message with rule and files
@@ -122,6 +126,10 @@ impl crate::agent::r#loop::ToolExecutor<WorkerState> for ToolExecutor {
                 .await
             }
             "fetch" => web::fetch(args["url"].as_str().unwrap_or("")).await,
+            "think" => {
+                let reasoning = args["reasoning"].as_str().unwrap_or("");
+                report::think(reasoning.to_string()).await
+            }
             "report" => {
                 let violations: Vec<report::Violation> =
                     match serde_json::from_value(args["violations"].clone()) {

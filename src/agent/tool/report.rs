@@ -15,33 +15,58 @@ pub struct Violation {
 
 /// Create report tools for the agent
 pub fn create_report_tools() -> Vec<Tool> {
-    vec![Tool {
-        tool_type: "function".to_string(),
-        function: ToolFunction {
-            name: "report".to_string(),
-            description: "Report rule violations found during review".to_string(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "violations": {
-                        "type": "array",
-                        "description": "List of violations",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "file": {"type": "string", "description": "File path"},
-                                "detail": {"type": "string", "description": "Violation detail"},
-                                "start_line": {"type": "integer", "description": "Start line (1-indexed)"},
-                                "end_line": {"type": "integer", "description": "End line (inclusive)"}
-                            },
-                            "required": ["file", "detail", "start_line", "end_line"]
+    vec![
+        Tool {
+            tool_type: "function".to_string(),
+            function: ToolFunction {
+                name: "think".to_string(),
+                description: "Think through whether something is a violation. MUST be called before reporting any violations to reason about the findings.".to_string(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "reasoning": {
+                            "type": "string",
+                            "description": "Your reasoning about whether the code violates the rule, considering exceptions and context"
                         }
-                    }
-                },
-                "required": ["violations"]
-            }),
+                    },
+                    "required": ["reasoning"]
+                }),
+            },
         },
-    }]
+        Tool {
+            tool_type: "function".to_string(),
+            function: ToolFunction {
+                name: "report".to_string(),
+                description: "Report rule violations found during review. MUST call 'think' tool first.".to_string(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "violations": {
+                            "type": "array",
+                            "description": "List of violations",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "file": {"type": "string", "description": "File path"},
+                                    "detail": {"type": "string", "description": "Violation detail"},
+                                    "start_line": {"type": "integer", "description": "Start line (1-indexed)"},
+                                    "end_line": {"type": "integer", "description": "End line (inclusive)"}
+                                },
+                                "required": ["file", "detail", "start_line", "end_line"]
+                            }
+                        }
+                    },
+                    "required": ["violations"]
+                }),
+            },
+        }
+    ]
+}
+
+/// Think through whether something is a violation
+pub async fn think(reasoning: String) -> Result<String, String> {
+    debug!("Thinking: {}", reasoning);
+    Ok("Continue with your analysis".to_string())
 }
 
 /// Report violations and add them to the state
