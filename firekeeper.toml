@@ -27,6 +27,7 @@ description = "Prevent hardcoded numeric literals"
 instruction = """
 Reject magic numbers (unexplained numeric literals).
 All numbers except 0, 1, -1 should be named constants with clear meaning.
+Exception: magic numbers in tests are allowed.
 """
 scope = ["**/*"]
 
