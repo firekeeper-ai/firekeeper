@@ -270,12 +270,13 @@ fn format_violations(violations_by_file: &HashMap<String, HashMap<String, Vec<Vi
     
     let mut output = String::new();
     for (file, rules) in violations_by_file {
-        output.push_str(&format!("# Violations in {}\n", file));
+        output.push_str(&format!("# Violations in {}\n\n", file));
         for (rule, violations) in rules {
-            output.push_str(&format!("## Rule: {}\n", rule));
+            output.push_str(&format!("## Rule: {}\n\n", rule));
             for violation in violations {
                 output.push_str(&format!("- Lines {}-{}: {}\n", violation.start_line, violation.end_line, violation.detail));
             }
+            output.push('\n');
         }
     }
     output.trim_end().to_string()
