@@ -18,8 +18,15 @@ pub struct RuleBody {
     /// Maximum files per task for this rule (overrides global config)
     #[serde(default)]
     pub max_files_per_task: Option<usize>,
+    /// Whether violations of this rule should block the pipeline (exit 1)
+    #[serde(default = "default_blocking")]
+    pub blocking: bool,
 }
 
 pub fn default_scope() -> Vec<String> {
     vec!["**/*".to_string()]
+}
+
+fn default_blocking() -> bool {
+    true
 }

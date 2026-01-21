@@ -19,6 +19,7 @@ pub struct WorkerResult {
     pub rule_name: String,
     pub rule_instruction: String,
     pub files: Vec<String>,
+    pub blocking: bool,
     pub violations: Vec<report::Violation>,
     pub messages: Option<Vec<crate::agent::types::Message>>,
 }
@@ -101,6 +102,7 @@ pub async fn worker(
         rule_name: rule.name.clone(),
         rule_instruction: rule.instruction.clone(),
         files,
+        blocking: rule.blocking,
         violations: agent.state.violations,
         messages,
     })

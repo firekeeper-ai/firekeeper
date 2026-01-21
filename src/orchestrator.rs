@@ -127,10 +127,12 @@ pub async fn orchestrate_and_run(
     
     // Group violations by file, then by rule name
     let mut violations_by_file: HashMap<String, HashMap<String, Vec<Violation>>> = HashMap::new();
+    let mut blocking_rules_with_violations = std::collections::HashSet::new();
     let mut all_traces = Vec::new();
     
     for result in results {
         if let Ok(worker_result) = result {
+            let has_violations = !worker_result.violations.is_empty();
             for violation in &worker_result.violations {
                 violations_by_file
                     .entry(violation.file.clone())
@@ -138,6 +140,9 @@ pub async fn orchestrate_and_run(
                     .entry(worker_result.rule_name.clone())
                     .or_insert_with(Vec::new)
                     .push(violation.clone());
+            }
+            if has_violations && worker_result.blocking {
+                blocking_rules_with_violations.insert(worker_result.rule_name.clone());
             }
             if let Some(messages) = worker_result.messages {
                 all_traces.push(TraceEntry {
@@ -160,6 +165,12 @@ pub async fn orchestrate_and_run(
     // Write trace if enabled
     if let Some(trace_path) = trace {
         write_trace(trace_path, &all_traces);
+    }
+    
+    // Exit with error if blocking rules have violations
+    if !blocking_rules_with_violations.is_empty() {
+        error!("Blocking rules with violations: {:?}", blocking_rules_with_violations);
+        std::process::exit(EXIT_FAILURE);
     }
 }
 

@@ -30,6 +30,8 @@ instruction = """
 scope = {:?}
 # Maximum number of files to process per task (overrides global config)
 # max_files_per_task = {}
+# Whether violations should block the pipeline (optional, defaults to true)
+# blocking = true
 "#,
         DEFAULT_BASE_URL,
         DEFAULT_MODEL,
