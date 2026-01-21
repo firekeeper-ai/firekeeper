@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use tracing::debug;
 
 use crate::agent::types::{Tool, ToolFunction};
 
@@ -64,8 +63,7 @@ pub fn create_report_tools() -> Vec<Tool> {
 }
 
 /// Think through whether something is a violation
-pub async fn think(reasoning: String) -> Result<String, String> {
-    debug!("Thinking: {}", reasoning);
+pub async fn think(_reasoning: String) -> Result<String, String> {
     Ok("Continue with your analysis".to_string())
 }
 
@@ -74,8 +72,6 @@ pub async fn report_violations(
     violations: Vec<Violation>,
     state: &mut Vec<Violation>,
 ) -> Result<String, String> {
-    debug!("Reporting {} violations", violations.len());
-
     if violations.is_empty() {
         return Err("At least 1 violation is required".to_string());
     }

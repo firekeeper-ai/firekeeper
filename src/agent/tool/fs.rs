@@ -4,7 +4,6 @@ use grep::searcher::{Searcher, sinks::UTF8};
 use serde_json::json;
 use std::collections::HashMap;
 use std::path::Path;
-use tracing::debug;
 
 use crate::agent::types::{Tool, ToolFunction};
 
@@ -106,7 +105,6 @@ pub async fn read_file(
     show_line_numbers: bool,
     limit: usize,
 ) -> Result<String, String> {
-    debug!("Reading file: {}", path);
     match tokio::fs::read_to_string(path).await {
         Ok(content) => {
             let lines: Vec<&str> = content.lines().collect();
@@ -154,7 +152,6 @@ pub async fn read_file(
 /// List directory contents recursively up to specified depth.
 /// Entries are prefixed with 'd' for directories and 'f' for files.
 pub async fn list_dir(path: &str, depth: Option<usize>) -> Result<String, String> {
-    debug!("Listing directory: {} (depth: {:?})", path, depth);
     let mut items = Vec::new();
 
     if let Err(e) = list_dir_recursive(path, depth.unwrap_or(0), 0, "", &mut items).await {
@@ -210,7 +207,6 @@ fn list_dir_recursive<'a>(
 /// Grep a path using regex pattern with ripgrep.
 /// Returns matches in format "line_number:line_content".
 pub async fn grep(path: &str, pattern: &str) -> Result<String, String> {
-    debug!("Grepping path: {} for pattern: {}", path, pattern);
     let path = path.to_string();
     let pattern = pattern.to_string();
 
@@ -244,7 +240,6 @@ pub async fn grep(path: &str, pattern: &str) -> Result<String, String> {
 /// Find files matching a glob pattern recursively.
 /// Searches up to MAX_GLOB_DEPTH and returns up to MAX_GLOB_MATCHES matches.
 pub async fn glob_files(path: &str, pattern: &str) -> Result<String, String> {
-    debug!("Globbing files in: {} with pattern: {}", path, pattern);
     let path = path.to_string();
     let pattern = pattern.to_string();
 
@@ -302,8 +297,6 @@ fn glob_recursive(
 
 /// Get git diff for a file from the precomputed diffs
 pub async fn diff_file(path: &str, diffs: &HashMap<String, String>) -> Result<String, String> {
-    debug!("Getting diff for file: {}", path);
-
     diffs
         .get(path)
         .cloned()

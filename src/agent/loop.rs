@@ -79,9 +79,13 @@ impl<P: LLMProvider, T: ToolExecutor<S>, S> AgentLoop<P, T, S> {
             if let Some(tool_calls) = &message.tool_calls {
                 debug!("LLM requested {} tool calls", tool_calls.len());
                 for tool_call in tool_calls {
-                    trace!("Executing tool: {}", tool_call.function.name);
+                    debug!(
+                        "Executing tool: {} with params: {}",
+                        tool_call.function.name,
+                        tool_call.function.arguments
+                    );
                     let result = self.tool_executor.execute(tool_call, &mut self.state).await;
-                    debug!("Tool result: {}", result);
+                    trace!("Tool result: {}", result);
                     self.messages.push(Message {
                         role: "tool".to_string(),
                         content: Some(result),
