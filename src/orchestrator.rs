@@ -1,3 +1,4 @@
+use crate::agent::tool::report::Violation;
 use crate::rule::body::RuleBody;
 use crate::worker;
 use futures::future::join_all;
@@ -5,6 +6,9 @@ use globset::{Glob, GlobSetBuilder};
 use std::collections::HashMap;
 use std::process::Command;
 use tracing::{debug, error, info, trace, warn};
+
+const EXIT_FAILURE: i32 = 1;
+const GIT_EMPTY_TREE: &str = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 
 /// Orchestrate and run code review tasks
 ///
@@ -107,22 +111,22 @@ pub async fn orchestrate_and_run(
         succeeded, failed
     );
     
-    // Group by file, then by rule
-    let mut violations_by_file: HashMap<String, HashMap<String, Vec<String>>> = HashMap::new();
+    // Group violations by file, then by rule name
+    let mut violations_by_file: HashMap<String, HashMap<String, Vec<Violation>>> = HashMap::new();
     for result in results {
         if let Ok((rule_name, violations)) = result {
             for violation in violations {
                 violations_by_file
-                    .entry(violation.file)
+                    .entry(violation.file.clone())
                     .or_insert_with(HashMap::new)
                     .entry(rule_name.clone())
                     .or_insert_with(Vec::new)
-                    .push(violation.detail);
+                    .push(violation);
             }
         }
     }
     
-    // Output results
+    // Output results to file or console
     if let Some(output_path) = output {
         write_output(output_path, &violations_by_file);
     } else {
@@ -130,7 +134,7 @@ pub async fn orchestrate_and_run(
     }
 }
 
-fn print_violations(violations_by_file: &HashMap<String, HashMap<String, Vec<String>>>) {
+fn print_violations(violations_by_file: &HashMap<String, HashMap<String, Vec<Violation>>>) {
     if violations_by_file.is_empty() {
         info!("No violations found");
         return;
@@ -141,25 +145,25 @@ fn print_violations(violations_by_file: &HashMap<String, HashMap<String, Vec<Str
     }
 }
 
-fn write_output(path: &str, violations_by_file: &HashMap<String, HashMap<String, Vec<String>>>) {
+fn write_output(path: &str, violations_by_file: &HashMap<String, HashMap<String, Vec<Violation>>>) {
     let content = if path.ends_with(".json") {
         serde_json::to_string_pretty(violations_by_file).unwrap()
     } else if path.ends_with(".md") {
         format_violations(violations_by_file)
     } else {
         error!("Output file must end with .md or .json");
-        std::process::exit(1);
+        std::process::exit(EXIT_FAILURE);
     };
     
     if let Err(e) = std::fs::write(path, content) {
         error!("Failed to write output file: {}", e);
-        std::process::exit(1);
+        std::process::exit(EXIT_FAILURE);
     }
     
     info!("Results written to {}", path);
 }
 
-fn format_violations(violations_by_file: &HashMap<String, HashMap<String, Vec<String>>>) -> String {
+fn format_violations(violations_by_file: &HashMap<String, HashMap<String, Vec<Violation>>>) -> String {
     if violations_by_file.is_empty() {
         return "No violations found".to_string();
     }
@@ -167,10 +171,10 @@ fn format_violations(violations_by_file: &HashMap<String, HashMap<String, Vec<St
     let mut output = String::new();
     for (file, rules) in violations_by_file {
         output.push_str(&format!("# Violations in {}\n", file));
-        for (rule, details) in rules {
+        for (rule, violations) in rules {
             output.push_str(&format!("## Rule: {}\n", rule));
-            for detail in details {
-                output.push_str(&format!("- {}\n", detail));
+            for violation in violations {
+                output.push_str(&format!("- Lines {}-{}: {}\n", violation.start_line, violation.end_line, violation.detail));
             }
         }
     }
@@ -265,9 +269,7 @@ fn get_diffs(base: &str, files: &[String]) -> HashMap<String, String> {
     let mut diffs = HashMap::new();
 
     let diff_base = if base == "ROOT" {
-        // Git empty tree hash - a stable constant representing an empty tree object.
-        // This SHA-1 hash will never change as it's the result of hashing an empty tree.
-        "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+        GIT_EMPTY_TREE
     } else {
         base
     };
