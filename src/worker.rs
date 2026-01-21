@@ -6,11 +6,15 @@ use crate::rule::body::RuleBody;
 use std::collections::HashMap;
 use tracing::{debug, info, trace};
 
+const DEFAULT_READ_LIMIT: usize = 1000;
+
+/// Worker state containing violations and diffs
 pub struct WorkerState {
     pub violations: Vec<report::Violation>,
     pub diffs: HashMap<String, String>,
 }
 
+/// Run a review worker for a specific rule and set of files
 pub async fn worker(
     rule: &RuleBody,
     files: Vec<String>,
@@ -26,13 +30,18 @@ pub async fn worker(
     );
     trace!("Files to review: {:?}", files);
 
+    // Setup LLM provider
     debug!("Creating OpenAI provider with model: {}", model);
     let provider =
         OpenAIProvider::new(base_url.to_string(), api_key.to_string(), model.to_string());
+    
+    // Setup tools
     let mut tools = fs::create_fs_tools();
     tools.extend(web::create_web_tools());
     tools.extend(report::create_report_tools());
     trace!("Created {} tools", tools.len());
+    
+    // Setup state and agent
     let state = WorkerState {
         violations: Vec::new(),
         diffs,
@@ -62,12 +71,14 @@ pub async fn worker(
     trace!("User message: {}", user_message);
     agent.add_message("user", &user_message);
 
+    // Run agent loop
     debug!("Starting agent loop for rule '{}'", rule.name);
     agent.run().await?;
 
     Ok((rule.name.clone(), agent.state.violations))
 }
 
+/// Tool executor for worker
 struct ToolExecutor;
 
 impl crate::agent::r#loop::ToolExecutor<WorkerState> for ToolExecutor {
@@ -84,7 +95,7 @@ impl crate::agent::r#loop::ToolExecutor<WorkerState> for ToolExecutor {
                     args["start_line"].as_u64().map(|v| v as usize),
                     args["end_line"].as_u64().map(|v| v as usize),
                     args["show_line_numbers"].as_bool().unwrap_or(false),
-                    args["limit"].as_u64().map(|v| v as usize).unwrap_or(1000),
+                    args["limit"].as_u64().map(|v| v as usize).unwrap_or(DEFAULT_READ_LIMIT),
                 )
                 .await
             }

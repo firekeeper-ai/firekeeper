@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+/// LLM message
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Message {
     pub role: String,
@@ -12,6 +13,7 @@ pub struct Message {
     pub tool_call_id: Option<String>,
 }
 
+/// Tool call from LLM
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ToolCall {
     pub id: String,
@@ -20,12 +22,14 @@ pub struct ToolCall {
     pub function: FunctionCall,
 }
 
+/// Function call details
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct FunctionCall {
     pub name: String,
     pub arguments: String,
 }
 
+/// Tool definition for LLM
 #[derive(Serialize, Clone)]
 pub struct Tool {
     #[serde(rename = "type")]
@@ -33,6 +37,7 @@ pub struct Tool {
     pub function: ToolFunction,
 }
 
+/// Tool function definition
 #[derive(Serialize, Clone)]
 pub struct ToolFunction {
     pub name: String,

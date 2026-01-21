@@ -3,19 +3,27 @@ use std::fs;
 
 pub const DEFAULT_BASE_URL: &str = "https://openrouter.ai/api/v1";
 pub const DEFAULT_MODEL: &str = "google/gemini-3-flash-preview";
+pub const DEFAULT_MAX_FILES_PER_TASK: usize = 5;
 
+/// Configuration for Firekeeper code review
 #[derive(Deserialize, Debug)]
 pub struct Config {
+    /// LLM provider configuration
     pub llm: LlmConfig,
+    /// Worker configuration
     #[serde(default)]
     pub worker: WorkerConfig,
+    /// Review rules
     pub rules: Vec<crate::rule::body::RuleBody>,
 }
 
+/// LLM provider configuration
 #[derive(Deserialize, Debug)]
 pub struct LlmConfig {
+    /// LLM API base URL
     #[serde(default = "default_base_url")]
     pub base_url: String,
+    /// LLM model name
     #[serde(default = "default_model")]
     pub model: String,
 }
@@ -28,10 +36,13 @@ fn default_model() -> String {
     DEFAULT_MODEL.to_string()
 }
 
+/// Worker configuration
 #[derive(Deserialize, Debug)]
 pub struct WorkerConfig {
+    /// Maximum number of files per review task
     #[serde(default = "default_max_files_per_task")]
     pub max_files_per_task: usize,
+    /// Maximum number of parallel workers
     #[serde(default)]
     pub max_parallel_workers: Option<usize>,
 }
@@ -46,7 +57,7 @@ impl Default for WorkerConfig {
 }
 
 fn default_max_files_per_task() -> usize {
-    5
+    DEFAULT_MAX_FILES_PER_TASK
 }
 
 impl Config {

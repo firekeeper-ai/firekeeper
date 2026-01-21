@@ -4,12 +4,14 @@ use tracing::debug;
 
 use crate::agent::types::{Tool, ToolFunction};
 
+/// A code review violation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Violation {
     pub file: String,
     pub detail: String,
 }
 
+/// Create report tools for the agent
 pub fn create_report_tools() -> Vec<Tool> {
     vec![Tool {
         tool_type: "function".to_string(),
@@ -38,6 +40,7 @@ pub fn create_report_tools() -> Vec<Tool> {
     }]
 }
 
+/// Report violations and add them to the state
 pub async fn report_violations(
     violations: Vec<Violation>,
     state: &mut Vec<Violation>,

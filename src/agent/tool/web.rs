@@ -3,6 +3,7 @@ use tracing::debug;
 
 use crate::agent::types::{Tool, ToolFunction};
 
+/// Create web tools for the agent
 pub fn create_web_tools() -> Vec<Tool> {
     vec![Tool {
         tool_type: "function".to_string(),
@@ -20,6 +21,7 @@ pub fn create_web_tools() -> Vec<Tool> {
     }]
 }
 
+/// Fetch a webpage and convert HTML to Markdown
 pub async fn fetch(url: &str) -> Result<String, String> {
     debug!("Fetching URL: {}", url);
 

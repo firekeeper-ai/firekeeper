@@ -1,8 +1,12 @@
 use crate::config::{DEFAULT_BASE_URL, DEFAULT_MODEL};
 use clap::{Parser, Subcommand};
 
+// Display order for API key option (placed at top of help text)
+const API_KEY_DISPLAY_ORDER: usize = 0;
+// Display order for log level option (placed at end of help text)
 const LOG_LEVEL_DISPLAY_ORDER: usize = 100;
 
+/// CLI arguments
 #[derive(Parser)]
 #[command(name = "firekeeper", version, about = "Code review tool that enforces custom rules", long_about = None)]
 pub struct Cli {
@@ -24,6 +28,7 @@ pub struct Cli {
     pub command: Commands,
 }
 
+/// CLI subcommands
 #[derive(Subcommand)]
 pub enum Commands {
     /// Initialize a default firekeeper.toml config file
@@ -32,6 +37,7 @@ pub enum Commands {
     Review(ReviewArgs),
 }
 
+/// Arguments for the init command
 #[derive(Parser)]
 pub struct InitArgs {
     /// Path to config file
@@ -59,7 +65,7 @@ pub struct ReviewArgs {
     pub config: String,
 
     /// LLM API key
-    #[arg(long, env = "FIREKEEPER_LLM_API_KEY", display_order = 0)]
+    #[arg(long, env = "FIREKEEPER_LLM_API_KEY", display_order = API_KEY_DISPLAY_ORDER)]
     pub api_key: String,
 
     /// LLM base URL

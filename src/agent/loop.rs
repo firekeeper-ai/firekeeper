@@ -1,6 +1,7 @@
 use super::types::{Message, Tool, ToolCall};
 use tracing::{debug, trace, trace_span};
 
+/// LLM provider trait for making API calls
 pub trait LLMProvider {
     async fn call(
         &mut self,
@@ -9,10 +10,12 @@ pub trait LLMProvider {
     ) -> Result<Message, Box<dyn std::error::Error>>;
 }
 
+/// Tool executor trait for executing tool calls
 pub trait ToolExecutor<S> {
     async fn execute(&mut self, tool_call: &ToolCall, state: &mut S) -> String;
 }
 
+/// Agent loop that coordinates LLM calls and tool execution
 pub struct AgentLoop<P: LLMProvider, T: ToolExecutor<S>, S> {
     provider: P,
     tool_executor: T,
@@ -22,6 +25,7 @@ pub struct AgentLoop<P: LLMProvider, T: ToolExecutor<S>, S> {
 }
 
 impl<P: LLMProvider, T: ToolExecutor<S>, S> AgentLoop<P, T, S> {
+    /// Create a new agent loop
     pub fn new(provider: P, tool_executor: T, tools: Vec<Tool>, state: S) -> Self {
         Self {
             provider,
@@ -32,6 +36,7 @@ impl<P: LLMProvider, T: ToolExecutor<S>, S> AgentLoop<P, T, S> {
         }
     }
 
+    /// Add a message to the conversation
     pub fn add_message(&mut self, role: &str, content: &str) {
         trace!(
             "Adding message: role={}, content_len={}",
@@ -46,6 +51,7 @@ impl<P: LLMProvider, T: ToolExecutor<S>, S> AgentLoop<P, T, S> {
         });
     }
 
+    /// Run the agent loop until completion
     pub async fn run(&mut self) -> Result<String, Box<dyn std::error::Error>> {
         trace!("Starting agent loop with {} messages", self.messages.len());
         let mut iteration = 0;

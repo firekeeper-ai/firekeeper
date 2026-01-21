@@ -8,6 +8,11 @@ use tracing::debug;
 
 use crate::agent::types::{Tool, ToolFunction};
 
+const DEFAULT_READ_LIMIT: usize = 1000;
+const MAX_GLOB_DEPTH: usize = 20;
+const MAX_GLOB_MATCHES: usize = 1000;
+
+/// Create filesystem tools for the agent
 pub fn create_fs_tools() -> Vec<Tool> {
     vec![
         Tool {
@@ -22,7 +27,7 @@ pub fn create_fs_tools() -> Vec<Tool> {
                         "start_line": {"type": "integer", "description": "Optional start line (1-indexed)"},
                         "end_line": {"type": "integer", "description": "Optional end line (inclusive)"},
                         "show_line_numbers": {"type": "boolean", "description": "Optional: show line numbers (default: false)"},
-                        "limit": {"type": "integer", "description": "Optional: maximum number of lines to return (default: 1000)"}
+                        "limit": {"type": "integer", "description": format!("Optional: maximum number of lines to return (default: {})", DEFAULT_READ_LIMIT)}
                     },
                     "required": ["path"]
                 }),
@@ -237,7 +242,7 @@ pub async fn grep(path: &str, pattern: &str) -> Result<String, String> {
 }
 
 /// Find files matching a glob pattern recursively.
-/// Searches up to depth 20 and returns up to 1000 matches.
+/// Searches up to MAX_GLOB_DEPTH and returns up to MAX_GLOB_MATCHES matches.
 pub async fn glob_files(path: &str, pattern: &str) -> Result<String, String> {
     debug!("Globbing files in: {} with pattern: {}", path, pattern);
     let path = path.to_string();
@@ -273,7 +278,7 @@ fn glob_recursive(
     matches: &mut Vec<String>,
     depth: usize,
 ) -> std::io::Result<()> {
-    if depth > 20 || matches.len() >= 1000 {
+    if depth > MAX_GLOB_DEPTH || matches.len() >= MAX_GLOB_MATCHES {
         return Ok(());
     }
 
@@ -295,6 +300,7 @@ fn glob_recursive(
     Ok(())
 }
 
+/// Get git diff for a file from the precomputed diffs
 pub async fn diff_file(path: &str, diffs: &HashMap<String, String>) -> Result<String, String> {
     debug!("Getting diff for file: {}", path);
 

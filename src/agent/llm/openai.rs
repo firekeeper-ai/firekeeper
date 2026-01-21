@@ -21,6 +21,7 @@ struct Choice {
     message: Message,
 }
 
+/// OpenAI-compatible LLM provider
 pub struct OpenAIProvider {
     client: reqwest::Client,
     base_url: String,
@@ -29,6 +30,7 @@ pub struct OpenAIProvider {
 }
 
 impl OpenAIProvider {
+    /// Create a new OpenAI provider
     pub fn new(base_url: String, api_key: String, model: String) -> Self {
         Self {
             client: reqwest::Client::new(),
@@ -55,7 +57,7 @@ impl crate::agent::r#loop::LLMProvider for OpenAIProvider {
             model: self.model.clone(),
             messages: messages.to_vec(),
             tools: tools.to_vec(),
-            temperature: 0.0,
+            temperature: 0.0, // Deterministic responses
         };
 
         let response = self
@@ -70,6 +72,6 @@ impl crate::agent::r#loop::LLMProvider for OpenAIProvider {
         let chat_response: ChatResponse = response.json().await?;
         trace!("Response has {} choices", chat_response.choices.len());
 
-        Ok(chat_response.choices[0].message.clone())
+        Ok(chat_response.choices[0].message.clone()) // First choice is the primary response
     }
 }
