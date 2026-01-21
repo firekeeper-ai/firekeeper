@@ -20,6 +20,6 @@ pub struct RuleBody {
     pub max_files_per_task: Option<usize>,
 }
 
-fn default_scope() -> Vec<String> {
+pub fn default_scope() -> Vec<String> {
     vec!["**/*".to_string()]
 }

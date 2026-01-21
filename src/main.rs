@@ -24,40 +24,12 @@ async fn main() {
 
     match &cli.command {
         Commands::Init(args) => {
-            let default_config = format!(
-                r#"[llm]
-base_url = "{}"
-model = "{}"
-
-[worker]
-# Maximum number of files to process per task (optional, defaults to {})
-max_files_per_task = {}
-# Maximum number of parallel workers (optional, defaults to unlimited)
-# max_parallel_workers = 10
-
-[[rules]]
-# Name of the rule (required)
-name = ""
-# Brief description of the rule (optional, defaults to empty string)
-description = ""
-# Detailed instructions for the LLM on how to check this rule (required)
-instruction = """
-"""
-# Glob patterns to match files this rule applies to (optional, defaults to ["**/*"])
-scope = ["**/*"]
-"#,
-                config::DEFAULT_BASE_URL,
-                config::DEFAULT_MODEL,
-                config::DEFAULT_MAX_FILES_PER_TASK,
-                config::DEFAULT_MAX_FILES_PER_TASK
-            );
-
             if std::path::Path::new(&args.config).exists() {
                 error!("Error: {} already exists", args.config);
                 std::process::exit(1);
             }
 
-            std::fs::write(&args.config, default_config).unwrap_or_else(|e| {
+            std::fs::write(&args.config, config::default_config_template()).unwrap_or_else(|e| {
                 error!("Error writing config: {}", e);
                 std::process::exit(1);
             });

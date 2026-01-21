@@ -5,6 +5,42 @@ pub const DEFAULT_BASE_URL: &str = "https://openrouter.ai/api/v1";
 pub const DEFAULT_MODEL: &str = "google/gemini-3-flash-preview";
 pub const DEFAULT_MAX_FILES_PER_TASK: usize = 5;
 
+pub fn default_config_template() -> String {
+    let default_scope = crate::rule::body::default_scope();
+    format!(
+        r#"[llm]
+base_url = "{}"
+model = "{}"
+
+[worker]
+# Maximum number of files to process per task (optional, defaults to {})
+max_files_per_task = {}
+# Maximum number of parallel workers (optional, defaults to unlimited)
+# max_parallel_workers = 10
+
+[[rules]]
+# Name of the rule (required)
+name = ""
+# Brief description of the rule (optional, defaults to empty string)
+description = ""
+# Detailed instructions for the LLM on how to check this rule (required)
+instruction = """
+"""
+# Glob patterns to match files this rule applies to (optional, defaults to {:?})
+scope = {:?}
+# Maximum number of files to process per task (overrides global config)
+# max_files_per_task = {}
+"#,
+        DEFAULT_BASE_URL,
+        DEFAULT_MODEL,
+        DEFAULT_MAX_FILES_PER_TASK,
+        DEFAULT_MAX_FILES_PER_TASK,
+        default_scope,
+        default_scope,
+        DEFAULT_MAX_FILES_PER_TASK
+    )
+}
+
 /// Configuration for Firekeeper code review
 #[derive(Deserialize, Debug)]
 pub struct Config {
