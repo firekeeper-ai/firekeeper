@@ -3,21 +3,24 @@ base_url = "https://openrouter.ai/api/v1"
 model = "google/gemini-3-flash-preview"
 
 [[rules]]
-name = "No Code Duplication"
-description = "Prevent duplicate code across files"
+name = "Documentation Sync"
+description = "Ensure documentation and comments are updated with code changes"
 instruction = """
-Check if the modified content duplicates code from other files.
-Flag any duplicated logic, functions, or significant code blocks.
+When code is modified, ensure:
+- Related documentation (e.g., README.md, docs/) in the same or parent directories is updated.
+- Struct/class/method/function doc comments match the code changes.
+- Long and complex functions have comments explaining key steps.
 """
 scope = ["**/*"]
 
 [[rules]]
-name = "Documentation Sync"
-description = "Ensure documentation is updated with code changes"
+name = "No Code Duplication"
+description = "Prevent duplicate code across files"
 instruction = """
-When code is modified, verify that related documentation (README.md, docs/) in the same or parent directories is updated accordingly.
-Also ensure struct/class/method doc comments are updated to match code changes.
-Flag if documentation appears outdated.
+Ensure modified content does not duplicate code from other files.
+- If duplicating an existing function, the code should call that function instead.
+- If duplicating a code block, a shared function should be extracted.
+- Ignore trivial duplication (e.g., simple one-liners).
 """
 scope = ["**/*"]
 
@@ -25,9 +28,12 @@ scope = ["**/*"]
 name = "No Magic Numbers"
 description = "Prevent hardcoded numeric literals"
 instruction = """
-Reject magic numbers (unexplained numeric literals).
-All numbers except 0, 1, -1 should be named constants with clear meaning.
-Exception: magic numbers in tests are allowed.
+Reject magic numbers (unexplained numeric literals) in code.
+All numbers except 0, 1, and -1 should be named constants with clear meaning.
+Exceptions:
+- Magic numbers in tests are allowed.
+- Magic numbers in configuration files are allowed.
+- Numbers with explanatory comments are allowed.
 """
 scope = ["**/*"]
 
