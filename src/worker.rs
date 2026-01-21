@@ -14,7 +14,18 @@ pub struct WorkerState {
     pub diffs: HashMap<String, String>,
 }
 
+/// Worker result containing violations and optional trace messages
+pub struct WorkerResult {
+    pub rule_name: String,
+    pub rule_instruction: String,
+    pub files: Vec<String>,
+    pub violations: Vec<report::Violation>,
+    pub messages: Option<Vec<crate::agent::types::Message>>,
+}
+
 /// Run a review worker for a specific rule and set of files
+///
+/// Returns a WorkerResult containing violations found and optionally the agent conversation trace
 pub async fn worker(
     rule: &RuleBody,
     files: Vec<String>,
@@ -22,7 +33,8 @@ pub async fn worker(
     api_key: &str,
     model: &str,
     diffs: HashMap<String, String>,
-) -> Result<(String, Vec<report::Violation>), Box<dyn std::error::Error>> {
+    trace_enabled: bool,
+) -> Result<WorkerResult, Box<dyn std::error::Error>> {
     info!(
         "Worker: reviewing {} files for rule '{}'",
         files.len(),
@@ -79,7 +91,19 @@ pub async fn worker(
     debug!("Starting agent loop for rule '{}'", rule.name);
     agent.run().await?;
 
-    Ok((rule.name.clone(), agent.state.violations))
+    let messages = if trace_enabled {
+        Some(agent.messages.clone())
+    } else {
+        None
+    };
+
+    Ok(WorkerResult {
+        rule_name: rule.name.clone(),
+        rule_instruction: rule.instruction.clone(),
+        files,
+        violations: agent.state.violations,
+        messages,
+    })
 }
 
 /// Tool executor for worker

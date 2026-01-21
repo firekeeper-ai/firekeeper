@@ -65,6 +65,7 @@ async fn main() {
                 model,
                 args.dry_run,
                 args.output.as_deref(),
+                args.trace.as_deref(),
             )
             .await;
         }

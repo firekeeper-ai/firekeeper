@@ -1,13 +1,24 @@
 use crate::agent::tool::report::Violation;
+use crate::agent::types::Message;
 use crate::rule::body::RuleBody;
 use crate::worker;
 use futures::future::join_all;
 use globset::{Glob, GlobSetBuilder};
+use serde::Serialize;
 use std::collections::HashMap;
 use std::process::Command;
 use tracing::{debug, error, info, trace, warn};
 
 const EXIT_FAILURE: i32 = 1;
+
+/// Trace entry containing worker task details and agent conversation
+#[derive(Serialize)]
+struct TraceEntry {
+    rule_name: String,
+    rule_instruction: String,
+    files: Vec<String>,
+    messages: Vec<Message>,
+}
 const GIT_EMPTY_TREE: &str = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 
 /// Orchestrate and run code review tasks
@@ -18,6 +29,7 @@ const GIT_EMPTY_TREE: &str = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 /// - Splits work into tasks based on rules and file scopes
 /// - Executes workers in parallel (with optional concurrency limit)
 /// - Collects and outputs results
+/// - Optionally writes trace of agent conversations to file
 pub async fn orchestrate_and_run(
     rules: &[RuleBody],
     diff_base: &str,
@@ -28,6 +40,7 @@ pub async fn orchestrate_and_run(
     model: &str,
     dry_run: bool,
     output: Option<&str>,
+    trace: Option<&str>,
 ) {
     let base = resolve_base(diff_base);
     debug!("Resolved base: {}", base);
@@ -56,9 +69,10 @@ pub async fn orchestrate_and_run(
     }
 
     debug!("Creating worker futures for {} tasks", tasks.len());
+    let trace_enabled = trace.is_some();
     let futures: Vec<_> = tasks
         .into_iter()
-        .map(|(rule, files)| worker::worker(rule, files, base_url, api_key, model, diffs.clone()))
+        .map(|(rule, files)| worker::worker(rule, files, base_url, api_key, model, diffs.clone(), trace_enabled))
         .collect();
 
     if let Some(max) = max_parallel_workers {
@@ -113,15 +127,25 @@ pub async fn orchestrate_and_run(
     
     // Group violations by file, then by rule name
     let mut violations_by_file: HashMap<String, HashMap<String, Vec<Violation>>> = HashMap::new();
+    let mut all_traces = Vec::new();
+    
     for result in results {
-        if let Ok((rule_name, violations)) = result {
-            for violation in violations {
+        if let Ok(worker_result) = result {
+            for violation in &worker_result.violations {
                 violations_by_file
                     .entry(violation.file.clone())
                     .or_insert_with(HashMap::new)
-                    .entry(rule_name.clone())
+                    .entry(worker_result.rule_name.clone())
                     .or_insert_with(Vec::new)
-                    .push(violation);
+                    .push(violation.clone());
+            }
+            if let Some(messages) = worker_result.messages {
+                all_traces.push(TraceEntry {
+                    rule_name: worker_result.rule_name,
+                    rule_instruction: worker_result.rule_instruction,
+                    files: worker_result.files,
+                    messages,
+                });
             }
         }
     }
@@ -131,6 +155,11 @@ pub async fn orchestrate_and_run(
         write_output(output_path, &violations_by_file);
     } else {
         print_violations(&violations_by_file);
+    }
+    
+    // Write trace if enabled
+    if let Some(trace_path) = trace {
+        write_trace(trace_path, &all_traces);
     }
 }
 
@@ -161,6 +190,77 @@ fn write_output(path: &str, violations_by_file: &HashMap<String, HashMap<String,
     }
     
     info!("Results written to {}", path);
+}
+
+/// Write trace data to file in JSON or Markdown format
+fn write_trace(path: &str, traces: &[TraceEntry]) {
+    let content = if path.ends_with(".json") {
+        serde_json::to_string_pretty(traces).unwrap()
+    } else if path.ends_with(".md") {
+        format_trace_markdown(traces)
+    } else {
+        error!("Trace file must end with .md or .json");
+        std::process::exit(EXIT_FAILURE);
+    };
+    
+    if let Err(e) = std::fs::write(path, content) {
+        error!("Failed to write trace file: {}", e);
+        std::process::exit(EXIT_FAILURE);
+    }
+    
+    info!("Trace written to {}", path);
+}
+
+/// Format trace entries as Markdown with rule details, files, and agent messages
+fn format_trace_markdown(traces: &[TraceEntry]) -> String {
+    let mut output = String::new();
+    for trace in traces {
+        output.push_str(&format!("# Rule: {}\n\n", trace.rule_name));
+        output.push_str(&format!("## Rule Instruction\n\n{}\n\n", trace.rule_instruction));
+        output.push_str(&format!("## Files\n\n"));
+        for file in &trace.files {
+            output.push_str(&format!("- {}\n", file));
+        }
+        output.push_str("\n## Messages\n\n");
+        for (i, msg) in trace.messages.iter().enumerate() {
+            output.push_str(&format!("### Message {} - Role: {}\n\n", i + 1, msg.role));
+            if let Some(content) = &msg.content {
+                if !content.is_empty() {
+                    let backticks = get_fence_backticks(content);
+                    if msg.role == "tool" {
+                        output.push_str(&format!("{}\n{}\n{}\n\n", backticks, content, backticks));
+                    } else {
+                        output.push_str(&format!("{}\n\n", content));
+                    }
+                }
+            }
+            if let Some(tool_calls) = &msg.tool_calls {
+                output.push_str("**Tool Calls:**\n\n");
+                for tc in tool_calls {
+                    let formatted_args = serde_json::from_str::<serde_json::Value>(&tc.function.arguments)
+                        .and_then(|v| serde_json::to_string_pretty(&v))
+                        .unwrap_or_else(|_| tc.function.arguments.clone());
+                    output.push_str(&format!("- **{}**\n\n```json\n{}\n```\n\n", tc.function.name, formatted_args));
+                }
+            }
+        }
+        output.push_str("\n---\n\n");
+    }
+    output
+}
+
+/// Get appropriate number of backticks for Markdown code fence
+/// Returns at least 3 backticks, or more if content contains backtick sequences
+fn get_fence_backticks(content: &str) -> String {
+    const MIN_BACKTICKS: usize = 3;
+    let max_backticks = content
+        .as_bytes()
+        .split(|&b| b != b'`')
+        .filter(|s| !s.is_empty())
+        .map(|s| s.len())
+        .max()
+        .unwrap_or(0);
+    "`".repeat((max_backticks + 1).max(MIN_BACKTICKS))
 }
 
 fn format_violations(violations_by_file: &HashMap<String, HashMap<String, Vec<Violation>>>) -> String {

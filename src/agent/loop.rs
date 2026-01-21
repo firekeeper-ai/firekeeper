@@ -19,7 +19,7 @@ pub trait ToolExecutor<S> {
 pub struct AgentLoop<P: LLMProvider, T: ToolExecutor<S>, S> {
     provider: P,
     tool_executor: T,
-    messages: Vec<Message>,
+    pub messages: Vec<Message>,
     tools: Vec<Tool>,
     pub state: S,
 }

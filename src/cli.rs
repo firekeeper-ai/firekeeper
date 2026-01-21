@@ -87,4 +87,8 @@ pub struct ReviewArgs {
     /// Output file path (.md or .json)
     #[arg(long)]
     pub output: Option<String>,
+
+    /// Trace file path to record agent responses and tool use (.md or .json)
+    #[arg(long)]
+    pub trace: Option<String>,
 }
