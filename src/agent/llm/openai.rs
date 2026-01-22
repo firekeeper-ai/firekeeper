@@ -30,16 +30,20 @@ pub struct OpenAIProvider {
     base_url: String,
     api_key: String,
     model: String,
+    temperature: Option<f32>,
+    max_tokens: u32,
 }
 
 impl OpenAIProvider {
     /// Create a new OpenAI provider
-    pub fn new(base_url: String, api_key: String, model: String) -> Self {
+    pub fn new(base_url: String, api_key: String, model: String, temperature: Option<f32>, max_tokens: u32) -> Self {
         Self {
             client: reqwest::Client::new(),
             base_url,
             api_key,
             model,
+            temperature,
+            max_tokens,
         }
     }
 }
@@ -60,8 +64,8 @@ impl crate::agent::r#loop::LLMProvider for OpenAIProvider {
             model: self.model.clone(),
             messages: messages.to_vec(),
             tools: tools.to_vec(),
-            temperature: Some(0.0), // Deterministic responses
-            max_tokens: Some(4096),
+            temperature: self.temperature,
+            max_tokens: Some(self.max_tokens),
         };
 
         let response = self

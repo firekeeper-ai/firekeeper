@@ -63,6 +63,8 @@ async fn main() {
                 base_url,
                 &args.api_key,
                 model,
+                config.llm.temperature,
+                config.llm.max_tokens,
                 args.dry_run,
                 args.output.as_deref(),
                 args.trace.as_deref(),

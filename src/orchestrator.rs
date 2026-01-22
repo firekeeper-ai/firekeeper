@@ -38,6 +38,8 @@ pub async fn orchestrate_and_run(
     base_url: &str,
     api_key: &str,
     model: &str,
+    temperature: Option<f32>,
+    max_tokens: u32,
     dry_run: bool,
     output: Option<&str>,
     trace: Option<&str>,
@@ -72,7 +74,7 @@ pub async fn orchestrate_and_run(
     let trace_enabled = trace.is_some();
     let futures: Vec<_> = tasks
         .into_iter()
-        .map(|(rule, files)| worker::worker(rule, files, base_url, api_key, model, diffs.clone(), trace_enabled))
+        .map(|(rule, files)| worker::worker(rule, files, base_url, api_key, model, temperature, max_tokens, diffs.clone(), trace_enabled))
         .collect();
 
     if let Some(max) = max_parallel_workers {

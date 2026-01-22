@@ -11,6 +11,10 @@ pub fn default_config_template() -> String {
         r#"[llm]
 base_url = "{}"
 model = "{}"
+# Temperature for LLM sampling (optional, omit for model default)
+# temperature = 0.1
+# Maximum tokens for LLM response (optional, defaults to 4096)
+# max_tokens = 4096
 
 [worker]
 # Maximum number of files to process per task (optional, defaults to {})
@@ -64,6 +68,12 @@ pub struct LlmConfig {
     /// LLM model name
     #[serde(default = "default_model")]
     pub model: String,
+    /// Temperature for LLM sampling (optional)
+    #[serde(default)]
+    pub temperature: Option<f32>,
+    /// Maximum tokens for LLM response
+    #[serde(default = "default_max_tokens")]
+    pub max_tokens: u32,
 }
 
 fn default_base_url() -> String {
@@ -72,6 +82,10 @@ fn default_base_url() -> String {
 
 fn default_model() -> String {
     DEFAULT_MODEL.to_string()
+}
+
+fn default_max_tokens() -> u32 {
+    4096
 }
 
 /// Worker configuration

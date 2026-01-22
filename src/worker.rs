@@ -34,6 +34,8 @@ pub async fn worker(
     base_url: &str,
     api_key: &str,
     model: &str,
+    temperature: Option<f32>,
+    max_tokens: u32,
     diffs: HashMap<String, String>,
     trace_enabled: bool,
 ) -> Result<WorkerResult, Box<dyn std::error::Error>> {
@@ -47,7 +49,7 @@ pub async fn worker(
     // Setup LLM provider
     debug!("Creating OpenAI provider with model: {}", model);
     let provider =
-        OpenAIProvider::new(base_url.to_string(), api_key.to_string(), model.to_string());
+        OpenAIProvider::new(base_url.to_string(), api_key.to_string(), model.to_string(), temperature, max_tokens);
     
     // Setup tools
     let mut tools = fs::create_fs_tools();
