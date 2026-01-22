@@ -140,9 +140,15 @@ impl crate::agent::r#loop::ToolExecutor<WorkerState> for ToolExecutor {
                 .await
             }
             "rg" => {
+                let case_sensitive = args.get("case_sensitive").and_then(|v| v.as_bool()).unwrap_or(false);
+                let type_filter = args.get("type_filter").and_then(|v| v.as_str());
+                let glob = args.get("glob").and_then(|v| v.as_str());
                 fs::grep(
                     args["path"].as_str().unwrap_or(""),
                     args["pattern"].as_str().unwrap_or(""),
+                    case_sensitive,
+                    type_filter,
+                    glob,
                 )
                 .await
             }
