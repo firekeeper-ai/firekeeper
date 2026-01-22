@@ -22,6 +22,7 @@ pub struct WorkerResult {
     pub blocking: bool,
     pub violations: Vec<report::Violation>,
     pub messages: Option<Vec<crate::agent::types::Message>>,
+    pub tip: Option<String>,
 }
 
 /// Run a review worker for a specific rule and set of files
@@ -105,6 +106,7 @@ pub async fn worker(
         blocking: rule.blocking,
         violations: agent.state.violations,
         messages,
+        tip: rule.tip.clone(),
     })
 }
 

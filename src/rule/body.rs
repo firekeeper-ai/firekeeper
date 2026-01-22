@@ -21,6 +21,9 @@ pub struct RuleBody {
     /// Whether violations of this rule should block the pipeline (exit 1)
     #[serde(default = "default_blocking")]
     pub blocking: bool,
+    /// Optional tip for downstream processors to fix violations
+    #[serde(default)]
+    pub tip: Option<String>,
 }
 
 pub fn default_scope() -> Vec<String> {
