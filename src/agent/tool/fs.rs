@@ -2,6 +2,7 @@ use globset::{Glob, GlobSetBuilder};
 use grep::regex::RegexMatcher;
 use grep::searcher::{Searcher, sinks::UTF8};
 use serde_json::json;
+use tracing::warn;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -37,7 +38,7 @@ pub fn create_fs_tools() -> Vec<Tool> {
             function: ToolFunction {
                 name: "diff".to_string(),
                 description:
-                    "Get git diff for a file. Do not use for lock files or generated files."
+                    "Get git diff for a file. Do NOT use this for lock files (e.g. package-lock.json) or generated files."
                         .to_string(),
                 parameters: json!({
                     "type": "object",
@@ -313,6 +314,9 @@ fn glob_recursive(
 
 /// Get git diff for a file from the precomputed diffs
 pub async fn diff_file(path: &str, diffs: &HashMap<String, String>) -> Result<String, String> {
+    if path.contains("lock") {
+        warn!("trying to get diff for a lock file: {}", path);
+    }
     diffs
         .get(path)
         .cloned()
