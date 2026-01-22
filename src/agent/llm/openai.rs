@@ -8,7 +8,8 @@ struct ChatRequest {
     model: String,
     messages: Vec<Message>,
     tools: Vec<Tool>,
-    temperature: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    temperature: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     max_tokens: Option<u32>,
 }
@@ -59,7 +60,7 @@ impl crate::agent::r#loop::LLMProvider for OpenAIProvider {
             model: self.model.clone(),
             messages: messages.to_vec(),
             tools: tools.to_vec(),
-            temperature: 0.0, // Deterministic responses
+            temperature: Some(0.0), // Deterministic responses
             max_tokens: Some(4096),
         };
 
