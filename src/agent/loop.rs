@@ -93,9 +93,9 @@ impl<P: LLMProvider, T: ToolExecutor<S>, S> AgentLoop<P, T, S> {
                         tool_call_id: Some(tool_call.id.clone()),
                     });
                 }
-            } else if let Some(content) = &message.content {
+            } else {
                 debug!("Agent loop completed after {} iterations", iteration);
-                return Ok(content.clone());
+                return Ok(message.content.unwrap_or_default());
             }
         }
     }
