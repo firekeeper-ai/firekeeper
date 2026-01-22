@@ -67,11 +67,11 @@ pub fn create_fs_tools() -> Vec<Tool> {
             tool_type: "function".to_string(),
             function: ToolFunction {
                 name: "rg".to_string(),
-                description: "Search for regex pattern in a file using ripgrep".to_string(),
+                description: "Search for regex pattern in a file or directory using ripgrep".to_string(),
                 parameters: json!({
                     "type": "object",
                     "properties": {
-                        "path": {"type": "string", "description": "File path"},
+                        "path": {"type": "string", "description": "File or directory path"},
                         "pattern": {"type": "string", "description": "Regex pattern"}
                     },
                     "required": ["path", "pattern"]
@@ -218,19 +218,35 @@ pub async fn grep(path: &str, pattern: &str) -> Result<String, String> {
 
         let mut matches = Vec::new();
         let mut searcher = Searcher::new();
+        let path_obj = std::path::Path::new(&path);
 
-        let result = searcher.search_path(
-            &matcher,
-            &path,
-            UTF8(|lnum, line| {
-                matches.push(format!("{}:{}", lnum, line.trim_end()));
-                Ok(true)
-            }),
-        );
-
-        match result {
-            Ok(_) => Ok(matches.join("\n")),
-            Err(e) => Err(format!("Grep error: {}", e)),
+        if path_obj.is_dir() {
+            for result in ignore::Walk::new(&path) {
+                if let Ok(entry) = result {
+                    if entry.file_type().map_or(false, |ft| ft.is_file()) {
+                        let _ = searcher.search_path(
+                            &matcher,
+                            entry.path(),
+                            UTF8(|lnum, line| {
+                                matches.push(format!("{}:{}:{}", entry.path().display(), lnum, line.trim_end()));
+                                Ok(true)
+                            }),
+                        );
+                    }
+                }
+            }
+            Ok(matches.join("\n"))
+        } else {
+            searcher.search_path(
+                &matcher,
+                &path,
+                UTF8(|lnum, line| {
+                    matches.push(format!("{}:{}", lnum, line.trim_end()));
+                    Ok(true)
+                }),
+            )
+            .map(|_| matches.join("\n"))
+            .map_err(|e| format!("Grep error: {}", e))
         }
     })
     .await
