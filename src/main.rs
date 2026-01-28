@@ -1,9 +1,9 @@
-mod agent;
 mod cli;
 mod config;
-
 mod orchestrator;
 mod rule;
+mod tool;
+mod types;
 mod worker;
 
 use clap::Parser;

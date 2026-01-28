@@ -1,12 +1,12 @@
-use crate::agent::tool::report::Violation;
-use crate::agent::types::Message;
 use crate::rule::body::RuleBody;
+use crate::types::Violation;
 use crate::worker;
 use futures::future::join_all;
 use globset::{Glob, GlobSetBuilder};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::process::Command;
+use tiny_loop::types::Message;
 use tracing::{debug, error, info, trace, warn};
 
 const EXIT_FAILURE: i32 = 1;
@@ -74,7 +74,19 @@ pub async fn orchestrate_and_run(
     let trace_enabled = trace.is_some();
     let futures: Vec<_> = tasks
         .into_iter()
-        .map(|(rule, files)| worker::worker(rule, files, base_url, api_key, model, temperature, max_tokens, diffs.clone(), trace_enabled))
+        .map(|(rule, files)| {
+            worker::worker(
+                rule,
+                files,
+                base_url,
+                api_key,
+                model,
+                temperature,
+                max_tokens,
+                diffs.clone(),
+                trace_enabled,
+            )
+        })
         .collect();
 
     if let Some(max) = max_parallel_workers {
@@ -126,13 +138,13 @@ pub async fn orchestrate_and_run(
         "Review complete: {} succeeded, {} failed",
         succeeded, failed
     );
-    
+
     // Group violations by file, then by rule name
     let mut violations_by_file: HashMap<String, HashMap<String, Vec<Violation>>> = HashMap::new();
     let mut tips_by_rule: HashMap<String, String> = HashMap::new();
     let mut blocking_rules_with_violations = std::collections::HashSet::new();
     let mut all_traces = Vec::new();
-    
+
     for result in results {
         if let Ok(worker_result) = result {
             let has_violations = !worker_result.violations.is_empty();
@@ -160,38 +172,48 @@ pub async fn orchestrate_and_run(
             }
         }
     }
-    
+
     // Output results to file or console
     if let Some(output_path) = output {
         write_output(output_path, &violations_by_file, &tips_by_rule);
     } else {
         print_violations(&violations_by_file, &tips_by_rule);
     }
-    
+
     // Write trace if enabled
     if let Some(trace_path) = trace {
         write_trace(trace_path, &all_traces);
     }
-    
+
     // Exit with error if blocking rules have violations
     if !blocking_rules_with_violations.is_empty() {
-        error!("Blocking rules with violations: {:?}", blocking_rules_with_violations);
+        error!(
+            "Blocking rules with violations: {:?}",
+            blocking_rules_with_violations
+        );
         std::process::exit(EXIT_FAILURE);
     }
 }
 
-fn print_violations(violations_by_file: &HashMap<String, HashMap<String, Vec<Violation>>>, tips_by_rule: &HashMap<String, String>) {
+fn print_violations(
+    violations_by_file: &HashMap<String, HashMap<String, Vec<Violation>>>,
+    tips_by_rule: &HashMap<String, String>,
+) {
     if violations_by_file.is_empty() {
         info!("No violations found");
         return;
     }
-    
+
     for line in format_violations(violations_by_file, tips_by_rule).lines() {
         info!("{}", line);
     }
 }
 
-fn write_output(path: &str, violations_by_file: &HashMap<String, HashMap<String, Vec<Violation>>>, tips_by_rule: &HashMap<String, String>) {
+fn write_output(
+    path: &str,
+    violations_by_file: &HashMap<String, HashMap<String, Vec<Violation>>>,
+    tips_by_rule: &HashMap<String, String>,
+) {
     let content = if path.ends_with(".json") {
         let output = serde_json::json!({
             "violations": violations_by_file,
@@ -204,12 +226,12 @@ fn write_output(path: &str, violations_by_file: &HashMap<String, HashMap<String,
         error!("Output file must end with .md or .json");
         std::process::exit(EXIT_FAILURE);
     };
-    
+
     if let Err(e) = std::fs::write(path, content) {
         error!("Failed to write output file: {}", e);
         std::process::exit(EXIT_FAILURE);
     }
-    
+
     info!("Results written to {}", path);
 }
 
@@ -223,12 +245,12 @@ fn write_trace(path: &str, traces: &[TraceEntry]) {
         error!("Trace file must end with .md or .json");
         std::process::exit(EXIT_FAILURE);
     };
-    
+
     if let Err(e) = std::fs::write(path, content) {
         error!("Failed to write trace file: {}", e);
         std::process::exit(EXIT_FAILURE);
     }
-    
+
     info!("Trace written to {}", path);
 }
 
@@ -237,31 +259,52 @@ fn format_trace_markdown(traces: &[TraceEntry]) -> String {
     let mut output = String::new();
     for trace in traces {
         output.push_str(&format!("# Rule: {}\n\n", trace.rule_name));
-        output.push_str(&format!("## Rule Instruction\n\n{}\n\n", trace.rule_instruction));
+        output.push_str(&format!(
+            "## Rule Instruction\n\n{}\n\n",
+            trace.rule_instruction
+        ));
         output.push_str(&format!("## Files\n\n"));
         for file in &trace.files {
             output.push_str(&format!("- {}\n", file));
         }
         output.push_str("\n## Messages\n\n");
         for (i, msg) in trace.messages.iter().enumerate() {
-            output.push_str(&format!("### Message {} - Role: {}\n\n", i + 1, msg.role));
-            if let Some(content) = &msg.content {
+            let (role, content, tool_calls) = match msg {
+                Message::System { content } => ("system", Some(content.as_str()), None),
+                Message::User { content } => ("user", Some(content.as_str()), None),
+                Message::Assistant {
+                    content,
+                    tool_calls,
+                } => ("assistant", Some(content.as_str()), tool_calls.as_ref()),
+                Message::Tool { content, .. } => ("tool", Some(content.as_str()), None),
+                Message::Custom { role, body } => (
+                    role.as_str(),
+                    body.get("content").and_then(|v| v.as_str()),
+                    None,
+                ),
+            };
+            output.push_str(&format!("### Message {} - Role: {}\n\n", i + 1, role));
+            if let Some(content) = content {
                 if !content.is_empty() {
                     let backticks = get_fence_backticks(content);
-                    if msg.role == "tool" {
+                    if role == "tool" {
                         output.push_str(&format!("{}\n{}\n{}\n\n", backticks, content, backticks));
                     } else {
                         output.push_str(&format!("{}\n\n", content));
                     }
                 }
             }
-            if let Some(tool_calls) = &msg.tool_calls {
+            if let Some(tool_calls) = tool_calls {
                 output.push_str("**Tool Calls:**\n\n");
                 for tc in tool_calls {
-                    let formatted_args = serde_json::from_str::<serde_json::Value>(&tc.function.arguments)
-                        .and_then(|v| serde_json::to_string_pretty(&v))
-                        .unwrap_or_else(|_| tc.function.arguments.clone());
-                    output.push_str(&format!("- **{}**\n\n```json\n{}\n```\n\n", tc.function.name, formatted_args));
+                    let formatted_args =
+                        serde_json::from_str::<serde_json::Value>(&tc.function.arguments)
+                            .and_then(|v| serde_json::to_string_pretty(&v))
+                            .unwrap_or_else(|_| tc.function.arguments.clone());
+                    output.push_str(&format!(
+                        "- **{}**\n\n```json\n{}\n```\n\n",
+                        tc.function.name, formatted_args
+                    ));
                 }
             }
         }
@@ -284,18 +327,24 @@ fn get_fence_backticks(content: &str) -> String {
     "`".repeat((max_backticks + 1).max(MIN_BACKTICKS))
 }
 
-fn format_violations(violations_by_file: &HashMap<String, HashMap<String, Vec<Violation>>>, tips_by_rule: &HashMap<String, String>) -> String {
+fn format_violations(
+    violations_by_file: &HashMap<String, HashMap<String, Vec<Violation>>>,
+    tips_by_rule: &HashMap<String, String>,
+) -> String {
     if violations_by_file.is_empty() {
         return "No violations found".to_string();
     }
-    
+
     let mut output = String::new();
     for (file, rules) in violations_by_file {
         output.push_str(&format!("# Violations in {}\n\n", file));
         for (rule, violations) in rules {
             output.push_str(&format!("## Rule: {}\n\n", rule));
             for violation in violations {
-                output.push_str(&format!("- Lines {}-{}: {}\n", violation.start_line, violation.end_line, violation.detail));
+                output.push_str(&format!(
+                    "- Lines {}-{}: {}\n",
+                    violation.start_line, violation.end_line, violation.detail
+                ));
             }
             if let Some(tip) = tips_by_rule.get(rule) {
                 output.push_str(&format!("\n**Tip:** {}\n", tip));
@@ -393,11 +442,7 @@ fn get_changed_files(base: &str) -> Vec<String> {
 fn get_diffs(base: &str, files: &[String]) -> HashMap<String, String> {
     let mut diffs = HashMap::new();
 
-    let diff_base = if base == "ROOT" {
-        GIT_EMPTY_TREE
-    } else {
-        base
-    };
+    let diff_base = if base == "ROOT" { GIT_EMPTY_TREE } else { base };
 
     for file in files {
         if let Ok(output) = Command::new("git")
