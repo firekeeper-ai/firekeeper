@@ -1,2 +1,3 @@
 /target
 .kiro/settings/lsp.json
+.claude/settings.local.json
