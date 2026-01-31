@@ -14,6 +14,7 @@ const EXIT_FAILURE: i32 = 1;
 /// Trace entry containing worker task details and agent conversation
 #[derive(Serialize)]
 struct TraceEntry {
+    worker_id: String,
     rule_name: String,
     rule_instruction: String,
     files: Vec<String>,
@@ -74,8 +75,11 @@ pub async fn orchestrate_and_run(
     let trace_enabled = trace.is_some();
     let futures: Vec<_> = tasks
         .into_iter()
-        .map(|(rule, files)| {
+        .enumerate()
+        .map(|(i, (rule, files))| {
+            let worker_id = i.to_string();
             worker::worker(
+                worker_id,
                 rule,
                 files,
                 base_url,
@@ -126,9 +130,9 @@ pub async fn orchestrate_and_run(
 
     for (i, result) in results.iter().enumerate() {
         if let Err(e) = result {
-            error!("Task {} failed: {}", i, e);
+            error!("[Worker {}] Task failed: {}", i, e);
         } else {
-            debug!("Task {} completed successfully", i);
+            debug!("[Worker {}] Task completed successfully", i);
         }
     }
 
@@ -164,6 +168,7 @@ pub async fn orchestrate_and_run(
             }
             if let Some(messages) = worker_result.messages {
                 all_traces.push(TraceEntry {
+                    worker_id: worker_result.worker_id,
                     rule_name: worker_result.rule_name,
                     rule_instruction: worker_result.rule_instruction,
                     files: worker_result.files,
@@ -258,7 +263,8 @@ fn write_trace(path: &str, traces: &[TraceEntry]) {
 fn format_trace_markdown(traces: &[TraceEntry]) -> String {
     let mut output = String::new();
     for trace in traces {
-        output.push_str(&format!("# Rule: {}\n\n", trace.rule_name));
+        output.push_str(&format!("# Worker: {}\n\n", trace.worker_id));
+        output.push_str(&format!("## Rule: {}\n\n", trace.rule_name));
         output.push_str(&format!(
             "## Rule Instruction\n\n{}\n\n",
             trace.rule_instruction

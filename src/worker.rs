@@ -7,6 +7,7 @@ use tracing::{debug, info, trace};
 
 /// Worker result containing violations and optional trace messages
 pub struct WorkerResult {
+    pub worker_id: String,
     pub rule_name: String,
     pub rule_instruction: String,
     pub files: Vec<String>,
@@ -20,6 +21,7 @@ pub struct WorkerResult {
 ///
 /// Returns a WorkerResult containing violations found and optionally the agent conversation trace
 pub async fn worker(
+    worker_id: String,
     rule: &RuleBody,
     files: Vec<String>,
     base_url: &str,
@@ -31,14 +33,15 @@ pub async fn worker(
     trace_enabled: bool,
 ) -> Result<WorkerResult, Box<dyn std::error::Error>> {
     info!(
-        "Worker: reviewing {} files for rule '{}'",
+        "[Worker {}] Reviewing {} files for rule '{}'",
+        worker_id,
         files.len(),
         rule.name
     );
-    trace!("Files to review: {:?}", files);
+    trace!("[Worker {}] Files to review: {:?}", worker_id, files);
 
     // Setup LLM provider
-    debug!("Creating OpenAI provider with model: {}", model);
+    debug!("[Worker {}] Creating OpenAI provider with model: {}", worker_id, model);
     let llm = OpenAIProvider::new()
         .base_url(base_url)
         .api_key(api_key)
@@ -78,11 +81,11 @@ pub async fn worker(
         <rule>\n{}\n</rule>",
         files_list, rule.instruction
     );
-    trace!("Adding user message with {} files", files.len());
-    trace!("User message: {}", user_message);
+    trace!("[Worker {}] Adding user message with {} files", worker_id, files.len());
+    trace!("[Worker {}] User message: {}", worker_id, user_message);
 
     // Run agent loop
-    debug!("Starting agent loop for rule '{}'", rule.name);
+    debug!("[Worker {}] Starting agent loop for rule '{}'", worker_id, rule.name);
     let _response = agent.chat(user_message).await?;
 
     // For trace, we need to collect messages from agent's history
@@ -96,6 +99,7 @@ pub async fn worker(
     let violations = report.violations.lock().await.clone();
 
     Ok(WorkerResult {
+        worker_id,
         rule_name: rule.name.clone(),
         rule_instruction: rule.instruction.clone(),
         files,
