@@ -33,12 +33,12 @@ pub async fn worker(
     trace_enabled: bool,
 ) -> Result<WorkerResult, Box<dyn std::error::Error>> {
     info!(
-        "[Worker {}] Reviewing {} files for rule '{}'",
+        "[Worker {}] Reviewing {} files for rule '{}': {:?}",
         worker_id,
         files.len(),
-        rule.name
+        rule.name,
+        files
     );
-    trace!("[Worker {}] Files to review: {:?}", worker_id, files);
 
     // Setup LLM provider
     debug!(
@@ -107,6 +107,8 @@ pub async fn worker(
 
     // Extract violations from shared state
     let violations = report.violations.lock().await.clone();
+
+    info!("[Worker {}] Done reviewing rule '{}'", worker_id, rule.name);
 
     Ok(WorkerResult {
         worker_id,
