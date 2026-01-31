@@ -6,6 +6,7 @@ use globset::{Glob, GlobSetBuilder};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::process::Command;
+use tiny_loop::tool::ToolArgs;
 use tiny_loop::types::Message;
 use tracing::{debug, error, info, trace, warn};
 
@@ -303,14 +304,28 @@ fn format_trace_markdown(traces: &[TraceEntry]) -> String {
             if let Some(tool_calls) = tool_calls {
                 output.push_str("**Tool Calls:**\n\n");
                 for tc in tool_calls {
-                    let formatted_args =
-                        serde_json::from_str::<serde_json::Value>(&tc.function.arguments)
-                            .and_then(|v| serde_json::to_string_pretty(&v))
-                            .unwrap_or_else(|_| tc.function.arguments.clone());
-                    output.push_str(&format!(
-                        "- **{}**\n\n```json\n{}\n```\n\n",
-                        tc.function.name, formatted_args
-                    ));
+                    if tc.function.name == crate::tool::think::ThinkArgs::TOOL_NAME {
+                        // Handle think tool specially
+                        if let Ok(args) = serde_json::from_str::<crate::tool::think::ThinkArgs>(
+                            &tc.function.arguments,
+                        ) {
+                            let backticks = get_fence_backticks(&args._reasoning);
+                            output.push_str(&format!(
+                                "- **{}**\n\n{}markdown\n{}\n{}\n\n",
+                                tc.function.name, backticks, args._reasoning, backticks
+                            ));
+                        }
+                    } else {
+                        // Handle non-think tools with JSON
+                        let formatted_args =
+                            serde_json::from_str::<serde_json::Value>(&tc.function.arguments)
+                                .and_then(|v| serde_json::to_string_pretty(&v))
+                                .unwrap_or_else(|_| tc.function.arguments.clone());
+                        output.push_str(&format!(
+                            "- **{}**\n\n```json\n{}\n```\n\n",
+                            tc.function.name, formatted_args
+                        ));
+                    }
                 }
             }
         }
