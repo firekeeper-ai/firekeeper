@@ -24,10 +24,6 @@ impl Report {
         /// List of violations
         violations: Vec<Violation>,
     ) -> String {
-        if violations.is_empty() {
-            return "At least 1 violation is required".into();
-        }
-
         self.violations.lock().await.extend(violations);
         "OK".into()
     }
