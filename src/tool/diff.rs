@@ -1,6 +1,5 @@
 use std::{collections::HashMap, sync::Arc};
 use tiny_loop::tool::tool;
-use tracing::warn;
 
 #[derive(Clone)]
 pub struct Diff {
@@ -17,14 +16,25 @@ impl Diff {
 
 #[tool]
 impl Diff {
-    /// Get git diff for a file. Do NOT use this for lock files (e.g. package-lock.json) or generated files.
+    /// Get git diff for a file.
     pub async fn diff(
         self,
         /// File path
         path: String,
+        /// Force read files containing "lock" or "generated" in path.
+        /// These files are usually large and not meaningful to review. (default: false)
+        force_read: Option<bool>,
     ) -> String {
-        if path.contains("lock") {
-            warn!("trying to get diff for a lock file: {}", path);
+        let force = force_read.unwrap_or(false);
+
+        if !force && (path.contains("lock") || path.contains("generated")) {
+            return format!(
+                "Skipped '{}':\n\
+                contains 'lock' or 'generated'.\n\
+                These files are usually large and not meaningful to review.\n\
+                Use force_read=true to override if necessary.",
+                path
+            );
         }
 
         self.diffs
