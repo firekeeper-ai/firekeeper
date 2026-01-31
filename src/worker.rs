@@ -41,7 +41,10 @@ pub async fn worker(
     trace!("[Worker {}] Files to review: {:?}", worker_id, files);
 
     // Setup LLM provider
-    debug!("[Worker {}] Creating OpenAI provider with model: {}", worker_id, model);
+    debug!(
+        "[Worker {}] Creating OpenAI provider with model: {}",
+        worker_id, model
+    );
     let llm = OpenAIProvider::new()
         .base_url(base_url)
         .api_key(api_key)
@@ -81,11 +84,18 @@ pub async fn worker(
         <rule>\n{}\n</rule>",
         files_list, rule.instruction
     );
-    trace!("[Worker {}] Adding user message with {} files", worker_id, files.len());
+    trace!(
+        "[Worker {}] Adding user message with {} files",
+        worker_id,
+        files.len()
+    );
     trace!("[Worker {}] User message: {}", worker_id, user_message);
 
     // Run agent loop
-    debug!("[Worker {}] Starting agent loop for rule '{}'", worker_id, rule.name);
+    debug!(
+        "[Worker {}] Starting agent loop for rule '{}'",
+        worker_id, rule.name
+    );
     let _response = agent.chat(user_message).await?;
 
     // For trace, we need to collect messages from agent's history
