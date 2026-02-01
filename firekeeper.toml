@@ -4,16 +4,27 @@ model = "google/gemini-3-flash-preview"
 
 [[rules]]
 name = "Documentation Sync"
-description = "Ensure documentation and comments are updated with code changes"
+description = "Ensure user-facing documentation is updated with CLI changes"
 instruction = """
-When code is modified, ensure:
-- Related documentation (e.g., README.md, docs/) in the same or parent directories is updated.
-- Struct/class/method/function doc comments match the code changes.
-- Long and complex functions have comments explaining key steps.
+This is a CLI tool. Only user-facing changes require documentation updates.
 
-Consider the scope of changes:
-- External-facing changes (CLI options, user-visible features, API changes) require documentation updates.
-- Internal-facing changes (refactoring, internal implementation details) may not require documentation updates.
+User-facing changes that MUST be documented:
+- New CLI commands, subcommands, or options
+- Changes to CLI behavior or output format
+- New features visible to end users
+- Changes to configuration file format (e.g., firekeeper.toml)
+- Breaking changes to existing functionality
+
+Internal changes that do NOT require documentation:
+- Internal function implementations
+- Code refactoring that doesn't change CLI behavior
+- Internal helper functions or utilities
+- Implementation details not exposed to users
+"""
+tip = """
+Update README.md with examples and usage.
+Ensure CLI help text matches actual behavior.
+Update configuration examples to reflect current format.
 """
 scope = ["**/*"]
 max_files_per_task = 3
@@ -25,12 +36,21 @@ instruction = """
 Ensure modified content does not duplicate code from other files.
 - If duplicating an existing function, the code should call that function instead.
 - If duplicating a code block, a shared function should be extracted.
-- Ignore trivial duplication (e.g., simple one-liners, common patterns like error handling).
-- Focus on substantial logic duplication (>20 lines of similar business logic).
-- Common file I/O patterns (read/write with error handling) are acceptable unless the entire function is duplicated.
+
+Ignore acceptable duplication:
+- Trivial code (simple one-liners, common patterns like error handling)
+- Test code and test utilities
+- Similar but contextually different logic (e.g., different validation rules)
+- Common patterns like builder methods, getters/setters
+- Standard boilerplate (e.g., CLI argument parsing, config loading)
+
+Focus on substantial logic duplication:
+- Business logic duplicated across multiple files (>30 lines)
+- Complex algorithms or calculations repeated
+- Data transformation logic that's identical
 """
 tip = """
-Extract common code into functions.
+Extract common code into shared functions or modules.
 """
 scope = ["**/*"]
 max_files_per_task = 3
@@ -39,14 +59,25 @@ max_files_per_task = 3
 name = "No Magic Numbers"
 description = "Prevent hardcoded numeric literals"
 instruction = """
-Reject magic numbers (unexplained numeric literals) in code.
-Only check numbers in actual code, ignore numbers in comments and documentation.
-Read surrounding lines to check for explanatory comments near the number.
-Exceptions:
-- Magic numbers in tests are allowed.
-- Magic numbers in configuration files are allowed.
-- Numbers with explanatory comments are allowed.
-- Common sense numbers: 0, 1, -1 in array indexing, loop increments, exit codes, and simple arithmetic.
+Reject unexplained numeric literals in production code.
+
+Allowed numbers (not magic):
+- 0, 1, -1 in common contexts (array indexing, loop increments, exit codes, boolean-like values)
+- Numbers in test files
+- Numbers in configuration files
+- Numbers with nearby explanatory comments (within 3 lines)
+- HTTP status codes (200, 404, etc.)
+- Common time values with clear context (60 for seconds/minutes, 24 for hours, 1000 for milliseconds)
+- Array/collection sizes in obvious contexts (e.g., Vec::with_capacity(10) in tests)
+
+Reject as magic numbers:
+- Business logic constants without explanation (e.g., threshold values, multipliers, limits)
+- Arbitrary timeouts or delays without context
+- Numeric configuration values hardcoded in logic
+- Calculation constants without explanation
+"""
+tip = """
+Define constants with descriptive names or add explanatory comments.
 """
 scope = ["**/*"]
 max_files_per_task = 10
@@ -55,8 +86,26 @@ max_files_per_task = 10
 name = "No Hardcoded Credentials"
 description = "Prevent credential leaks"
 instruction = """
-Reject hardcoded credentials including API keys, passwords, tokens, and secrets.
-Email addresses and contact information are allowed.
+Reject hardcoded credentials in code.
+
+Forbidden:
+- API keys, tokens, secrets (e.g., "sk-...", "Bearer ...", actual secret values)
+- Passwords or password hashes
+- Private keys or certificates
+- OAuth client secrets
+- Database connection strings with credentials
+
+Allowed:
+- Placeholder/example values (e.g., "your-api-key", "sk-xxxxxx", "<API_KEY>")
+- Environment variable names (e.g., "FIREKEEPER_LLM_API_KEY")
+- Public URLs and endpoints
+- Email addresses and contact information
+- Test/mock credentials in test files clearly marked as fake
+- Documentation examples with obvious placeholders
+"""
+tip = """
+Use environment variables or configuration files for credentials.
+Replace real values with placeholders in examples.
 """
 scope = ["**/*"]
 max_files_per_task = 10
