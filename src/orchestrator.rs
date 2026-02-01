@@ -7,8 +7,10 @@ use globset::{Glob, GlobSetBuilder};
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::sync::Arc;
 use tiny_loop::tool::ToolArgs;
 use tiny_loop::types::{Message, ToolDefinition};
+use tokio::sync::Mutex;
 
 /// Number of decimal places for elapsed time display
 const ELAPSED_TIME_PRECISION: usize = 2;
@@ -77,7 +79,8 @@ pub async fn orchestrate_and_run(
         max_files_per_task
     );
     let tasks = orchestrate(rules, &changed_files, max_files_per_task);
-    info!("Created {} tasks", tasks.len());
+    let total_tasks = tasks.len();
+    info!("Created {} tasks", total_tasks);
 
     if dry_run {
         info!("Dry run - {} tasks to execute:", tasks.len());
@@ -86,6 +89,17 @@ pub async fn orchestrate_and_run(
         }
         return;
     }
+
+    // Setup Ctrl+C handler for graceful shutdown
+    // When triggered, sets shutdown flag that workers poll during execution
+    // Workers stop mid-execution and return partial results including trace data
+    let shutdown = Arc::new(Mutex::new(false));
+    let shutdown_clone = shutdown.clone();
+    tokio::spawn(async move {
+        tokio::signal::ctrl_c().await.ok();
+        warn!("Received Ctrl+C, stopping workers...");
+        *shutdown_clone.lock().await = true;
+    });
 
     debug!("Creating worker futures for {} tasks", tasks.len());
     let trace_enabled = trace.is_some();
@@ -98,6 +112,7 @@ pub async fn orchestrate_and_run(
             let commits = commit_messages.clone();
             let headers = headers.clone();
             let body = body.clone();
+            let shutdown_clone = shutdown.clone();
             worker::worker(
                 worker_id,
                 rule,
@@ -111,6 +126,7 @@ pub async fn orchestrate_and_run(
                 body,
                 diffs.clone(),
                 trace_enabled,
+                shutdown_clone,
             )
         })
         .collect();
@@ -137,8 +153,13 @@ pub async fn orchestrate_and_run(
         }
 
         // As workers complete, spawn new ones to maintain pool size
+        // Stop spawning new workers if shutdown is requested
         while let Some(result) = stream.next().await {
             results.push(result);
+            if *shutdown.lock().await {
+                warn!("Shutdown requested, not spawning new workers");
+                break;
+            }
             if let Some(fut) = futures_iter.next() {
                 stream.push(fut);
             }
@@ -160,10 +181,20 @@ pub async fn orchestrate_and_run(
 
     let failed = results.iter().filter(|r| r.is_err()).count();
     let succeeded = results.len() - failed;
-    info!(
-        "Review complete: {} succeeded, {} failed",
-        succeeded, failed
-    );
+    let was_interrupted = *shutdown.lock().await;
+    if was_interrupted {
+        warn!(
+            "Review interrupted: {} succeeded, {} failed, {} cancelled",
+            succeeded,
+            failed,
+            total_tasks - results.len()
+        );
+    } else {
+        info!(
+            "Review complete: {} succeeded, {} failed",
+            succeeded, failed
+        );
+    }
 
     // Group violations by file, then by rule name
     let mut violations_by_file: HashMap<String, HashMap<String, Vec<Violation>>> = HashMap::new();

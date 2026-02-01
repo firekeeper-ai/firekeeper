@@ -3,10 +3,15 @@ use crate::tool::report::Report;
 use crate::{rule::body::RuleBody, types::Violation};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::sync::Arc;
 use tiny_loop::Agent;
 use tiny_loop::tool::ToolArgs;
 use tiny_loop::types::{Message, ToolDefinition};
-use tracing::{debug, info, trace};
+use tokio::sync::Mutex;
+use tracing::{debug, info, trace, warn};
+
+/// Polling interval for checking shutdown flag during agent chat (milliseconds)
+const SHUTDOWN_POLL_INTERVAL_MS: u64 = 100;
 
 /// Worker result containing violations and optional trace messages
 pub struct WorkerResult {
@@ -24,7 +29,8 @@ pub struct WorkerResult {
 
 /// Run a review worker for a specific rule and set of files
 ///
-/// Returns a WorkerResult containing violations found and optionally the agent conversation trace
+/// Returns a WorkerResult containing violations found and optionally the agent conversation trace.
+/// The worker can be cancelled via the shutdown flag, in which case it returns partial results.
 pub async fn worker(
     worker_id: String,
     rule: &RuleBody,
@@ -38,6 +44,7 @@ pub async fn worker(
     body: Value,
     diffs: HashMap<String, String>,
     trace_enabled: bool,
+    shutdown: Arc<Mutex<bool>>,
 ) -> Result<WorkerResult, Box<dyn std::error::Error>> {
     let start = std::time::Instant::now();
     info!(
@@ -146,14 +153,39 @@ pub async fn worker(
     );
     trace!("[Worker {}] User message: {}", worker_id, user_message);
 
-    // Run agent loop to review code
+    // Run agent loop to review code with cancellation support
+    // Uses tokio::select to race between agent chat completion and shutdown signal
+    // Polls shutdown flag every 100ms to allow graceful cancellation mid-execution
     debug!(
         "[Worker {}] Starting agent loop for rule '{}'",
         worker_id, rule.name
     );
-    let _response = agent.chat(user_message).await?;
 
-    // Collect trace data if enabled
+    let chat_future = agent.chat(user_message);
+    let shutdown_check = async {
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_millis(
+                SHUTDOWN_POLL_INTERVAL_MS,
+            ))
+            .await;
+            if *shutdown.lock().await {
+                break;
+            }
+        }
+    };
+
+    let cancelled = tokio::select! {
+        result = chat_future => {
+            result?;
+            false
+        }
+        _ = shutdown_check => {
+            warn!("[Worker {}] Cancelled due to shutdown", worker_id);
+            true
+        }
+    };
+
+    // Collect trace data if enabled (even if cancelled)
     let (messages, tools) = if trace_enabled {
         // Collect conversation history and tool schemas for trace output
         let tool_schemas = vec![
@@ -175,10 +207,18 @@ pub async fn worker(
     let violations = report.violations.lock().await.clone();
 
     let elapsed = start.elapsed().as_secs_f64();
-    info!(
-        "[Worker {}] Done reviewing rule '{}' ({:.2}s)",
-        worker_id, rule.name, elapsed
-    );
+
+    if cancelled {
+        info!(
+            "[Worker {}] Cancelled reviewing rule '{}' ({:.2}s) - returning partial results",
+            worker_id, rule.name, elapsed
+        );
+    } else {
+        info!(
+            "[Worker {}] Done reviewing rule '{}' ({:.2}s)",
+            worker_id, rule.name, elapsed
+        );
+    }
 
     Ok(WorkerResult {
         worker_id,
