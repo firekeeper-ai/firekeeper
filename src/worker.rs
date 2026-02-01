@@ -77,7 +77,8 @@ pub async fn worker(
         - {}\n\n\
         Against this rule:\n\n\
         <rule>\n{}\n</rule>",
-        files_list, rule.instruction
+        files_list,
+        rule.instruction.trim()
     );
     trace!(
         "[Worker {}] Adding user message with {} files",
