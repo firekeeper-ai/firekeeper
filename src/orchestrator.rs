@@ -113,6 +113,7 @@ pub async fn orchestrate_and_run(
             let headers = headers.clone();
             let body = body.clone();
             let shutdown_clone = shutdown.clone();
+            let is_root = matches!(base, util::Base::Root);
             worker::worker(
                 worker_id,
                 rule,
@@ -127,6 +128,7 @@ pub async fn orchestrate_and_run(
                 diffs.clone(),
                 trace_enabled,
                 shutdown_clone,
+                is_root,
             )
         })
         .collect();

@@ -45,6 +45,7 @@ pub async fn worker(
     diffs: HashMap<String, String>,
     trace_enabled: bool,
     shutdown: Arc<Mutex<bool>>,
+    is_root_base: bool,
 ) -> Result<WorkerResult, Box<dyn std::error::Error>> {
     let start = std::time::Instant::now();
     info!(
@@ -101,7 +102,7 @@ pub async fn worker(
     // Build user message: simplified if focus files match all changed files
     let user_message = if files == all_changed_files {
         let files_list = files.join("\n- ");
-        let commits_section = if commit_messages.is_empty() {
+        let commits_section = if is_root_base || commit_messages.is_empty() {
             String::new()
         } else {
             format!("Commit messages:\n\n{}\n\n", commit_messages)
@@ -109,21 +110,30 @@ pub async fn worker(
 
         let diffs_section = build_diffs_section(&files);
 
-        format!(
-            "{}Changed files:\n\n\
-            - {}\n\n\
-            Rule:\n\n\
-            <rule>\n\n{}\n\n</rule>\n\n{}",
-            commits_section,
-            files_list,
-            rule.instruction.trim(),
-            diffs_section
-        )
+        if is_root_base {
+            format!(
+                "Rule:\n\n\
+                <rule>\n\n{}\n\n</rule>\n\n{}",
+                rule.instruction.trim(),
+                diffs_section
+            )
+        } else {
+            format!(
+                "{}Changed files:\n\n\
+                - {}\n\n\
+                Rule:\n\n\
+                <rule>\n\n{}\n\n</rule>\n\n{}",
+                commits_section,
+                files_list,
+                rule.instruction.trim(),
+                diffs_section
+            )
+        }
     } else {
         // Include all changed files for context, but focus on specific files
         let all_files_list = all_changed_files.join("\n- ");
         let focus_files_list = files.join("\n- ");
-        let commits_section = if commit_messages.is_empty() {
+        let commits_section = if is_root_base || commit_messages.is_empty() {
             String::new()
         } else {
             format!("Commit messages:\n\n{}\n\n", commit_messages)
@@ -131,20 +141,33 @@ pub async fn worker(
 
         let diffs_section = build_diffs_section(&files);
 
-        format!(
-            "{}All changed files:\n\n\
-            - {}\n\n\
-            Focus on these files:\n\n\
-            - {}\n\n\
-            Note: For most cases, only read the focused files.\n\n\
-            Rule:\n\n\
-            <rule>\n\n{}\n\n</rule>\n\n{}",
-            commits_section,
-            all_files_list,
-            focus_files_list,
-            rule.instruction.trim(),
-            diffs_section
-        )
+        if is_root_base {
+            format!(
+                "Focus on these files:\n\n\
+                - {}\n\n\
+                Note: For most cases, only read the focused files.\n\n\
+                Rule:\n\n\
+                <rule>\n\n{}\n\n</rule>\n\n{}",
+                focus_files_list,
+                rule.instruction.trim(),
+                diffs_section
+            )
+        } else {
+            format!(
+                "{}All changed files:\n\n\
+                - {}\n\n\
+                Focus on these files:\n\n\
+                - {}\n\n\
+                Note: For most cases, only read the focused files.\n\n\
+                Rule:\n\n\
+                <rule>\n\n{}\n\n</rule>\n\n{}",
+                commits_section,
+                all_files_list,
+                focus_files_list,
+                rule.instruction.trim(),
+                diffs_section
+            )
+        }
     };
     trace!(
         "[Worker {}] Adding user message with {} files",
