@@ -1,12 +1,14 @@
 use std::{collections::HashMap, sync::Arc};
 use tiny_loop::tool::tool;
 
+/// Tool for retrieving git diffs of changed files
 #[derive(Clone)]
 pub struct Diff {
     diffs: Arc<HashMap<String, String>>,
 }
 
 impl Diff {
+    /// Create a new Diff tool with the provided file diffs
     pub fn new(diff: HashMap<String, String>) -> Self {
         Self {
             diffs: Arc::new(diff),

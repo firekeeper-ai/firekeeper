@@ -3,12 +3,14 @@ use std::sync::Arc;
 use tiny_loop::tool::tool;
 use tokio::sync::Mutex;
 
+/// Tool for reporting rule violations found during code review
 #[derive(Clone)]
 pub struct Report {
     pub violations: Arc<Mutex<Vec<Violation>>>,
 }
 
 impl Report {
+    /// Create a new Report tool
     pub fn new() -> Self {
         Self {
             violations: Arc::new(Mutex::new(Vec::new())),

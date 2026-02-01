@@ -3,12 +3,14 @@ use std::sync::Arc;
 use tiny_loop::tool::tool;
 use tokio::sync::Mutex;
 
+/// Tool for suggesting new review rules based on code changes
 #[derive(Clone)]
 pub struct Suggest {
     pub rules: Arc<Mutex<Vec<RuleBody>>>,
 }
 
 impl Suggest {
+    /// Create a new Suggest tool
     pub fn new() -> Self {
         Self {
             rules: Arc::new(Mutex::new(Vec::new())),
