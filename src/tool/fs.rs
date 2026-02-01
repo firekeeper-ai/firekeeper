@@ -66,10 +66,10 @@ fn list_dir_recursive<'a>(
     })
 }
 
-/// Search for regex pattern in a file or directory using ripgrep
+/// Search for regex pattern in a file or directory
 #[tool]
-pub async fn rg(
-    /// Search for regex pattern in a file or directory using ripgrep
+pub async fn grep(
+    /// File or directory path to search
     path: String,
     /// Regex pattern
     pattern: String,

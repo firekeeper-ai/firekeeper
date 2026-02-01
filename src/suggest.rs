@@ -81,7 +81,7 @@ pub async fn suggest(
         .bind(diff_tool, crate::tool::diff::Diff::diff)
         .bind(suggest_tool.clone(), Suggest::suggest)
         .tool(crate::tool::fs::ls)
-        .tool(crate::tool::fs::rg)
+        .tool(crate::tool::fs::grep)
         .tool(crate::tool::fs::glob)
         .tool(crate::tool::think::think);
 

@@ -71,7 +71,7 @@ pub async fn worker(
         .tool(tiny_loop::tool::read)
         .tool(tiny_loop::tool::fetch)
         .tool(crate::tool::fs::ls)
-        .tool(crate::tool::fs::rg)
+        .tool(crate::tool::fs::grep)
         .tool(crate::tool::fs::glob)
         .tool(crate::tool::think::think)
         .bind(diff.clone(), Diff::diff)
@@ -137,7 +137,7 @@ pub async fn worker(
             tiny_loop::tool::ReadArgs::definition(),
             tiny_loop::tool::FetchArgs::definition(),
             crate::tool::fs::LsArgs::definition(),
-            crate::tool::fs::RgArgs::definition(),
+            crate::tool::fs::GrepArgs::definition(),
             crate::tool::fs::GlobArgs::definition(),
             crate::tool::think::ThinkArgs::definition(),
             crate::tool::diff::DiffArgs::definition(),
