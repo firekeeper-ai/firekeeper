@@ -8,12 +8,37 @@ fn process_file_content(
     num_lines: usize,
     max_line_len: usize,
 ) -> String {
-    let truncated = truncate_text_by_lines(content, start_line, num_lines);
-    truncated
+    let result = truncate_text_by_lines(content, start_line, num_lines);
+    let truncated_lines = result.truncated;
+
+    let output = result
+        .content
         .lines()
-        .map(|line| truncate_single_line(line.to_string(), max_line_len))
+        .enumerate()
+        .map(|(idx, line)| {
+            let line_result = truncate_single_line(line.to_string(), max_line_len);
+            if line_result.truncated {
+                format!(
+                    "{} [Hint: Line {} truncated, use max_line_len to increase limit]",
+                    line_result.content,
+                    start_line + idx
+                )
+            } else {
+                line_result.content
+            }
+        })
         .collect::<Vec<_>>()
-        .join("\n")
+        .join("\n");
+
+    if truncated_lines {
+        format!(
+            "{}\nHint: Use start_line={} to read more.",
+            output,
+            start_line + num_lines
+        )
+    } else {
+        output
+    }
 }
 
 /// Read file contents with optional line range

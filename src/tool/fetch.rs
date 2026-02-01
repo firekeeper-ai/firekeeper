@@ -4,7 +4,17 @@ use super::utils::truncate_text_by_chars;
 
 fn process_html(html: String, start_char: usize, num_chars: usize) -> String {
     let markdown = html2md::parse_html(&html);
-    truncate_text_by_chars(markdown, start_char, num_chars)
+    let result = truncate_text_by_chars(markdown, start_char, num_chars);
+
+    if result.truncated {
+        format!(
+            "{}\nHint: Use start_char={} to read more.",
+            result.content,
+            start_char + num_chars
+        )
+    } else {
+        result.content
+    }
 }
 
 /// Fetch a webpage and convert HTML to Markdown
