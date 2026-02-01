@@ -56,7 +56,24 @@ pub async fn worker(
 
     // Setup stateful tools for reporting violations and getting diffs
     let report = Report::new();
-    let diff = Diff::new(diffs);
+    let diff = Diff::new(diffs.clone());
+
+    // Helper function to build diffs section for focused files
+    let build_diffs_section = |files: &[String]| -> String {
+        let mut diffs_content = String::new();
+        for file in files {
+            if crate::util::should_include_diff(file) {
+                if let Some(diff) = diffs.get(file) {
+                    diffs_content.push_str(&format!("```diff\n{}\n```\n\n", diff));
+                }
+            }
+        }
+        if diffs_content.is_empty() {
+            String::new()
+        } else {
+            format!("<diff>\n\n{}</diff>\n\n", diffs_content.trim_end())
+        }
+    };
 
     // Create agent with system prompt and bind tools
     let agent = Agent::new(llm)
@@ -81,14 +98,18 @@ pub async fn worker(
         } else {
             format!("Commit messages:\n\n{}\n\n", commit_messages)
         };
+
+        let diffs_section = build_diffs_section(&files);
+
         format!(
             "{}Changed files:\n\n\
             - {}\n\n\
             Rule:\n\n\
-            <rule>\n{}\n</rule>",
+            <rule>\n\n{}\n\n</rule>\n\n{}",
             commits_section,
             files_list,
-            rule.instruction.trim()
+            rule.instruction.trim(),
+            diffs_section
         )
     } else {
         // Include all changed files for context, but focus on specific files
@@ -99,6 +120,9 @@ pub async fn worker(
         } else {
             format!("Commit messages:\n\n{}\n\n", commit_messages)
         };
+
+        let diffs_section = build_diffs_section(&files);
+
         format!(
             "{}All changed files:\n\n\
             - {}\n\n\
@@ -106,11 +130,12 @@ pub async fn worker(
             - {}\n\n\
             Note: For most cases, only read the focused files.\n\n\
             Rule:\n\n\
-            <rule>\n{}\n</rule>",
+            <rule>\n{}\n</rule>\n\n{}",
             commits_section,
             all_files_list,
             focus_files_list,
-            rule.instruction.trim()
+            rule.instruction.trim(),
+            diffs_section
         )
     };
     trace!(

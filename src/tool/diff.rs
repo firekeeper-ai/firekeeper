@@ -23,16 +23,16 @@ impl Diff {
         self,
         /// File path
         path: String,
-        /// Force read files containing "lock" or "generated" in path.
+        /// Force read files that are normally excluded.
         /// These files are usually large and not meaningful to review. (default: false)
         force_read: Option<bool>,
     ) -> String {
         let force = force_read.unwrap_or(false);
 
-        if !force && (path.contains("lock") || path.contains("generated")) {
+        if !force && !crate::util::should_include_diff(&path) {
             return format!(
                 "Skipped '{}':\n\
-                contains 'lock' or 'generated'.\n\
+                File is excluded.\n\
                 These files are usually large and not meaningful to review.\n\
                 Use force_read=true to override if necessary.",
                 path
