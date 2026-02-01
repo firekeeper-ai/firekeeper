@@ -66,3 +66,16 @@ pub fn get_diffs(base: &str, files: &[String]) -> HashMap<String, String> {
 
     diffs
 }
+
+pub fn get_commit_messages(base: &str) -> String {
+    if base == "ROOT" {
+        return String::new();
+    }
+
+    let output = Command::new("git")
+        .args(["log", "--format=%s", &format!("{}..HEAD", base)])
+        .output()
+        .expect("Failed to execute git log");
+
+    String::from_utf8_lossy(&output.stdout).trim().to_string()
+}

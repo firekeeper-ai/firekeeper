@@ -58,6 +58,9 @@ pub async fn orchestrate_and_run(
     debug!("Generating diffs for {} files", changed_files.len());
     let diffs = util::get_diffs(&base, &changed_files);
 
+    debug!("Getting commit messages for base: {}", base);
+    let commit_messages = util::get_commit_messages(&base);
+
     debug!(
         "Orchestrating tasks with max_files_per_task: {}",
         max_files_per_task
@@ -81,11 +84,13 @@ pub async fn orchestrate_and_run(
         .map(|(i, (rule, files))| {
             let worker_id = i.to_string();
             let all_files = changed_files.clone();
+            let commits = commit_messages.clone();
             worker::worker(
                 worker_id,
                 rule,
                 files,
                 all_files,
+                commits,
                 base_url,
                 api_key,
                 model,

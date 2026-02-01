@@ -29,6 +29,7 @@ pub async fn worker(
     rule: &RuleBody,
     files: Vec<String>,
     all_changed_files: Vec<String>,
+    commit_messages: String,
     base_url: &str,
     api_key: &str,
     model: &str,
@@ -79,25 +80,37 @@ pub async fn worker(
     // User message with rule and files
     let user_message = if files == all_changed_files {
         let files_list = files.join("\n- ");
+        let commits_section = if commit_messages.is_empty() {
+            String::new()
+        } else {
+            format!("Commit messages:\n\n{}\n\n", commit_messages)
+        };
         format!(
-            "Changed files:\n\n\
+            "{}Changed files:\n\n\
             - {}\n\n\
             Rule:\n\n\
             <rule>\n{}\n</rule>",
+            commits_section,
             files_list,
             rule.instruction.trim()
         )
     } else {
         let all_files_list = all_changed_files.join("\n- ");
         let focus_files_list = files.join("\n- ");
+        let commits_section = if commit_messages.is_empty() {
+            String::new()
+        } else {
+            format!("Commit messages:\n\n{}\n\n", commit_messages)
+        };
         format!(
-            "All changed files:\n\n\
+            "{}All changed files:\n\n\
             - {}\n\n\
             Focus on these files:\n\n\
             - {}\n\n\
             Note: For most cases, only read the focused files.\n\n\
             Rule:\n\n\
             <rule>\n{}\n</rule>",
+            commits_section,
             all_files_list,
             focus_files_list,
             rule.instruction.trim()
