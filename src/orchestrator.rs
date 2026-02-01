@@ -47,10 +47,10 @@ pub async fn orchestrate_and_run(
     output: Option<&str>,
     trace: Option<&str>,
 ) {
-    let base = util::resolve_base(diff_base);
-    debug!("Resolved base: {}", base);
+    let base = util::Base::parse(diff_base);
+    debug!("Resolved base: {:?}", base);
 
-    debug!("Getting changed files for base: {}", base);
+    debug!("Getting changed files for base");
     let changed_files = util::get_changed_files(&base);
     info!("Found {} changed files", changed_files.len());
     trace!("Changed files: {:?}", changed_files);
@@ -58,7 +58,7 @@ pub async fn orchestrate_and_run(
     debug!("Generating diffs for {} files", changed_files.len());
     let diffs = util::get_diffs(&base, &changed_files);
 
-    debug!("Getting commit messages for base: {}", base);
+    debug!("Getting commit messages for base");
     let commit_messages = util::get_commit_messages(&base);
 
     debug!(

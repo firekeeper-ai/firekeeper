@@ -18,8 +18,8 @@ pub async fn suggest(
     info!("Starting rule suggestion");
 
     // Determine base commit
-    let base = util::resolve_base(diff_base);
-    info!("Using base: {}", base);
+    let base = util::Base::parse(diff_base);
+    info!("Using base: {:?}", base);
 
     // Get changed files and diffs
     let changed_files = util::get_changed_files(&base);
