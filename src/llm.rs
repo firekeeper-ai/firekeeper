@@ -5,15 +5,23 @@ pub fn create_provider(
     api_key: &str,
     base_url: &str,
     model: &str,
-    temperature: Option<f32>,
-    max_tokens: u32,
-) -> OpenAIProvider {
-    OpenAIProvider::new()
+    headers: &std::collections::HashMap<String, String>,
+    body: &serde_json::Value,
+) -> anyhow::Result<OpenAIProvider> {
+    let mut provider = OpenAIProvider::new()
         .api_key(api_key)
         .base_url(base_url)
-        .model(model)
-        .temperature(temperature)
-        .max_tokens(max_tokens)
+        .model(model);
+
+    for (key, value) in headers {
+        provider = provider.header(key, value)?;
+    }
+
+    if !body.is_null() {
+        provider = provider.body(body.clone())?;
+    }
+
+    Ok(provider)
 }
 
 /// Register common tools (read, fetch, ls, grep, glob, think) to an agent

@@ -56,9 +56,9 @@ pub async fn suggest(
         api_key,
         base_url,
         model,
-        config.llm.temperature,
-        config.llm.max_tokens,
-    );
+        &config.llm.headers,
+        &config.llm.body,
+    )?;
 
     // Create agent with tools
     let diff_tool = Diff::new(diffs.clone());

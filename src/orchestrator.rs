@@ -5,6 +5,7 @@ use crate::worker;
 use futures::future::join_all;
 use globset::{Glob, GlobSetBuilder};
 use serde::Serialize;
+use serde_json::Value;
 use std::collections::HashMap;
 use tiny_loop::tool::ToolArgs;
 use tiny_loop::types::{Message, ToolDefinition};
@@ -51,8 +52,8 @@ pub async fn orchestrate_and_run(
     base_url: &str,
     api_key: &str,
     model: &str,
-    temperature: Option<f32>,
-    max_tokens: u32,
+    headers: &HashMap<String, String>,
+    body: &Value,
     dry_run: bool,
     output: Option<&str>,
     trace: Option<&str>,
@@ -95,6 +96,8 @@ pub async fn orchestrate_and_run(
             let worker_id = i.to_string();
             let all_files = changed_files.clone();
             let commits = commit_messages.clone();
+            let headers = headers.clone();
+            let body = body.clone();
             worker::worker(
                 worker_id,
                 rule,
@@ -104,8 +107,8 @@ pub async fn orchestrate_and_run(
                 base_url,
                 api_key,
                 model,
-                temperature,
-                max_tokens,
+                headers,
+                body,
                 diffs.clone(),
                 trace_enabled,
             )

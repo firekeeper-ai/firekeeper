@@ -1,6 +1,7 @@
 use crate::tool::diff::Diff;
 use crate::tool::report::Report;
 use crate::{rule::body::RuleBody, types::Violation};
+use serde_json::Value;
 use std::collections::HashMap;
 use tiny_loop::Agent;
 use tiny_loop::tool::ToolArgs;
@@ -33,8 +34,8 @@ pub async fn worker(
     base_url: &str,
     api_key: &str,
     model: &str,
-    temperature: Option<f32>,
-    max_tokens: u32,
+    headers: HashMap<String, String>,
+    body: Value,
     diffs: HashMap<String, String>,
     trace_enabled: bool,
 ) -> Result<WorkerResult, Box<dyn std::error::Error>> {
@@ -52,7 +53,7 @@ pub async fn worker(
         "[Worker {}] Creating OpenAI provider with model: {}",
         worker_id, model
     );
-    let llm = crate::llm::create_provider(api_key, base_url, model, temperature, max_tokens);
+    let llm = crate::llm::create_provider(api_key, base_url, model, &headers, &body)?;
 
     // Setup stateful tools for reporting violations and getting diffs
     let report = Report::new();

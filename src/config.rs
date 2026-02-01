@@ -1,4 +1,6 @@
 use serde::Deserialize;
+use serde_json::Value;
+use std::collections::HashMap;
 use std::fs;
 
 pub const DEFAULT_BASE_URL: &str = "https://openrouter.ai/api/v1";
@@ -11,9 +13,12 @@ pub fn default_config_template() -> String {
         r#"[llm]
 base_url = "{}"
 model = "{}"
-# Temperature for LLM sampling (optional, omit for model default)
-# temperature = 0.1
-# Maximum tokens for LLM response (optional, defaults to 4096)
+# Custom HTTP headers (optional)
+# [llm.headers]
+# x-custom-header = "value"
+# Custom request body fields (optional)
+# [llm.body]
+# temperature = 0.7
 # max_tokens = 4096
 
 [worker]
@@ -68,12 +73,12 @@ pub struct LlmConfig {
     /// LLM model name
     #[serde(default = "default_model")]
     pub model: String,
-    /// Temperature for LLM sampling (optional)
+    /// Custom HTTP headers
     #[serde(default)]
-    pub temperature: Option<f32>,
-    /// Maximum tokens for LLM response
-    #[serde(default = "default_max_tokens")]
-    pub max_tokens: u32,
+    pub headers: HashMap<String, String>,
+    /// Custom request body fields
+    #[serde(default)]
+    pub body: Value,
 }
 
 fn default_base_url() -> String {
@@ -84,8 +89,8 @@ fn default_model() -> String {
     DEFAULT_MODEL.to_string()
 }
 
-fn default_max_tokens() -> u32 {
-    4096
+fn default_max_files_per_task() -> usize {
+    DEFAULT_MAX_FILES_PER_TASK
 }
 
 /// Worker configuration
@@ -106,10 +111,6 @@ impl Default for WorkerConfig {
             max_parallel_workers: None,
         }
     }
-}
-
-fn default_max_files_per_task() -> usize {
-    DEFAULT_MAX_FILES_PER_TASK
 }
 
 impl Config {
