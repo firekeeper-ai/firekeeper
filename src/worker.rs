@@ -71,7 +71,7 @@ pub async fn worker(
         if diffs_content.is_empty() {
             String::new()
         } else {
-            format!("<diff>\n\n{}</diff>\n\n", diffs_content.trim_end())
+            format!("<diff>\n\n{}\n\n</diff>\n\n", diffs_content.trim())
         }
     };
 
@@ -130,7 +130,7 @@ pub async fn worker(
             - {}\n\n\
             Note: For most cases, only read the focused files.\n\n\
             Rule:\n\n\
-            <rule>\n{}\n</rule>\n\n{}",
+            <rule>\n\n{}\n\n</rule>\n\n{}",
             commits_section,
             all_files_list,
             focus_files_list,
