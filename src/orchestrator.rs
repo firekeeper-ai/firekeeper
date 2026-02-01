@@ -7,7 +7,7 @@ use globset::{Glob, GlobSetBuilder};
 use serde::Serialize;
 use std::collections::HashMap;
 use tiny_loop::tool::ToolArgs;
-use tiny_loop::types::Message;
+use tiny_loop::types::{Message, ToolDefinition};
 use tracing::{debug, error, info, trace, warn};
 
 const EXIT_FAILURE: i32 = 1;
@@ -19,6 +19,7 @@ struct TraceEntry {
     rule_name: String,
     rule_instruction: String,
     files: Vec<String>,
+    tools: Vec<ToolDefinition>,
     messages: Vec<Message>,
 }
 
@@ -172,6 +173,7 @@ pub async fn orchestrate_and_run(
                     rule_name: worker_result.rule_name,
                     rule_instruction: worker_result.rule_instruction,
                     files: worker_result.files,
+                    tools: worker_result.tools.unwrap_or_default(),
                     messages,
                 });
             }
@@ -270,7 +272,12 @@ fn format_trace_markdown(traces: &[TraceEntry]) -> String {
         for file in &trace.files {
             output.push_str(&format!("- {}\n", file));
         }
-        output.push_str("\n## Messages\n\n");
+        output.push_str("\n## Tools\n\n");
+        for tool in &trace.tools {
+            let tool_json = serde_json::to_string_pretty(tool).unwrap_or_default();
+            output.push_str(&format!("```json\n{}\n```\n\n", tool_json));
+        }
+        output.push_str("## Messages\n\n");
         for (i, msg) in trace.messages.iter().enumerate() {
             let (role, content, tool_calls) = match msg {
                 Message::System { content } => ("system", Some(content.as_str()), None),

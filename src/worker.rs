@@ -2,7 +2,9 @@ use crate::tool::diff::Diff;
 use crate::tool::report::Report;
 use crate::{rule::body::RuleBody, types::Violation};
 use std::collections::HashMap;
-use tiny_loop::{Agent, types::Message};
+use tiny_loop::Agent;
+use tiny_loop::tool::ToolArgs;
+use tiny_loop::types::{Message, ToolDefinition};
 use tracing::{debug, info, trace};
 
 /// Worker result containing violations and optional trace messages
@@ -14,6 +16,7 @@ pub struct WorkerResult {
     pub blocking: bool,
     pub violations: Vec<Violation>,
     pub messages: Option<Vec<Message>>,
+    pub tools: Option<Vec<ToolDefinition>>,
     pub tip: Option<String>,
 }
 
@@ -94,11 +97,22 @@ pub async fn worker(
     );
     let _response = agent.chat(user_message).await?;
 
-    // For trace, we need to collect messages from agent's history
-    let messages = if trace_enabled {
-        Some(agent.history.get_all().to_vec())
+    // For trace, we need to collect messages from agent
+    let (messages, tools) = if trace_enabled {
+        // Manually collect tool schemas since agent.tools is private
+        let tool_schemas = vec![
+            tiny_loop::tool::ReadArgs::definition(),
+            tiny_loop::tool::FetchArgs::definition(),
+            crate::tool::fs::LsArgs::definition(),
+            crate::tool::fs::RgArgs::definition(),
+            crate::tool::fs::GlobArgs::definition(),
+            crate::tool::think::ThinkArgs::definition(),
+            crate::tool::diff::DiffArgs::definition(),
+            crate::tool::report::ReportArgs::definition(),
+        ];
+        (Some(agent.history.get_all().to_vec()), Some(tool_schemas))
     } else {
-        None
+        (None, None)
     };
 
     // Extract violations from shared state
@@ -114,6 +128,7 @@ pub async fn worker(
         blocking: rule.blocking,
         violations,
         messages,
+        tools,
         tip: rule.tip.clone(),
     })
 }
