@@ -77,20 +77,32 @@ pub async fn worker(
         .bind(report.clone(), Report::report);
 
     // User message with rule and files
-    let all_files_list = all_changed_files.join("\n- ");
-    let focus_files_list = files.join("\n- ");
-    let user_message = format!(
-        "All changed files:\n\n\
-        - {}\n\n\
-        Focus on these files:\n\n\
-        - {}\n\n\
-        Note: For most cases, only read the focused files.\n\n\
-        Rule:\n\n\
-        <rule>\n{}\n</rule>",
-        all_files_list,
-        focus_files_list,
-        rule.instruction.trim()
-    );
+    let user_message = if files == all_changed_files {
+        let files_list = files.join("\n- ");
+        format!(
+            "Changed files:\n\n\
+            - {}\n\n\
+            Rule:\n\n\
+            <rule>\n{}\n</rule>",
+            files_list,
+            rule.instruction.trim()
+        )
+    } else {
+        let all_files_list = all_changed_files.join("\n- ");
+        let focus_files_list = files.join("\n- ");
+        format!(
+            "All changed files:\n\n\
+            - {}\n\n\
+            Focus on these files:\n\n\
+            - {}\n\n\
+            Note: For most cases, only read the focused files.\n\n\
+            Rule:\n\n\
+            <rule>\n{}\n</rule>",
+            all_files_list,
+            focus_files_list,
+            rule.instruction.trim()
+        )
+    };
     trace!(
         "[Worker {}] Adding user message with {} files",
         worker_id,
