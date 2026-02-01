@@ -51,7 +51,7 @@ pub async fn read(
     path: String,
     /// Optional start line index (default: 0)
     start_line: Option<usize>,
-    /// Optional number of lines to return (default: 100)
+    /// Optional number of lines to return (default: 250)
     num_lines: Option<usize>,
     /// Optional maximum characters per line (default: 200)
     max_line_len: Option<usize>,
@@ -60,7 +60,7 @@ pub async fn read(
         Ok(content) => process_file_content(
             content,
             start_line.unwrap_or(0),
-            num_lines.unwrap_or(100),
+            num_lines.unwrap_or(250),
             max_line_len.unwrap_or(200),
         ),
         Err(e) => format!("Error reading file: {}", e),
