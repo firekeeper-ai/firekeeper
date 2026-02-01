@@ -34,6 +34,7 @@ name = "No Magic Numbers"
 description = "Prevent hardcoded numeric literals"
 instruction = """
 Reject magic numbers (unexplained numeric literals) in code.
+Only check numbers in actual code, ignore numbers in comments and documentation.
 Exceptions:
 - Magic numbers in tests are allowed.
 - Magic numbers in configuration files are allowed.
