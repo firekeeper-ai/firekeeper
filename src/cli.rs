@@ -35,6 +35,8 @@ pub enum Commands {
     Init(InitArgs),
     /// Review code changes against rules
     Review(ReviewArgs),
+    /// Suggest new rules based on code changes
+    Suggest(SuggestArgs),
 }
 
 /// Arguments for the init command
@@ -83,6 +85,46 @@ pub struct ReviewArgs {
     /// Maximum number of parallel workers (defaults to unlimited)
     #[arg(long)]
     pub max_parallel_workers: Option<usize>,
+
+    /// Output file path (.md or .json)
+    #[arg(long)]
+    pub output: Option<String>,
+
+    /// Trace file path to record agent responses and tool use (.md or .json)
+    #[arg(long)]
+    pub trace: Option<String>,
+}
+
+/// Arguments for the suggest command
+#[derive(Parser, Debug, Clone)]
+pub struct SuggestArgs {
+    /// Base commit to compare against.
+    /// Examples: HEAD^ or ^, HEAD~1 or ~1, commit hash, @{1.day.ago}.
+    /// HEAD for uncommitted changes, ROOT for all files
+    /// [default: HEAD if uncommitted changes exist, otherwise ^]
+    #[arg(
+        long,
+        default_value = "",
+        hide_default_value = true,
+        verbatim_doc_comment
+    )]
+    pub base: String,
+
+    /// Path to config file to read existing rules
+    #[arg(long, default_value = "firekeeper.toml")]
+    pub config: String,
+
+    /// LLM API key
+    #[arg(long, env = "FIREKEEPER_LLM_API_KEY", display_order = API_KEY_DISPLAY_ORDER)]
+    pub api_key: String,
+
+    /// LLM base URL
+    #[arg(long, default_value = DEFAULT_BASE_URL)]
+    pub base_url: Option<String>,
+
+    /// LLM model
+    #[arg(long, default_value = DEFAULT_MODEL)]
+    pub model: Option<String>,
 
     /// Output file path (.md or .json)
     #[arg(long)]

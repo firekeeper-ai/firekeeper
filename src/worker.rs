@@ -2,7 +2,7 @@ use crate::tool::diff::Diff;
 use crate::tool::report::Report;
 use crate::{rule::body::RuleBody, types::Violation};
 use std::collections::HashMap;
-use tiny_loop::{Agent, llm::OpenAIProvider, types::Message};
+use tiny_loop::{Agent, types::Message};
 use tracing::{debug, info, trace};
 
 /// Worker result containing violations and optional trace messages
@@ -45,12 +45,7 @@ pub async fn worker(
         "[Worker {}] Creating OpenAI provider with model: {}",
         worker_id, model
     );
-    let llm = OpenAIProvider::new()
-        .base_url(base_url)
-        .api_key(api_key)
-        .model(model)
-        .temperature(temperature)
-        .max_tokens(max_tokens);
+    let llm = crate::llm::create_provider(api_key, base_url, model, temperature, max_tokens);
 
     // Setup stateful tools
     let report = Report::new();

@@ -1,6 +1,7 @@
-use serde::Deserialize;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct RuleBody {
     /// Human-readable rule name, not for LLM
     /// e.g. "Prefer Async instead of Promise Chain in JS/TS"

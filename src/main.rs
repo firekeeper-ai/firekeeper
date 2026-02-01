@@ -1,9 +1,12 @@
 mod cli;
 mod config;
+mod llm;
 mod orchestrator;
 mod rule;
+mod suggest;
 mod tool;
 mod types;
+mod util;
 mod worker;
 
 use clap::Parser;
@@ -70,6 +73,34 @@ async fn main() {
                 args.trace.as_deref(),
             )
             .await;
+        }
+        Commands::Suggest(args) => {
+            let config = Config::load(&args.config).unwrap_or_else(|e| {
+                error!("Failed to load config: {}", e);
+                std::process::exit(1);
+            });
+
+            let base_url = args
+                .base_url
+                .as_deref()
+                .or(Some(&config.llm.base_url))
+                .unwrap();
+            let model = args.model.as_deref().or(Some(&config.llm.model)).unwrap();
+
+            suggest::suggest(
+                &args.base,
+                &config,
+                &args.api_key,
+                base_url,
+                model,
+                args.output.as_deref(),
+                args.trace.as_deref(),
+            )
+            .await
+            .unwrap_or_else(|e| {
+                error!("Failed to suggest rules: {}", e);
+                std::process::exit(1);
+            });
         }
     }
 }
