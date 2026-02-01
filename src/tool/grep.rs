@@ -22,6 +22,7 @@ pub async fn grep(
     let glob_pattern = glob_pattern.map(|s| s.to_string());
 
     tokio::task::spawn_blocking(move || {
+        // Build regex matcher with case sensitivity option
         let mut matcher_builder = grep::regex::RegexMatcherBuilder::new();
         matcher_builder.case_insensitive(!case_sensitive);
 
@@ -35,6 +36,7 @@ pub async fn grep(
         let path_obj = std::path::Path::new(&path);
 
         if path_obj.is_dir() {
+            // Setup directory walker with optional type filter
             let mut walk_builder = ignore::WalkBuilder::new(&path);
 
             if let Some(ref type_str) = type_filter {
@@ -49,6 +51,7 @@ pub async fn grep(
                 }
             }
 
+            // Setup optional glob matcher for file filtering
             let glob_matcher = if let Some(ref glob_str) = glob_pattern {
                 match Glob::new(glob_str) {
                     Ok(g) => Some(g.compile_matcher()),
@@ -58,15 +61,18 @@ pub async fn grep(
                 None
             };
 
+            // Walk directory and search each file
             for result in walk_builder.build() {
                 if let Ok(entry) = result {
                     if entry.file_type().map_or(false, |ft| ft.is_file()) {
+                        // Apply glob filter if specified
                         if let Some(ref gm) = glob_matcher {
                             if !gm.is_match(entry.path()) {
                                 continue;
                             }
                         }
 
+                        // Search file and collect matches
                         let _ = searcher.search_path(
                             &matcher,
                             entry.path(),
@@ -85,6 +91,7 @@ pub async fn grep(
             }
             matches.join("\n")
         } else {
+            // Search single file
             searcher
                 .search_path(
                     &matcher,

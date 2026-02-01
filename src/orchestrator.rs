@@ -8,6 +8,9 @@ use serde::Serialize;
 use std::collections::HashMap;
 use tiny_loop::tool::ToolArgs;
 use tiny_loop::types::{Message, ToolDefinition};
+
+/// Number of decimal places for elapsed time display
+const ELAPSED_TIME_PRECISION: usize = 2;
 use tracing::{debug, error, info, trace, warn};
 
 const EXIT_FAILURE: i32 = 1;
@@ -15,12 +18,19 @@ const EXIT_FAILURE: i32 = 1;
 /// Trace entry containing worker task details and agent conversation
 #[derive(Serialize)]
 struct TraceEntry {
+    /// Unique identifier for the worker
     worker_id: String,
+    /// Name of the rule being checked
     rule_name: String,
+    /// Instruction text for the rule
     rule_instruction: String,
+    /// List of files being reviewed
     files: Vec<String>,
+    /// Time taken to complete the task in seconds
     elapsed_secs: f64,
+    /// Tool definitions available to the agent
     tools: Vec<ToolDefinition>,
+    /// Conversation messages between agent and tools
     messages: Vec<Message>,
 }
 
@@ -28,10 +38,10 @@ struct TraceEntry {
 ///
 /// This function coordinates the entire review process:
 /// - Resolves the base commit for comparison
-/// - Gets changed files and generates diffs
+/// - Gets changed files, commit messages, and generates diffs
 /// - Splits work into tasks based on rules and file scopes
 /// - Executes workers in parallel (with optional concurrency limit)
-/// - Collects and outputs results
+/// - Collects and outputs results with worker_id, all_files, and commits
 /// - Optionally writes trace of agent conversations to file
 pub async fn orchestrate_and_run(
     rules: &[RuleBody],
@@ -274,19 +284,31 @@ fn write_trace(path: &str, traces: &[TraceEntry]) {
 fn format_trace_markdown(traces: &[TraceEntry]) -> String {
     let mut output = String::new();
     for trace in traces {
+        // Write worker and rule header information
         output.push_str(&format!("# Worker: {}\n\n", trace.worker_id));
         output.push_str(&format!("## Rule: {}\n\n", trace.rule_name));
         output.push_str(&format!("{}\n\n", trace.rule_instruction.trim()));
-        output.push_str(&format!("**Elapsed:** {:.2}s\n\n", trace.elapsed_secs));
+        output.push_str(&format!(
+            "**Elapsed:** {:.prec$}s\n\n",
+            trace.elapsed_secs,
+            prec = ELAPSED_TIME_PRECISION
+        ));
+
+        // List files being reviewed
         output.push_str("## Files\n\n");
         for file in &trace.files {
             output.push_str(&format!("- {}\n", file));
         }
+
+        // Show tool schemas as JSON
         output.push_str("\n## Tools\n\n");
         let tools_json = serde_json::to_string_pretty(&trace.tools).unwrap_or_default();
         output.push_str(&format!("```json\n{}\n```\n\n", tools_json));
+
+        // Format conversation messages
         output.push_str("## Messages\n\n");
         for (i, msg) in trace.messages.iter().enumerate() {
+            // Extract role, content, and tool calls from message variants
             let (role, content, tool_calls) = match msg {
                 Message::System { content } => ("system", Some(content.as_str()), None),
                 Message::User { content } => ("user", Some(content.as_str()), None),
@@ -301,7 +323,10 @@ fn format_trace_markdown(traces: &[TraceEntry]) -> String {
                     None,
                 ),
             };
+
             output.push_str(&format!("### Message {} - Role: {}\n\n", i + 1, role));
+
+            // Format message content with appropriate code fences for tool responses
             if let Some(content) = content {
                 if !content.is_empty() {
                     let backticks = get_fence_backticks(content);
@@ -312,11 +337,13 @@ fn format_trace_markdown(traces: &[TraceEntry]) -> String {
                     }
                 }
             }
+
+            // Format tool calls: special handling for 'think' tool vs others
             if let Some(tool_calls) = tool_calls {
                 output.push_str("**Tool Calls:**\n\n");
                 for tc in tool_calls {
                     if tc.function.name == crate::tool::think::ThinkArgs::TOOL_NAME {
-                        // Handle think tool specially
+                        // Render think tool reasoning as markdown
                         if let Ok(args) = serde_json::from_str::<crate::tool::think::ThinkArgs>(
                             &tc.function.arguments,
                         ) {
@@ -327,7 +354,7 @@ fn format_trace_markdown(traces: &[TraceEntry]) -> String {
                             ));
                         }
                     } else {
-                        // Handle non-think tools with JSON
+                        // Render other tools with JSON arguments
                         let formatted_args =
                             serde_json::from_str::<serde_json::Value>(&tc.function.arguments)
                                 .and_then(|v| serde_json::to_string_pretty(&v))
@@ -387,6 +414,10 @@ fn format_violations(
     output.trim_end().to_string()
 }
 
+/// Split rules and files into worker tasks
+///
+/// For each rule, filters files by scope and splits them into chunks based on
+/// max_files_per_task. Returns list of (rule, files) pairs for parallel execution.
 fn orchestrate<'a>(
     rules: &'a [RuleBody],
     changed_files: &[String],
@@ -402,6 +433,8 @@ fn orchestrate<'a>(
         .iter()
         .flat_map(|rule| {
             trace!("Processing rule: {}", rule.name);
+
+            // Filter files that match this rule's scope
             let matched_files = filter_files_by_scope(rule, changed_files);
             debug!("Rule '{}' matched {} files", rule.name, matched_files.len());
 
@@ -409,12 +442,14 @@ fn orchestrate<'a>(
                 return vec![];
             }
 
+            // Use rule-specific or global max_files_per_task
             let max_files = rule.max_files_per_task.unwrap_or(global_max_files_per_task);
             debug!(
                 "Rule '{}' using max_files_per_task: {}",
                 rule.name, max_files
             );
 
+            // Split matched files into chunks and create tasks
             split_files(&matched_files, max_files)
                 .into_iter()
                 .map(|chunk| {

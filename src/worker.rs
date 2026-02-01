@@ -54,12 +54,12 @@ pub async fn worker(
     );
     let llm = crate::llm::create_provider(api_key, base_url, model, temperature, max_tokens);
 
-    // Setup stateful tools
+    // Setup stateful tools for reporting violations and getting diffs
     let report = Report::new();
     let diff = Diff::new(diffs);
 
-    // Create agent with tools
-    let mut agent = Agent::new(llm)
+    // Create agent with system prompt and bind tools
+    let agent = Agent::new(llm)
         .system("You are a code reviewer. Your task is to review code changes against a specific rule. \
                 Focus only on the files provided and only check for violations of the given rule. \
                 You can read related files if needed, but only report issues related to the provided files and rule. \
@@ -68,16 +68,12 @@ pub async fn worker(
                 2. Search/read related files if needed for context\n\
                 3. Use the 'think' tool to reason about whether the changes violate the rule\n\
                 4. Use the 'report' tool to report all violations found, then exit without summary")
-        .tool(crate::tool::read::read)
-        .tool(crate::tool::fetch::fetch)
-        .tool(crate::tool::ls::ls)
-        .tool(crate::tool::grep::grep)
-        .tool(crate::tool::glob::glob)
-        .tool(crate::tool::think::think)
         .bind(diff.clone(), Diff::diff)
         .bind(report.clone(), Report::report);
 
-    // User message with rule and files
+    let mut agent = crate::llm::register_common_tools(agent);
+
+    // Build user message: simplified if focus files match all changed files
     let user_message = if files == all_changed_files {
         let files_list = files.join("\n- ");
         let commits_section = if commit_messages.is_empty() {
@@ -95,6 +91,7 @@ pub async fn worker(
             rule.instruction.trim()
         )
     } else {
+        // Include all changed files for context, but focus on specific files
         let all_files_list = all_changed_files.join("\n- ");
         let focus_files_list = files.join("\n- ");
         let commits_section = if commit_messages.is_empty() {
@@ -123,16 +120,16 @@ pub async fn worker(
     );
     trace!("[Worker {}] User message: {}", worker_id, user_message);
 
-    // Run agent loop
+    // Run agent loop to review code
     debug!(
         "[Worker {}] Starting agent loop for rule '{}'",
         worker_id, rule.name
     );
     let _response = agent.chat(user_message).await?;
 
-    // For trace, we need to collect messages from agent
+    // Collect trace data if enabled
     let (messages, tools) = if trace_enabled {
-        // Manually collect tool schemas since agent.tools is private
+        // Collect conversation history and tool schemas for trace output
         let tool_schemas = vec![
             crate::tool::read::ReadArgs::definition(),
             crate::tool::fetch::FetchArgs::definition(),
@@ -148,7 +145,7 @@ pub async fn worker(
         (None, None)
     };
 
-    // Extract violations from shared state
+    // Extract violations from report tool's shared state
     let violations = report.violations.lock().await.clone();
 
     let elapsed = start.elapsed().as_secs_f64();

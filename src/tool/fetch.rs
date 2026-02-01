@@ -2,6 +2,9 @@ use tiny_loop::tool::tool;
 
 use super::utils::truncate_text_by_chars;
 
+/// Default number of characters to fetch from a URL
+const DEFAULT_NUM_CHARS: usize = 5000;
+
 fn process_html(html: String, start_char: usize, num_chars: usize) -> String {
     let markdown = html2md::parse_html(&html);
     let result = truncate_text_by_chars(markdown, start_char, num_chars);
@@ -37,7 +40,11 @@ pub async fn fetch(
         Err(e) => return format!("Error reading response: {}", e),
     };
 
-    process_html(html, start_char.unwrap_or(0), num_chars.unwrap_or(5000))
+    process_html(
+        html,
+        start_char.unwrap_or(0),
+        num_chars.unwrap_or(DEFAULT_NUM_CHARS),
+    )
 }
 
 #[cfg(test)]

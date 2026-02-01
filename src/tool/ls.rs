@@ -1,5 +1,8 @@
 use tiny_loop::tool::tool;
 
+/// Indentation spaces per depth level for directory listing
+const INDENT_SPACES: usize = 2;
+
 /// List directory contents with optional recursive depth
 #[tool]
 pub async fn ls(
@@ -25,12 +28,15 @@ fn list_dir_recursive<'a>(
     items: &'a mut Vec<String>,
 ) -> std::pin::Pin<Box<dyn std::future::Future<Output = std::io::Result<()>> + Send + 'a>> {
     Box::pin(async move {
+        // Read all directory entries
         let mut entries = tokio::fs::read_dir(path).await?;
         let mut entry_list = Vec::new();
 
         while let Some(entry) = entries.next_entry().await? {
             entry_list.push(entry);
         }
+
+        // Sort entries by name for consistent output
         entry_list.sort_by_key(|e| e.file_name());
 
         for entry in entry_list {
@@ -38,9 +44,11 @@ fn list_dir_recursive<'a>(
             let name = entry.file_name();
             let name_str = name.to_string_lossy();
 
+            // Add entry with 'd' for directory, 'f' for file
             let type_prefix = if file_type.is_dir() { "d" } else { "f" };
             items.push(format!("{}{} {}", prefix, type_prefix, name_str));
 
+            // Recursively list subdirectories if within depth limit
             if file_type.is_dir() && current_depth < max_depth {
                 let new_path = entry.path();
                 if let Some(path_str) = new_path.to_str() {
@@ -48,7 +56,7 @@ fn list_dir_recursive<'a>(
                         path_str,
                         max_depth,
                         current_depth + 1,
-                        &format!("{}  ", prefix),
+                        &format!("{}{:width$}", prefix, "", width = INDENT_SPACES),
                         items,
                     )
                     .await?;

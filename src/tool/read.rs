@@ -8,9 +8,11 @@ fn process_file_content(
     num_lines: usize,
     max_line_len: usize,
 ) -> String {
+    // Truncate content to requested line range
     let result = truncate_text_by_lines(content, start_line, num_lines);
     let truncated_lines = result.truncated;
 
+    // Process each line: truncate if too long and add hint
     let output = result
         .content
         .lines()
@@ -30,6 +32,7 @@ fn process_file_content(
         .collect::<Vec<_>>()
         .join("\n");
 
+    // Add hint for reading more lines if content was truncated
     if truncated_lines {
         format!(
             "{}\nHint: Use start_line={} to read more.",

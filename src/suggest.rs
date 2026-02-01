@@ -6,6 +6,10 @@ use crate::util;
 use tiny_loop::Agent;
 use tracing::info;
 
+/// Suggest new review rules based on code changes
+///
+/// Analyzes code changes and uses an LLM agent to suggest new rules that could
+/// catch violations in the current changes. Returns suggested rules or error.
 pub async fn suggest(
     diff_base: &str,
     config: &Config,
@@ -61,7 +65,7 @@ pub async fn suggest(
     let suggest_tool = Suggest::new();
     let files: Vec<String> = diffs.keys().cloned().collect();
 
-    let mut agent = Agent::new(provider)
+    let agent = Agent::new(provider)
         .system(&format!(
             "You are a code review expert analyzing code changes to suggest new review rules.\n\n\
             Changed files: {}\n\n\
@@ -79,13 +83,9 @@ pub async fn suggest(
             existing_rules_text
         ))
         .bind(diff_tool, crate::tool::diff::Diff::diff)
-        .bind(suggest_tool.clone(), Suggest::suggest)
-        .tool(crate::tool::read::read)
-        .tool(crate::tool::fetch::fetch)
-        .tool(crate::tool::ls::ls)
-        .tool(crate::tool::grep::grep)
-        .tool(crate::tool::glob::glob)
-        .tool(crate::tool::think::think);
+        .bind(suggest_tool.clone(), Suggest::suggest);
+
+    let mut agent = crate::llm::register_common_tools(agent);
 
     info!("Running agent to suggest rules");
     let _response = agent
@@ -108,6 +108,7 @@ pub async fn suggest(
     Ok(())
 }
 
+/// Write suggested rules to output file in JSON or Markdown format
 fn write_output(path: &str, rules: &[RuleBody]) -> Result<(), Box<dyn std::error::Error>> {
     let content = if path.ends_with(".json") {
         serde_json::to_string_pretty(&rules)?
@@ -122,6 +123,7 @@ fn write_output(path: &str, rules: &[RuleBody]) -> Result<(), Box<dyn std::error
     Ok(())
 }
 
+/// Format rules as Markdown with name, instruction, scope, and tip
 fn format_rules_markdown(rules: &[RuleBody]) -> String {
     let mut output = String::from("# Suggested Rules\n\n");
 
