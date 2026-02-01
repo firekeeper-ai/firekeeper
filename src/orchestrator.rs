@@ -80,10 +80,12 @@ pub async fn orchestrate_and_run(
         .enumerate()
         .map(|(i, (rule, files))| {
             let worker_id = i.to_string();
+            let all_files = changed_files.clone();
             worker::worker(
                 worker_id,
                 rule,
                 files,
+                all_files,
                 base_url,
                 api_key,
                 model,
