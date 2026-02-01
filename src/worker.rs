@@ -68,8 +68,8 @@ pub async fn worker(
                 2. Search/read related files if needed for context\n\
                 3. Use the 'think' tool to reason about whether the changes violate the rule\n\
                 4. Use the 'report' tool to report all violations found, then exit without summary")
-        .tool(tiny_loop::tool::read)
-        .tool(tiny_loop::tool::fetch)
+        .tool(crate::tool::read::read)
+        .tool(crate::tool::fetch::fetch)
         .tool(crate::tool::fs::ls)
         .tool(crate::tool::fs::grep)
         .tool(crate::tool::fs::glob)
@@ -134,8 +134,8 @@ pub async fn worker(
     let (messages, tools) = if trace_enabled {
         // Manually collect tool schemas since agent.tools is private
         let tool_schemas = vec![
-            tiny_loop::tool::ReadArgs::definition(),
-            tiny_loop::tool::FetchArgs::definition(),
+            crate::tool::read::ReadArgs::definition(),
+            crate::tool::fetch::FetchArgs::definition(),
             crate::tool::fs::LsArgs::definition(),
             crate::tool::fs::GrepArgs::definition(),
             crate::tool::fs::GlobArgs::definition(),
