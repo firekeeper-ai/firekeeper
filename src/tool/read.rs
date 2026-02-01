@@ -2,6 +2,9 @@ use tiny_loop::tool::tool;
 
 use super::utils::{truncate_single_line, truncate_text_by_lines};
 
+const DEFAULT_NUM_LINES: usize = 250;
+const DEFAULT_MAX_LINE_LEN: usize = 200;
+
 fn process_file_content(
     content: String,
     start_line: usize,
@@ -60,8 +63,8 @@ pub async fn read(
         Ok(content) => process_file_content(
             content,
             start_line.unwrap_or(0),
-            num_lines.unwrap_or(250),
-            max_line_len.unwrap_or(200),
+            num_lines.unwrap_or(DEFAULT_NUM_LINES),
+            max_line_len.unwrap_or(DEFAULT_MAX_LINE_LEN),
         ),
         Err(e) => format!("Error reading file: {}", e),
     }

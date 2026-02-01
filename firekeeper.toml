@@ -25,7 +25,9 @@ instruction = """
 Ensure modified content does not duplicate code from other files.
 - If duplicating an existing function, the code should call that function instead.
 - If duplicating a code block, a shared function should be extracted.
-- Ignore trivial duplication (e.g., simple one-liners).
+- Ignore trivial duplication (e.g., simple one-liners, common patterns like error handling).
+- Focus on substantial logic duplication (>20 lines of similar business logic).
+- Common file I/O patterns (read/write with error handling) are acceptable unless the entire function is duplicated.
 """
 tip = """
 Extract common code into functions.
