@@ -16,9 +16,9 @@ impl Report {
     }
 }
 
-/// Report rule violations found during review. MUST call 'think' tool first.
 #[tool]
 impl Report {
+    /// Report rule violations found during review. MUST call 'think' tool first.
     pub async fn report(
         self,
         /// List of violations
