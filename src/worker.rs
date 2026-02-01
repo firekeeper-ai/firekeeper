@@ -81,8 +81,8 @@ pub async fn worker(
                 Focus only on the files provided and only check for violations of the given rule. \
                 You can read related files if needed, but only report issues related to the provided files and rule. \
                 \n\nWorkflow:\n\
-                1. Get diffs for the provided files to see what changed\n\
-                2. Search/read related files if needed for context\n\
+                1. Review the provided diffs to understand what changed\n\
+                2. Read other related diffs or files if needed for context\n\
                 3. Use the 'think' tool to reason about whether the changes violate the rule\n\
                 4. Use the 'report' tool to report all violations found, then exit without summary")
         .bind(diff.clone(), Diff::diff)
