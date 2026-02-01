@@ -344,16 +344,15 @@ fn format_trace_markdown(traces: &[TraceEntry]) -> String {
         for (i, msg) in trace.messages.iter().enumerate() {
             // Extract role, content, and tool calls from message variants
             let (role, content, tool_calls) = match msg {
-                Message::System { content } => ("system", Some(content.as_str()), None),
-                Message::User { content } => ("user", Some(content.as_str()), None),
-                Message::Assistant {
-                    content,
-                    tool_calls,
-                } => ("assistant", Some(content.as_str()), tool_calls.as_ref()),
-                Message::Tool { content, .. } => ("tool", Some(content.as_str()), None),
-                Message::Custom { role, body } => (
-                    role.as_str(),
-                    body.get("content").and_then(|v| v.as_str()),
+                Message::System(m) => ("system", Some(m.content.as_str()), None),
+                Message::User(m) => ("user", Some(m.content.as_str()), None),
+                Message::Assistant(m) => {
+                    ("assistant", Some(m.content.as_str()), m.tool_calls.as_ref())
+                }
+                Message::Tool(m) => ("tool", Some(m.content.as_str()), None),
+                Message::Custom(m) => (
+                    m.role.as_str(),
+                    m.body.get("content").and_then(|v| v.as_str()),
                     None,
                 ),
             };
