@@ -82,9 +82,9 @@ pub async fn suggest(
         .bind(suggest_tool.clone(), Suggest::suggest)
         .tool(crate::tool::read::read)
         .tool(crate::tool::fetch::fetch)
-        .tool(crate::tool::fs::ls)
-        .tool(crate::tool::fs::grep)
-        .tool(crate::tool::fs::glob)
+        .tool(crate::tool::ls::ls)
+        .tool(crate::tool::grep::grep)
+        .tool(crate::tool::glob::glob)
         .tool(crate::tool::think::think);
 
     info!("Running agent to suggest rules");

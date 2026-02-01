@@ -70,9 +70,9 @@ pub async fn worker(
                 4. Use the 'report' tool to report all violations found, then exit without summary")
         .tool(crate::tool::read::read)
         .tool(crate::tool::fetch::fetch)
-        .tool(crate::tool::fs::ls)
-        .tool(crate::tool::fs::grep)
-        .tool(crate::tool::fs::glob)
+        .tool(crate::tool::ls::ls)
+        .tool(crate::tool::grep::grep)
+        .tool(crate::tool::glob::glob)
         .tool(crate::tool::think::think)
         .bind(diff.clone(), Diff::diff)
         .bind(report.clone(), Report::report);
@@ -136,9 +136,9 @@ pub async fn worker(
         let tool_schemas = vec![
             crate::tool::read::ReadArgs::definition(),
             crate::tool::fetch::FetchArgs::definition(),
-            crate::tool::fs::LsArgs::definition(),
-            crate::tool::fs::GrepArgs::definition(),
-            crate::tool::fs::GlobArgs::definition(),
+            crate::tool::ls::LsArgs::definition(),
+            crate::tool::grep::GrepArgs::definition(),
+            crate::tool::glob::GlobArgs::definition(),
             crate::tool::think::ThinkArgs::definition(),
             crate::tool::diff::DiffArgs::definition(),
             crate::tool::report::ReportArgs::definition(),

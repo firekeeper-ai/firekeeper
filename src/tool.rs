@@ -1,6 +1,8 @@
 pub mod diff;
 pub mod fetch;
-pub mod fs;
+pub mod glob;
+pub mod grep;
+pub mod ls;
 pub mod read;
 pub mod report;
 pub mod suggest;
