@@ -10,6 +10,10 @@ When code is modified, ensure:
 - Related documentation (e.g., README.md, docs/) in the same or parent directories is updated.
 - Struct/class/method/function doc comments match the code changes.
 - Long and complex functions have comments explaining key steps.
+
+Consider the scope of changes:
+- External-facing changes (CLI options, user-visible features, API changes) require documentation updates.
+- Internal-facing changes (refactoring, internal implementation details) may not require documentation updates.
 """
 scope = ["**/*"]
 max_files_per_task = 3
