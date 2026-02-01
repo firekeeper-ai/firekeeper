@@ -1,19 +1,76 @@
 use tiny_loop::tool::tool;
 
-use super::utils::truncate_text;
+use super::utils::{truncate_single_line, truncate_text_by_lines};
 
-/// Read file contents with optional character range
+fn process_file_content(
+    content: String,
+    start_line: usize,
+    num_lines: usize,
+    max_line_len: usize,
+) -> String {
+    let truncated = truncate_text_by_lines(content, start_line, num_lines);
+    truncated
+        .lines()
+        .map(|line| truncate_single_line(line.to_string(), max_line_len))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Read file contents with optional line range
 #[tool]
 pub async fn read(
     /// File path
     path: String,
-    /// Optional start character index (default: 0)
-    start: Option<usize>,
-    /// Optional length in characters (default: 5000)
-    len: Option<usize>,
+    /// Optional start line index (default: 0)
+    start_line: Option<usize>,
+    /// Optional number of lines to return (default: 100)
+    num_lines: Option<usize>,
+    /// Optional maximum characters per line (default: 200)
+    max_line_len: Option<usize>,
 ) -> String {
     match tokio::fs::read_to_string(&path).await {
-        Ok(content) => truncate_text(content, start.unwrap_or(0), len.unwrap_or(5000)),
+        Ok(content) => process_file_content(
+            content,
+            start_line.unwrap_or(0),
+            num_lines.unwrap_or(100),
+            max_line_len.unwrap_or(200),
+        ),
         Err(e) => format!("Error reading file: {}", e),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_process_file_content_no_truncation() {
+        let content = "line1\nline2\nline3".to_string();
+        let result = process_file_content(content, 0, 100, 200);
+        assert_eq!(result, "line1\nline2\nline3");
+    }
+
+    #[test]
+    fn test_process_file_content_with_line_truncation() {
+        let content = "line1\nline2\nline3\nline4".to_string();
+        let result = process_file_content(content, 0, 2, 200);
+        assert!(result.contains("line1"));
+        assert!(result.contains("line2"));
+        assert!(result.contains("truncated [2/4 lines]"));
+    }
+
+    #[test]
+    fn test_process_file_content_with_start_line() {
+        let content = "line1\nline2\nline3\nline4".to_string();
+        let result = process_file_content(content, 2, 100, 200);
+        assert_eq!(result, "line3\nline4");
+    }
+
+    #[test]
+    fn test_process_file_content_with_single_line_truncation() {
+        let content = "short\nthis is a very long line that should be truncated".to_string();
+        let result = process_file_content(content, 0, 100, 10);
+        assert!(result.contains("short"));
+        assert!(result.contains("this is a ... [truncated 10/"));
     }
 }
