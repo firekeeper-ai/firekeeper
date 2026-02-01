@@ -5,7 +5,6 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tiny_loop::Agent;
-use tiny_loop::tool::ToolArgs;
 use tiny_loop::types::{Message, ToolDefinition};
 use tokio::sync::Mutex;
 use tracing::{debug, info, trace, warn};
@@ -211,17 +210,10 @@ pub async fn worker(
     // Collect trace data if enabled (even if cancelled)
     let (messages, tools) = if trace_enabled {
         // Collect conversation history and tool schemas for trace output
-        let tool_schemas = vec![
-            crate::tool::read::ReadArgs::definition(),
-            crate::tool::fetch::FetchArgs::definition(),
-            crate::tool::ls::LsArgs::definition(),
-            crate::tool::grep::GrepArgs::definition(),
-            crate::tool::glob::GlobArgs::definition(),
-            crate::tool::think::ThinkArgs::definition(),
-            crate::tool::diff::DiffArgs::definition(),
-            crate::tool::report::ReportArgs::definition(),
-        ];
-        (Some(agent.history.get_all().to_vec()), Some(tool_schemas))
+        (
+            Some(agent.history.get_all().to_vec()),
+            Some(agent.tools().to_vec()),
+        )
     } else {
         (None, None)
     };
