@@ -265,11 +265,8 @@ fn format_trace_markdown(traces: &[TraceEntry]) -> String {
     for trace in traces {
         output.push_str(&format!("# Worker: {}\n\n", trace.worker_id));
         output.push_str(&format!("## Rule: {}\n\n", trace.rule_name));
-        output.push_str(&format!(
-            "## Rule Instruction\n\n{}\n\n",
-            trace.rule_instruction
-        ));
-        output.push_str(&format!("## Files\n\n"));
+        output.push_str(&format!("{}\n\n", trace.rule_instruction.trim()));
+        output.push_str("## Files\n\n");
         for file in &trace.files {
             output.push_str(&format!("- {}\n", file));
         }
