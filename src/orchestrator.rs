@@ -19,6 +19,7 @@ struct TraceEntry {
     rule_name: String,
     rule_instruction: String,
     files: Vec<String>,
+    elapsed_secs: f64,
     tools: Vec<ToolDefinition>,
     messages: Vec<Message>,
 }
@@ -173,6 +174,7 @@ pub async fn orchestrate_and_run(
                     rule_name: worker_result.rule_name,
                     rule_instruction: worker_result.rule_instruction,
                     files: worker_result.files,
+                    elapsed_secs: worker_result.elapsed_secs,
                     tools: worker_result.tools.unwrap_or_default(),
                     messages,
                 });
@@ -268,6 +270,7 @@ fn format_trace_markdown(traces: &[TraceEntry]) -> String {
         output.push_str(&format!("# Worker: {}\n\n", trace.worker_id));
         output.push_str(&format!("## Rule: {}\n\n", trace.rule_name));
         output.push_str(&format!("{}\n\n", trace.rule_instruction.trim()));
+        output.push_str(&format!("**Elapsed:** {:.2}s\n\n", trace.elapsed_secs));
         output.push_str("## Files\n\n");
         for file in &trace.files {
             output.push_str(&format!("- {}\n", file));

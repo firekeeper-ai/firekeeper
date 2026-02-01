@@ -18,6 +18,7 @@ pub struct WorkerResult {
     pub messages: Option<Vec<Message>>,
     pub tools: Option<Vec<ToolDefinition>>,
     pub tip: Option<String>,
+    pub elapsed_secs: f64,
 }
 
 /// Run a review worker for a specific rule and set of files
@@ -35,6 +36,7 @@ pub async fn worker(
     diffs: HashMap<String, String>,
     trace_enabled: bool,
 ) -> Result<WorkerResult, Box<dyn std::error::Error>> {
+    let start = std::time::Instant::now();
     info!(
         "[Worker {}] Reviewing {} files for rule '{}': {:?}",
         worker_id,
@@ -118,7 +120,11 @@ pub async fn worker(
     // Extract violations from shared state
     let violations = report.violations.lock().await.clone();
 
-    info!("[Worker {}] Done reviewing rule '{}'", worker_id, rule.name);
+    let elapsed = start.elapsed().as_secs_f64();
+    info!(
+        "[Worker {}] Done reviewing rule '{}' ({:.2}s)",
+        worker_id, rule.name, elapsed
+    );
 
     Ok(WorkerResult {
         worker_id,
@@ -130,5 +136,6 @@ pub async fn worker(
         messages,
         tools,
         tip: rule.tip.clone(),
+        elapsed_secs: elapsed,
     })
 }
