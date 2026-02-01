@@ -5,6 +5,7 @@ use tiny_loop::tool::tool;
 #[tool]
 pub async fn think(
     /// Your reasoning about whether the code violates the rule, considering exceptions and context
+    #[serde(rename = "reasoning")]
     _reasoning: String,
 ) -> String {
     "OK".to_string()
