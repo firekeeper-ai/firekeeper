@@ -283,10 +283,8 @@ fn format_trace_markdown(traces: &[TraceEntry]) -> String {
             output.push_str(&format!("- {}\n", file));
         }
         output.push_str("\n## Tools\n\n");
-        for tool in &trace.tools {
-            let tool_json = serde_json::to_string_pretty(tool).unwrap_or_default();
-            output.push_str(&format!("```json\n{}\n```\n\n", tool_json));
-        }
+        let tools_json = serde_json::to_string_pretty(&trace.tools).unwrap_or_default();
+        output.push_str(&format!("```json\n{}\n```\n\n", tools_json));
         output.push_str("## Messages\n\n");
         for (i, msg) in trace.messages.iter().enumerate() {
             let (role, content, tool_calls) = match msg {
