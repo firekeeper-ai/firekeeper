@@ -1,4 +1,3 @@
-use crate::config::{DEFAULT_BASE_URL, DEFAULT_MODEL};
 use clap::{Parser, Subcommand};
 
 // Display order for API key option (placed at top of help text)
@@ -74,21 +73,9 @@ pub struct ReviewArgs {
     #[arg(long, env = "FIREKEEPER_LLM_API_KEY", display_order = API_KEY_DISPLAY_ORDER)]
     pub api_key: String,
 
-    /// LLM base URL
-    #[arg(long, default_value = DEFAULT_BASE_URL)]
-    pub base_url: Option<String>,
-
-    /// LLM model
-    #[arg(long, default_value = DEFAULT_MODEL)]
-    pub model: Option<String>,
-
     /// Dry run: only show tasks without executing workers
     #[arg(long)]
     pub dry_run: bool,
-
-    /// Maximum number of parallel workers (defaults to unlimited)
-    #[arg(long)]
-    pub max_parallel_workers: Option<usize>,
 
     /// Output file path (.md or .json)
     #[arg(long)]
@@ -121,14 +108,6 @@ pub struct SuggestArgs {
     /// LLM API key
     #[arg(long, env = "FIREKEEPER_LLM_API_KEY", display_order = API_KEY_DISPLAY_ORDER)]
     pub api_key: String,
-
-    /// LLM base URL
-    #[arg(long, default_value = DEFAULT_BASE_URL)]
-    pub base_url: Option<String>,
-
-    /// LLM model
-    #[arg(long, default_value = DEFAULT_MODEL)]
-    pub model: Option<String>,
 
     /// Output file path (.md or .json)
     #[arg(long)]

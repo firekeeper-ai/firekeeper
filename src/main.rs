@@ -48,24 +48,14 @@ async fn main() {
             trace!("args: {:#?}", args);
             trace!("config: {:#?}", config);
 
-            let max_parallel_workers = args
-                .max_parallel_workers
-                .or(config.worker.max_parallel_workers);
-            let base_url = args
-                .base_url
-                .as_deref()
-                .or(Some(&config.llm.base_url))
-                .unwrap();
-            let model = args.model.as_deref().or(Some(&config.llm.model)).unwrap();
-
             orchestrator::orchestrate_and_run(
                 &config.rules,
                 &args.base,
                 config.worker.max_files_per_task,
-                max_parallel_workers,
-                base_url,
+                config.worker.max_parallel_workers,
+                &config.llm.base_url,
                 &args.api_key,
-                model,
+                &config.llm.model,
                 &config.llm.headers,
                 &config.llm.body,
                 args.dry_run,
@@ -80,19 +70,12 @@ async fn main() {
                 std::process::exit(1);
             });
 
-            let base_url = args
-                .base_url
-                .as_deref()
-                .or(Some(&config.llm.base_url))
-                .unwrap();
-            let model = args.model.as_deref().or(Some(&config.llm.model)).unwrap();
-
             suggest::suggest(
                 &args.base,
                 &config,
                 &args.api_key,
-                base_url,
-                model,
+                &config.llm.base_url,
+                &config.llm.model,
                 args.output.as_deref(),
                 args.trace.as_deref(),
             )
