@@ -71,6 +71,7 @@ async fn main() {
                 args.dry_run,
                 args.output.as_deref(),
                 args.trace.as_deref(),
+                &args.config,
             )
             .await;
         }

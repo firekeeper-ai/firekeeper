@@ -59,6 +59,7 @@ pub async fn orchestrate_and_run(
     dry_run: bool,
     output: Option<&str>,
     trace: Option<&str>,
+    config_path: &str,
 ) {
     let base = util::Base::parse(diff_base);
     debug!("Resolved base: {:?}", base);
@@ -252,6 +253,10 @@ pub async fn orchestrate_and_run(
         error!(
             "Blocking rules with violations: {:?}",
             blocking_rules_with_violations
+        );
+        info!(
+            "If violations are misreported, refine rules in {}",
+            config_path
         );
         std::process::exit(EXIT_FAILURE);
     }
