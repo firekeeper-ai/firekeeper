@@ -108,4 +108,59 @@ impl Config {
         let config = toml::from_str(&content)?;
         Ok(config)
     }
+
+    /// Apply config overrides using dot notation (e.g. "llm.model=gpt-4")
+    ///
+    /// Converts config to JSON, navigates to the field using dot-separated path,
+    /// sets the value (auto-parsing JSON or treating as string), then converts back.
+    pub fn apply_overrides(&mut self, overrides: &[String]) -> Result<(), String> {
+        if overrides.is_empty() {
+            return Ok(());
+        }
+
+        // Convert config to JSON for dynamic field access
+        let mut json_value = serde_json::to_value(&self)
+            .map_err(|e| format!("Failed to serialize config: {}", e))?;
+
+        for override_str in overrides {
+            // Parse "key=value" format
+            let (key, value) = override_str
+                .split_once('=')
+                .ok_or_else(|| format!("Invalid override format: {}", override_str))?;
+
+            // Split key into path parts (e.g. "llm.model" -> ["llm", "model"])
+            let parts: Vec<&str> = key.split('.').collect();
+            let mut current = &mut json_value;
+
+            // Navigate through the JSON structure
+            for (i, part) in parts.iter().enumerate() {
+                if i == parts.len() - 1 {
+                    // Last part: set the value
+                    if let Some(obj) = current.as_object_mut() {
+                        // Try parsing as JSON first (for numbers, bools, etc.), fallback to string
+                        let parsed_value = serde_json::from_str(value)
+                            .unwrap_or_else(|_| Value::String(value.to_string()));
+                        obj.insert(part.to_string(), parsed_value);
+                    } else {
+                        return Err(format!("Cannot set field '{}' on non-object", part));
+                    }
+                } else {
+                    // Intermediate part: navigate deeper
+                    if let Some(obj) = current.as_object_mut() {
+                        current = obj
+                            .get_mut(*part)
+                            .ok_or_else(|| format!("Unknown config key: {}", key))?;
+                    } else {
+                        return Err(format!("Cannot navigate through non-object at '{}'", part));
+                    }
+                }
+            }
+        }
+
+        // Convert back to Config struct
+        *self = serde_json::from_value(json_value)
+            .map_err(|e| format!("Failed to deserialize config: {}", e))?;
+
+        Ok(())
+    }
 }

@@ -69,6 +69,10 @@ pub struct ReviewArgs {
     #[arg(long, default_value = "firekeeper.toml")]
     pub config: String,
 
+    /// Override config values using dot notation (e.g. llm.model=gpt-4)
+    #[arg(long = "config-override")]
+    pub config_overrides: Vec<String>,
+
     /// LLM API key
     #[arg(long, env = "FIREKEEPER_LLM_API_KEY", display_order = API_KEY_DISPLAY_ORDER)]
     pub api_key: String,
@@ -104,6 +108,10 @@ pub struct SuggestArgs {
     /// Path to config file to read existing rules
     #[arg(long, default_value = "firekeeper.toml")]
     pub config: String,
+
+    /// Override config values using dot notation (e.g. llm.model=gpt-4)
+    #[arg(long = "config-override")]
+    pub config_overrides: Vec<String>,
 
     /// LLM API key
     #[arg(long, env = "FIREKEEPER_LLM_API_KEY", display_order = API_KEY_DISPLAY_ORDER)]

@@ -40,10 +40,15 @@ async fn main() {
             info!("Created {}", args.config);
         }
         Commands::Review(args) => {
-            let config = Config::load(&args.config).unwrap_or_else(|e| {
+            let mut config = Config::load(&args.config).unwrap_or_else(|e| {
                 error!("Failed to load config: {}", e);
                 std::process::exit(1);
             });
+
+            if let Err(e) = config.apply_overrides(&args.config_overrides) {
+                error!("Failed to apply config overrides: {}", e);
+                std::process::exit(1);
+            }
 
             trace!("args: {:#?}", args);
             trace!("config: {:#?}", config);
@@ -65,10 +70,15 @@ async fn main() {
             .await;
         }
         Commands::Suggest(args) => {
-            let config = Config::load(&args.config).unwrap_or_else(|e| {
+            let mut config = Config::load(&args.config).unwrap_or_else(|e| {
                 error!("Failed to load config: {}", e);
                 std::process::exit(1);
             });
+
+            if let Err(e) = config.apply_overrides(&args.config_overrides) {
+                error!("Failed to apply config overrides: {}", e);
+                std::process::exit(1);
+            }
 
             suggest::suggest(
                 &args.base,

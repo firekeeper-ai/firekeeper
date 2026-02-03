@@ -48,18 +48,28 @@ Review code changes against rules
 Usage: firekeeper review [OPTIONS] --api-key <API_KEY>
 
 Options:
-      --api-key <API_KEY>      LLM API key [env: FIREKEEPER_LLM_API_KEY=]
-      --base <BASE>            Base commit to compare against.
-                               Examples: HEAD^ or ^, HEAD~1 or ~1, commit hash, @{1.day.ago}.
-                               HEAD for uncommitted changes, ROOT for all files
-                               [default: HEAD if uncommitted changes exist, otherwise ^]
-      --config <CONFIG>        Path to config file (initialize with `firekeeper init`) [default: firekeeper.toml]
-      --dry-run                Dry run: only show tasks without executing workers
-      --output <OUTPUT>        Output file path (.md or .json)
-      --trace <TRACE>          Trace file path to record agent responses and tool use (.md or .json)
-      --log-level <LOG_LEVEL>  Log level (see https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html)
-                               [env: FIREKEEPER_LOG=] [default: info]
-  -h, --help                   Print help
+      --api-key <API_KEY>
+          LLM API key [env: FIREKEEPER_LLM_API_KEY=]
+      --base <BASE>
+          Base commit to compare against.
+          Examples: HEAD^ or ^, HEAD~1 or ~1, commit hash, @{1.day.ago}.
+          HEAD for uncommitted changes, ROOT for all files
+          [default: HEAD if uncommitted changes exist, otherwise ^]
+      --config <CONFIG>
+          Path to config file (initialize with `firekeeper init`) [default: firekeeper.toml]
+      --config-override <CONFIG_OVERRIDES>
+          Override config values using dot notation (e.g. llm.model=gpt-4)
+      --dry-run
+          Dry run: only show tasks without executing workers
+      --output <OUTPUT>
+          Output file path (.md or .json)
+      --trace <TRACE>
+          Trace file path to record agent responses and tool use (.md or .json)
+      --log-level <LOG_LEVEL>
+          Log level (see https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html)
+          [env: FIREKEEPER_LOG=] [default: info]
+  -h, --help
+          Print help
 ```
 
 </details>
@@ -69,22 +79,29 @@ Options:
 <summary><code>firekeeper suggest --help</code></summary>
 
 ```sh
-Suggest new rules based on code changes
-
 Usage: firekeeper suggest [OPTIONS] --api-key <API_KEY>
 
 Options:
-      --api-key <API_KEY>      LLM API key [env: FIREKEEPER_LLM_API_KEY=]
-      --base <BASE>            Base commit to compare against.
-                               Examples: HEAD^ or ^, HEAD~1 or ~1, commit hash, @{1.day.ago}.
-                               HEAD for uncommitted changes, ROOT for all files
-                               [default: HEAD if uncommitted changes exist, otherwise ^]
-      --config <CONFIG>        Path to config file to read existing rules [default: firekeeper.toml]
-      --output <OUTPUT>        Output file path (.md or .json)
-      --trace <TRACE>          Trace file path to record agent responses and tool use (.md or .json)
-      --log-level <LOG_LEVEL>  Log level (see https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html)
-                               [env: FIREKEEPER_LOG=] [default: info]
-  -h, --help                   Print help
+      --api-key <API_KEY>
+          LLM API key [env: FIREKEEPER_LLM_API_KEY=]
+      --base <BASE>
+          Base commit to compare against.
+          Examples: HEAD^ or ^, HEAD~1 or ~1, commit hash, @{1.day.ago}.
+          HEAD for uncommitted changes, ROOT for all files
+          [default: HEAD if uncommitted changes exist, otherwise ^]
+      --config <CONFIG>
+          Path to config file to read existing rules [default: firekeeper.toml]
+      --config-override <CONFIG_OVERRIDES>
+          Override config values using dot notation (e.g. llm.model=gpt-4)
+      --output <OUTPUT>
+          Output file path (.md or .json)
+      --trace <TRACE>
+          Trace file path to record agent responses and tool use (.md or .json)
+      --log-level <LOG_LEVEL>
+          Log level (see https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html)
+          [env: FIREKEEPER_LOG=] [default: info]
+  -h, --help
+          Print help
 ```
 
 </details>
