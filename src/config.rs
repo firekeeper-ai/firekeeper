@@ -7,16 +7,13 @@ use toml_scaffold::TomlScaffold;
 
 use crate::rule::body::RuleBody;
 
-/// Default maximum number of files to review per task
-pub const DEFAULT_MAX_FILES_PER_TASK: usize = 5;
-
 /// Configuration for Firekeeper
 #[derive(Deserialize, Serialize, Debug, JsonSchema, TomlScaffold)]
 #[serde(default)]
 pub struct Config {
     /// LLM provider configuration
     pub llm: LlmConfig,
-    /// Worker configuration
+    /// Code review configuration
     pub review: ReviewConfig,
     /// Code review rules
     pub rules: Vec<crate::rule::body::RuleBody>,
@@ -33,7 +30,7 @@ impl Default for Config {
                 instruction: "\nFor js/ts files:\nReject any Promise Chain, prefer async/await\n"
                     .into(),
                 scope: vec!["src/**/*.ts".into()],
-                max_files_per_task: DEFAULT_MAX_FILES_PER_TASK.into(),
+                max_files_per_task: None,
                 blocking: true,
                 tip: Some("tip".into()),
             }],
@@ -78,16 +75,23 @@ impl Default for LlmConfig {
 #[derive(Deserialize, Serialize, Debug, JsonSchema, TomlScaffold)]
 #[serde(default)]
 pub struct ReviewConfig {
-    /// Maximum number of files to review per task (optional, defaults to 5)
+    /// Maximum number of files to review per task
     pub max_files_per_task: usize,
     /// Maximum number of parallel workers (optional, defaults to unlimited)
     pub max_parallel_workers: Option<usize>,
 }
 
+impl ReviewConfig {
+    /// Default maximum number of files to review per task.
+    /// 5 is a balanced value for most rules,
+    /// allowing each worker to review multiple files without overwhelming the context.
+    const DEFAULT_MAX_FILES_PER_TASK: usize = 5;
+}
+
 impl Default for ReviewConfig {
     fn default() -> Self {
         Self {
-            max_files_per_task: DEFAULT_MAX_FILES_PER_TASK,
+            max_files_per_task: Self::DEFAULT_MAX_FILES_PER_TASK,
             max_parallel_workers: None,
         }
     }

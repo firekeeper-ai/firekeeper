@@ -14,7 +14,11 @@ pub struct RuleBody {
     /// Glob patterns to match files this rule applies to (optional, defaults to ["**/*"])
     #[serde(default = "default_scope")]
     pub scope: Vec<String>,
-    /// Maximum number of files to review per task (overrides global config)
+    /// Maximum number of files to review per task (overrides global config).
+    ///
+    /// Increase for simple rules that only check changed files (e.g. scan for hardcoded credentials).
+    ///
+    /// Decrease for complex rules that scan many additional files (e.g. documentation sync).
     #[serde(default)]
     pub max_files_per_task: Option<usize>,
     /// Whether violations should block the pipeline (exit 1) (optional, defaults to true)
