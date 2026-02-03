@@ -32,6 +32,9 @@ pub fn register_common_tools(agent: Agent) -> Agent {
         .tool(crate::tool::ls::ls)
         .tool(crate::tool::grep::grep)
         .tool(crate::tool::glob::glob)
-        .tool(crate::tool::lua::lua)
         .tool(crate::tool::think::think)
+
+    // Lua tool disabled: limited practical value currently.
+    // Kept as reference for code execution pattern implementation.
+    // .tool(crate::tool::lua::lua)
 }
