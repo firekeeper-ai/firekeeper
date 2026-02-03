@@ -1,7 +1,7 @@
+use super::worker;
 use crate::rule::body::RuleBody;
 use crate::types::Violation;
 use crate::util;
-use crate::worker;
 use futures::future::join_all;
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use serde::Serialize;

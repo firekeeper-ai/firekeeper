@@ -1,13 +1,12 @@
 mod cli;
 mod config;
 mod llm;
-mod orchestrator;
+mod review;
 mod rule;
 mod suggest;
 mod tool;
 mod types;
 mod util;
-mod worker;
 
 use clap::Parser;
 use cli::{Cli, Commands};
@@ -58,7 +57,7 @@ async fn main() {
             trace!("args: {:#?}", args);
             trace!("config: {:#?}", config);
 
-            orchestrator::orchestrate_and_run(
+            review::orchestrator::orchestrate_and_run(
                 &config.rules,
                 &args.base,
                 config.review.max_files_per_task,
