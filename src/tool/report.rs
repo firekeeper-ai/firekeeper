@@ -30,3 +30,48 @@ impl Report {
         "OK".into()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_report_stores_violations() {
+        let report = Report::new();
+        let violations = vec![Violation {
+            file: "test.rs".to_string(),
+            detail: "test violation".to_string(),
+            start_line: 1,
+            end_line: 2,
+        }];
+
+        report.violations.lock().await.extend(violations);
+
+        let stored = report.violations.lock().await;
+        assert_eq!(stored.len(), 1);
+        assert_eq!(stored[0].file, "test.rs");
+        assert_eq!(stored[0].detail, "test violation");
+    }
+
+    #[tokio::test]
+    async fn test_report_accumulates_violations() {
+        let report = Report::new();
+
+        report.violations.lock().await.push(Violation {
+            file: "a.rs".to_string(),
+            detail: "first".to_string(),
+            start_line: 1,
+            end_line: 1,
+        });
+
+        report.violations.lock().await.push(Violation {
+            file: "b.rs".to_string(),
+            detail: "second".to_string(),
+            start_line: 2,
+            end_line: 2,
+        });
+
+        let stored = report.violations.lock().await;
+        assert_eq!(stored.len(), 2);
+    }
+}

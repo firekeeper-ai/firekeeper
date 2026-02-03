@@ -58,3 +58,47 @@ impl Diff {
             .unwrap_or_else(|| format!("No diff available for file: {}", path))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_diff_one_existing_file() {
+        let mut diffs = HashMap::new();
+        diffs.insert("file.rs".to_string(), "diff content".to_string());
+        let diff = Diff::new(diffs);
+
+        let result = diff.diff_one("file.rs", None);
+        assert_eq!(result, "diff content");
+    }
+
+    #[test]
+    fn test_diff_one_missing_file() {
+        let diff = Diff::new(HashMap::new());
+
+        let result = diff.diff_one("missing.rs", None);
+        assert_eq!(result, "No diff available for file: missing.rs");
+    }
+
+    #[test]
+    fn test_diff_one_excluded_file() {
+        let mut diffs = HashMap::new();
+        diffs.insert("package-lock.json".to_string(), "diff".to_string());
+        let diff = Diff::new(diffs);
+
+        let result = diff.diff_one("package-lock.json", None);
+        assert!(result.contains("Skipped"));
+        assert!(result.contains("excluded"));
+    }
+
+    #[test]
+    fn test_diff_one_excluded_file_with_force() {
+        let mut diffs = HashMap::new();
+        diffs.insert("package-lock.json".to_string(), "diff".to_string());
+        let diff = Diff::new(diffs);
+
+        let result = diff.diff_one("package-lock.json", Some(true));
+        assert_eq!(result, "diff");
+    }
+}
