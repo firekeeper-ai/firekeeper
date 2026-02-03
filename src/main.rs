@@ -12,6 +12,7 @@ mod worker;
 use clap::Parser;
 use cli::{Cli, Commands};
 use config::Config;
+use toml_scaffold::TomlScaffold;
 use tracing::{error, info, trace};
 
 #[tokio::main]
@@ -32,10 +33,11 @@ async fn main() {
                 std::process::exit(1);
             }
 
-            std::fs::write(&args.config, config::default_config_template()).unwrap_or_else(|e| {
-                error!("Error writing config: {}", e);
-                std::process::exit(1);
-            });
+            std::fs::write(&args.config, config::Config::init().to_scaffold().unwrap())
+                .unwrap_or_else(|e| {
+                    error!("Error writing config: {}", e);
+                    std::process::exit(1);
+                });
 
             info!("Created {}", args.config);
         }
