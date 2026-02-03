@@ -41,7 +41,12 @@ async fn load_resources(resources: &[String]) -> String {
                     builder.add(glob);
                     if let Ok(globset) = builder.build() {
                         let mut matches = Vec::new();
-                        let _ = crate::tool::glob::glob_recursive(&base_path, &globset, &mut matches, 0);
+                        let _ = crate::tool::glob::glob_recursive(
+                            &base_path,
+                            &globset,
+                            &mut matches,
+                            0,
+                        );
                         for path in matches {
                             if loaded_files.insert(path.clone()) {
                                 match std::fs::read_to_string(&path) {
@@ -67,7 +72,12 @@ async fn load_resources(resources: &[String]) -> String {
                     builder.add(glob);
                     if let Ok(globset) = builder.build() {
                         let mut matches = Vec::new();
-                        let _ = crate::tool::glob::glob_recursive(&base_path, &globset, &mut matches, 0);
+                        let _ = crate::tool::glob::glob_recursive(
+                            &base_path,
+                            &globset,
+                            &mut matches,
+                            0,
+                        );
                         for path in matches {
                             if loaded_files.insert(path.clone()) && path.ends_with(".md") {
                                 match std::fs::read_to_string(&path) {
