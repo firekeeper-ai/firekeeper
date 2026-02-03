@@ -33,11 +33,14 @@ async fn main() {
                 std::process::exit(1);
             }
 
-            std::fs::write(&args.config, config::Config::init().to_scaffold().unwrap())
-                .unwrap_or_else(|e| {
-                    error!("Error writing config: {}", e);
-                    std::process::exit(1);
-                });
+            std::fs::write(
+                &args.config,
+                config::Config::default().to_scaffold().unwrap(),
+            )
+            .unwrap_or_else(|e| {
+                error!("Error writing config: {}", e);
+                std::process::exit(1);
+            });
 
             info!("Created {}", args.config);
         }
