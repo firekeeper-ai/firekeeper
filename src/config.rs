@@ -16,10 +16,15 @@ pub fn default_config_template() -> String {
         llm: LlmConfig {
             base_url: DEFAULT_BASE_URL.into(),
             model: DEFAULT_MODEL.into(),
-            headers: HashMap::from([("x-custom-header".to_string(), "value".to_string())]),
+            headers: HashMap::from([
+                (
+                    "HTTP-Referer".to_string(),
+                    "https://github.com/firekeeper-ai/firekeeper".to_string(),
+                ),
+                ("X-Title".to_string(), "firekeeper.ai".to_string()),
+            ]),
             body: json!({
-                "temperature": 0.7,
-                "max_tokens": 4096
+                "parallel_tool_calls": true
             }),
         },
         worker: WorkerConfig {
@@ -56,7 +61,7 @@ pub struct Config {
 /// LLM provider configuration
 #[derive(Deserialize, Serialize, Debug, JsonSchema, TomlScaffold)]
 pub struct LlmConfig {
-    /// LLM API base URL
+    /// OpenAI compatible API base URL
     #[serde(default = "default_base_url")]
     pub base_url: String,
     /// LLM model name

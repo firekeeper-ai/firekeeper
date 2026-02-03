@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- OpenRouter-specific headers (X-Title, HTTP-Referer) in default LLM config
+- Parallel tool calls support in default LLM config
+
 ## [0.1.0] - 2026-02-03
 
 ### Added
