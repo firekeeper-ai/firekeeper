@@ -20,7 +20,7 @@ pub async fn lua(
         return format!("Error setting up Lua environment: {}", e);
     }
 
-    match lua.load(&script).eval::<mlua::Value>() {
+    match lua.load(&script).eval_async::<mlua::Value>().await {
         Ok(value) => match value {
             mlua::Value::String(s) => s.to_string_lossy().to_string(),
             _ => serde_json::to_string(&value)
