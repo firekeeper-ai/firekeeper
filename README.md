@@ -6,6 +6,16 @@
 
 Firekeeper reviews your current working state against a base commit using custom rules.
 
+## Features
+
+- Customizable LLM model/header/body & bring your own API key
+- Custom review range by commit, date, or entire repo
+- Run locally, in git hooks, or CI/CD with the same tool
+- Auto task splitting and parallel review for speed and focus
+- Inject additional context from files, shell commands, AGENTS.md, and Agent Skills
+- Structured output with `--output`
+- Traceability with `--trace`
+
 ## Installation
 
 <details open>
@@ -65,7 +75,7 @@ firekeeper review
 Review changes from 1 day ago with structured output, suitable for CI/CD pipelines:
 
 ```bash
-firekeeper review --base "@{1.day.ago}" --output /tmp/report.json
+firekeeper review --base "@{1.day.ago}" --output /tmp/report.json --trace /tmp/trace.md
 ```
 
 Review all files (ensure you have sufficient LLM token budget):
