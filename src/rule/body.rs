@@ -14,6 +14,9 @@ pub struct RuleBody {
     /// Glob patterns to match files this rule applies to (optional, defaults to ["**/*"])
     #[serde(default = "default_scope")]
     pub scope: Vec<String>,
+    /// Glob patterns to exclude files from this rule (optional, defaults to [])
+    #[serde(default)]
+    pub exclude: Vec<String>,
     /// Maximum number of files to review per task (optional, overrides global config).
     ///
     /// Increase for simple rules that only check changed files (e.g. scan for hardcoded credentials).
@@ -62,6 +65,7 @@ Focus on substantial logic duplication:
 "#
             .into(),
             scope: default_scope(),
+            exclude: vec![],
             // Low value for complex rule that scans many files
             max_files_per_task: Some(3),
             blocking: true,
@@ -97,6 +101,7 @@ Reject as magic numbers:
 - Calculation constants without explanation
 "#.into(),
             scope: default_scope(),
+            exclude: vec![],
             // High value for simple rule that only checks changed files
             max_files_per_task: Some(10),
             blocking: true,
@@ -130,6 +135,7 @@ Allowed:
 "#
             .into(),
             scope: default_scope(),
+            exclude: vec![],
             // High value for simple rule that only checks changed files
             max_files_per_task: Some(10),
             blocking: true,

@@ -3,7 +3,7 @@ use crate::types::Violation;
 use crate::util;
 use crate::worker;
 use futures::future::join_all;
-use globset::{Glob, GlobSetBuilder};
+use globset::{Glob, GlobSet, GlobSetBuilder};
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -511,32 +511,37 @@ fn orchestrate<'a>(
         .collect()
 }
 
-fn filter_files_by_scope(rule: &RuleBody, files: &[String]) -> Vec<String> {
+fn build_globset(patterns: &[String], rule_name: &str, pattern_type: &str) -> Option<GlobSet> {
     let mut builder = GlobSetBuilder::new();
-    for pattern in &rule.scope {
+    for pattern in patterns {
         match Glob::new(pattern) {
             Ok(glob) => builder.add(glob),
             Err(e) => {
-                warn!(
-                    "Invalid glob pattern '{}' in rule '{}': {}",
-                    pattern, rule.name, e
-                );
+                warn!("Invalid {} pattern '{}' in rule '{}': {}", pattern_type, pattern, rule_name, e);
                 continue;
             }
         };
     }
-
-    let globset = match builder.build() {
-        Ok(gs) => gs,
+    match builder.build() {
+        Ok(gs) => Some(gs),
         Err(e) => {
-            error!("Failed to build globset for rule '{}': {}", rule.name, e);
-            return vec![];
+            error!("Failed to build {} globset for rule '{}': {}", pattern_type, rule_name, e);
+            None
         }
+    }
+}
+
+fn filter_files_by_scope(rule: &RuleBody, files: &[String]) -> Vec<String> {
+    let Some(globset) = build_globset(&rule.scope, &rule.name, "scope") else {
+        return vec![];
+    };
+    let Some(exclude_globset) = build_globset(&rule.exclude, &rule.name, "exclude") else {
+        return vec![];
     };
 
     files
         .iter()
-        .filter(|f| globset.is_match(f))
+        .filter(|f| globset.is_match(f) && !exclude_globset.is_match(f))
         .cloned()
         .collect()
 }
@@ -600,5 +605,30 @@ mod tests {
         assert_eq!(result[0].len(), 5);
         assert_eq!(result[1].len(), 4);
         assert_eq!(result[2].len(), 4);
+    }
+
+    #[test]
+    fn test_filter_files_by_scope_with_exclude() {
+        let rule = RuleBody {
+            name: "Test Rule".into(),
+            description: "Test".into(),
+            instruction: "Test".into(),
+            scope: vec!["src/**/*.rs".into()],
+            exclude: vec!["**/tests/**".into(), "**/*_test.rs".into()],
+            max_files_per_task: None,
+            blocking: true,
+            tip: None,
+        };
+
+        let files = vec![
+            "src/main.rs".into(),
+            "src/lib.rs".into(),
+            "src/tests/helper.rs".into(),
+            "src/util_test.rs".into(),
+            "src/util.rs".into(),
+        ];
+
+        let result = filter_files_by_scope(&rule, &files);
+        assert_eq!(result, vec!["src/main.rs", "src/lib.rs", "src/util.rs"]);
     }
 }

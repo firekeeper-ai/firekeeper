@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `exclude` field in rule configuration to filter files using glob patterns on top of `scope` patterns
 - OpenRouter-specific headers (X-Title, HTTP-Referer) in default LLM config
 - Parallel tool calls support in default LLM config
 - General-purpose rule factory methods: `no_code_duplication()`, `no_magic_numbers()`, `no_hardcoded_credentials()`
