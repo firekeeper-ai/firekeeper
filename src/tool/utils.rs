@@ -7,8 +7,9 @@ pub struct TruncateResult {
 
 /// Truncate text content by characters with pagination support
 pub fn truncate_text_by_chars(content: String, start: usize, len: usize) -> TruncateResult {
-    let end_idx = start.saturating_add(len).min(content.len());
     let total_len = content.len();
+    let start = start.min(total_len);
+    let end_idx = start.saturating_add(len).min(total_len);
 
     let mut result: String = content
         .chars()
@@ -34,6 +35,7 @@ pub fn truncate_text_by_chars(content: String, start: usize, len: usize) -> Trun
 pub fn truncate_text_by_lines(content: String, start: usize, len: usize) -> TruncateResult {
     let lines: Vec<&str> = content.lines().collect();
     let total_lines = lines.len();
+    let start = start.min(total_lines);
     let end_idx = start.saturating_add(len).min(total_lines);
 
     let mut result = lines[start..end_idx].join("\n");
@@ -121,6 +123,20 @@ mod tests {
     fn test_truncate_text_by_lines_with_start() {
         let result = truncate_text_by_lines("line1\nline2\nline3\nline4".to_string(), 2, 10);
         assert_eq!(result.content, "line3\nline4");
+        assert!(!result.truncated);
+    }
+
+    #[test]
+    fn test_truncate_text_by_lines_overflow_start() {
+        let result = truncate_text_by_lines("line1\nline2\nline3".to_string(), 80, 10);
+        assert_eq!(result.content, "");
+        assert!(!result.truncated);
+    }
+
+    #[test]
+    fn test_truncate_text_by_chars_overflow_start() {
+        let result = truncate_text_by_chars("hello".to_string(), 100, 10);
+        assert_eq!(result.content, "");
         assert!(!result.truncated);
     }
 
