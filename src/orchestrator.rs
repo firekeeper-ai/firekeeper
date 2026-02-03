@@ -260,6 +260,12 @@ pub async fn orchestrate_and_run(
         );
         std::process::exit(EXIT_FAILURE);
     }
+
+    // Exit with error if any workers failed
+    if failed > 0 {
+        error!("{} worker(s) failed", failed);
+        std::process::exit(EXIT_FAILURE);
+    }
 }
 
 fn print_violations(
