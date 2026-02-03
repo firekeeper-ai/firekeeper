@@ -19,7 +19,7 @@ User-facing changes that MUST be documented:
 - New CLI commands, subcommands, or options
 - Changes to CLI behavior or output format
 - New features visible to end users
-- Changes to configuration file format (e.g., firekeeper.toml)
+- New configuration options or changes to configuration schema
 - Breaking changes to existing functionality
 
 Internal changes that do NOT require documentation:
@@ -28,6 +28,7 @@ Internal changes that do NOT require documentation:
 - Internal helper functions or utilities
 - Implementation details not exposed to users
 - Internal tool implementations (files in src/tool/) used by the agent system
+- Internal config optimizations (e.g., rule scope patterns, performance tuning)
 """
 tip = """
 Update README.md with examples and usage.
