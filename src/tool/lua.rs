@@ -1,5 +1,7 @@
 use mlua::Lua;
+use std::sync::Arc;
 use tiny_loop::tool::tool;
+use tokio::sync::Mutex;
 
 /// Tool for executing Lua scripts.
 /// Use for math calculations, string manipulation, loops, and conditionals.
@@ -9,23 +11,56 @@ use tiny_loop::tool::tool;
 pub async fn lua(
     /// Lua script to execute.
     ///
-    /// Available functions: read, fetch, glob, grep, ls
+    /// Available tool functions (global): read(), fetch(), glob(), grep(), ls()
     /// Each function accepts a Lua table with the same parameters as the corresponding tool.
+    ///
+    /// Use print() to output results.
+    ///
+    /// Example:
+    /// ```lua
+    /// local files = ls({path = "src", depth = 0})
+    /// for file in string.gmatch(files, "[^\n]+") do
+    ///   local name = string.match(file, "f (.+)")
+    ///   if name then
+    ///     local diff = read({path = "src/" .. name})
+    ///     if string.match(diff, "TODO") then
+    ///       print("Found TODO in: " .. name)
+    ///     end
+    ///   end
+    /// end
+    /// ```
     script: String,
 ) -> String {
     let lua = Lua::new();
+    let output = Arc::new(Mutex::new(String::new()));
 
     // Register tools
     if let Err(e) = register_tools(&lua) {
         return format!("Error setting up Lua environment: {}", e);
     }
 
+    // Override print to capture output
+    let output_clone = output.clone();
+    let print_fn = lua
+        .create_async_function(move |_, args: mlua::Variadic<mlua::Value>| {
+            let output_clone = output_clone.clone();
+            async move {
+                let mut out = output_clone.lock().await;
+                for (i, arg) in args.iter().enumerate() {
+                    if i > 0 {
+                        out.push('\t');
+                    }
+                    out.push_str(&format!("{:?}", arg));
+                }
+                out.push('\n');
+                Ok(())
+            }
+        })
+        .unwrap();
+    lua.globals().set("print", print_fn).unwrap();
+
     match lua.load(&script).eval_async::<mlua::Value>().await {
-        Ok(value) => match value {
-            mlua::Value::String(s) => s.to_string_lossy().to_string(),
-            _ => serde_json::to_string(&value)
-                .unwrap_or_else(|e| format!("Serialization error: {}. Value: {:?}", e, value)),
-        },
+        Ok(_) => output.lock().await.clone(),
         Err(e) => format!("Lua error: {}", e),
     }
 }
