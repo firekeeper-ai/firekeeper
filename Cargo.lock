@@ -2111,9 +2111,9 @@ dependencies = [
 
 [[package]]
 name = "tiny-loop"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e07e9f252110a75c62f93d008c7089d60f65a71d0e3662b69cbab6ecc16c272"
+checksum = "97ffa645046035c7f647f6166d4aef9040837f3ae4656a17574152b877cdd94c"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2129,9 +2129,9 @@ dependencies = [
 
 [[package]]
 name = "tiny-loop-macros"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "528bd5b44e91f1546e5b869520232cac7bc3012604ad98c45a4396ec5399205b"
+checksum = "0617685b52b9608dccb5882c24a0165647864043cbc5fd8eb95a94a6078fc56d"
 dependencies = [
  "proc-macro2",
  "quote",

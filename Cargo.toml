@@ -13,7 +13,13 @@ globset = "0.4"
 grep = "0.4"
 html2md = "0.2"
 ignore = "0.4"
-mlua = { version = "0.10", features = ["lua54", "async", "send", "vendored", "serialize"] }
+mlua = { version = "0.10", features = [
+  "lua54",
+  "async",
+  "send",
+  "vendored",
+  "serialize",
+] }
 reqwest = { version = "0.13", features = ["json"] }
 schemars = "1"
 serde = { version = "1", features = ["derive"] }
