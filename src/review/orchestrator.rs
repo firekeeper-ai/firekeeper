@@ -381,6 +381,8 @@ fn format_trace_markdown(traces: &[TraceEntry]) -> String {
                     let backticks = get_fence_backticks(content);
                     if role == "tool" {
                         output.push_str(&format!("{}\n{}\n{}\n\n", backticks, content, backticks));
+                    } else if role == "system" || role == "user" {
+                        output.push_str(&format!("{}markdown\n{}\n{}\n\n", backticks, content, backticks));
                     } else {
                         output.push_str(&format!("{}\n\n", content));
                     }
