@@ -40,6 +40,22 @@ fn default_blocking() -> bool {
     true
 }
 
+fn default_non_code_exclude() -> Vec<String> {
+    vec![
+        "**/*.md".into(),
+        "**/*.toml".into(),
+        "**/*.json".into(),
+        "**/*.yaml".into(),
+        "**/*.yml".into(),
+        "**/*.xml".into(),
+        "**/*.ini".into(),
+        "**/*.cfg".into(),
+        "**/*.conf".into(),
+        "**/*.lock".into(),
+        "**/*ignore".into(),
+    ]
+}
+
 impl RuleBody {
     pub fn no_code_duplication() -> Self {
         Self {
@@ -65,7 +81,7 @@ Focus on substantial logic duplication:
 "#
             .into(),
             scope: default_scope(),
-            exclude: vec![],
+            exclude: default_non_code_exclude(),
             // Low value for complex rule that scans many files
             max_files_per_task: Some(3),
             blocking: true,
@@ -101,7 +117,7 @@ Reject as magic numbers:
 - Calculation constants without explanation
 "#.into(),
             scope: default_scope(),
-            exclude: vec![],
+            exclude: default_non_code_exclude(),
             // High value for simple rule that only checks changed files
             max_files_per_task: Some(10),
             blocking: true,

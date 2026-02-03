@@ -37,7 +37,7 @@ Update CHANGELOG.md under the [Unreleased] section.
 Ensure CLI help text matches actual behavior.
 Update configuration examples to reflect current format.
 """
-scope = ["**/*.rs", "**/*.toml"]
+scope = ["**/*.rs"]
 max_files_per_task = 3
 
 [[rules]]
@@ -77,7 +77,8 @@ Allowed numbers (not magic):
 - 0, 1, -1 in common contexts (array indexing, loop increments, exit codes, boolean-like values)
 - Numbers in test files
 - Numbers in configuration files
-- Numbers with nearby explanatory comments (within 3 lines)
+- Numbers with nearby explanatory comments (within 3 lines above or inline)
+- Numbers in default value functions or factory methods with descriptive context
 - HTTP status codes (200, 404, etc.)
 - Common time values with clear context (60 for seconds/minutes, 24 for hours, 1000 for milliseconds)
 - Array/collection sizes in obvious contexts (e.g., Vec::with_capacity(10) in tests)
@@ -85,7 +86,7 @@ Allowed numbers (not magic):
 Reject as magic numbers:
 - Business logic constants without explanation (e.g., threshold values, multipliers, limits)
 - Arbitrary timeouts or delays without context
-- Numeric configuration values hardcoded in logic
+- Numeric configuration values hardcoded in logic without comments
 - Calculation constants without explanation
 """
 tip = """
