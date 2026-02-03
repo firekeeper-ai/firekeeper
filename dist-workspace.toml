@@ -25,7 +25,5 @@ publish-jobs = ["npm"]
 install-path = "CARGO_HOME"
 # Whether to install an updater program
 install-updater = false
-
-[package.metadata.dist]
 npm-scope = "@firekeeper.ai"
 npm-package = "firekeeper"
