@@ -30,21 +30,34 @@ pub async fn fetch(
     /// Optional number of characters to return (default: 5000)
     num_chars: Option<usize>,
 ) -> String {
-    let start = start_char.unwrap_or(0);
-    let num = num_chars.unwrap_or(DEFAULT_NUM_CHARS);
+    if url.len() == 1 {
+        return fetch_one(&url[0], start_char, num_chars).await;
+    }
 
-    let mut results = Vec::new();
+    let mut results = Vec::with_capacity(url.len());
     for u in url {
-        let result = match reqwest::get(&u).await {
-            Ok(response) => match response.text().await {
-                Ok(html) => format!("=== {} ===\n{}", u, process_html(html, start, num)),
-                Err(e) => format!("=== {} ===\nError reading response: {}", u, e),
-            },
-            Err(e) => format!("=== {} ===\nError fetching URL: {}", u, e),
-        };
-        results.push(result);
+        let content = fetch_one(&u, start_char, num_chars).await;
+        results.push(format!("=== {} ===\n{}", u, content));
     }
     results.join("\n\n")
+}
+
+async fn fetch_one(url: &str, start_char: Option<usize>, num_chars: Option<usize>) -> String {
+    let response = match reqwest::get(url).await {
+        Ok(r) => r,
+        Err(e) => return format!("Error fetching URL: {}", e),
+    };
+
+    let html = match response.text().await {
+        Ok(h) => h,
+        Err(e) => return format!("Error reading response: {}", e),
+    };
+
+    process_html(
+        html,
+        start_char.unwrap_or(0),
+        num_chars.unwrap_or(DEFAULT_NUM_CHARS),
+    )
 }
 
 #[cfg(test)]

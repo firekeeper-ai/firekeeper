@@ -27,26 +27,34 @@ impl Diff {
         /// These files are usually large and not meaningful to review. (default: false)
         force_read: Option<bool>,
     ) -> String {
-        let force = force_read.unwrap_or(false);
+        if path.len() == 1 {
+            return self.diff_one(&path[0], force_read);
+        }
 
-        path.into_iter()
-            .map(|p| {
-                if !force && !crate::util::should_include_diff(&p) {
-                    format!(
-                        "Skipped '{}':\n\
-                        File is excluded.\n\
-                        These files are usually large and not meaningful to review.\n\
-                        Use force_read=true to override if necessary.",
-                        p
-                    )
-                } else {
-                    self.diffs
-                        .get(&p)
-                        .cloned()
-                        .unwrap_or_else(|| format!("No diff available for file: {}", p))
-                }
-            })
+        path.iter()
+            .map(|p| format!("=== {} ===\n{}", p, self.diff_one(p, force_read)))
             .collect::<Vec<_>>()
             .join("\n\n")
+    }
+}
+
+impl Diff {
+    fn diff_one(&self, path: &str, force_read: Option<bool>) -> String {
+        let force = force_read.unwrap_or(false);
+
+        if !force && !crate::util::should_include_diff(path) {
+            return format!(
+                "Skipped '{}':\n\
+                File is excluded.\n\
+                These files are usually large and not meaningful to review.\n\
+                Use force_read=true to override if necessary.",
+                path
+            );
+        }
+
+        self.diffs
+            .get(path)
+            .cloned()
+            .unwrap_or_else(|| format!("No diff available for file: {}", path))
     }
 }

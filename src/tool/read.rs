@@ -59,23 +59,33 @@ pub async fn read(
     /// Optional maximum characters per line (default: 200)
     max_line_len: Option<usize>,
 ) -> String {
-    let start = start_line.unwrap_or(0);
-    let num = num_lines.unwrap_or(DEFAULT_NUM_LINES);
-    let max_len = max_line_len.unwrap_or(DEFAULT_MAX_LINE_LEN);
+    if path.len() == 1 {
+        return read_one(&path[0], start_line, num_lines, max_line_len).await;
+    }
 
-    let mut results = Vec::new();
+    let mut results = Vec::with_capacity(path.len());
     for p in path {
-        let result = match tokio::fs::read_to_string(&p).await {
-            Ok(content) => format!(
-                "=== {} ===\n{}",
-                p,
-                process_file_content(content, start, num, max_len)
-            ),
-            Err(e) => format!("=== {} ===\nError reading file: {}", p, e),
-        };
-        results.push(result);
+        let content = read_one(&p, start_line, num_lines, max_line_len).await;
+        results.push(format!("=== {} ===\n{}", p, content));
     }
     results.join("\n\n")
+}
+
+async fn read_one(
+    path: &str,
+    start_line: Option<usize>,
+    num_lines: Option<usize>,
+    max_line_len: Option<usize>,
+) -> String {
+    match tokio::fs::read_to_string(path).await {
+        Ok(content) => process_file_content(
+            content,
+            start_line.unwrap_or(0),
+            num_lines.unwrap_or(DEFAULT_NUM_LINES),
+            max_line_len.unwrap_or(DEFAULT_MAX_LINE_LEN),
+        ),
+        Err(e) => format!("Error reading file: {}", e),
+    }
 }
 
 #[cfg(test)]
