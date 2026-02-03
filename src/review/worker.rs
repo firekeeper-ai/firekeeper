@@ -12,6 +12,172 @@ use tracing::{debug, info, trace, warn};
 /// Polling interval for checking shutdown flag during agent chat (milliseconds)
 const SHUTDOWN_POLL_INTERVAL_MS: u64 = 100;
 
+/// Resolve path with ~ and absolute path support, returns (base_path, glob_pattern)
+fn resolve_path(pattern: &str) -> (std::path::PathBuf, String) {
+    if let Some(rest) = pattern.strip_prefix("~/") {
+        if let Some(home) = std::env::var_os("HOME") {
+            (std::path::PathBuf::from(home), rest.to_string())
+        } else {
+            (std::path::PathBuf::from("."), pattern.to_string())
+        }
+    } else if pattern.starts_with('/') {
+        ("/".into(), pattern[1..].to_string())
+    } else {
+        (std::path::PathBuf::from("."), pattern.to_string())
+    }
+}
+
+/// Load resources from file://, skill://, or sh:// URIs
+async fn load_resources(resources: &[String]) -> String {
+    let mut content = String::new();
+    let mut loaded_files = std::collections::HashSet::new();
+
+    for resource in resources {
+        if let Some(pattern) = resource.strip_prefix("file://") {
+            let (base_path, glob_pattern) = resolve_path(pattern);
+            match globset::Glob::new(&glob_pattern) {
+                Ok(glob) => {
+                    let mut builder = globset::GlobSetBuilder::new();
+                    builder.add(glob);
+                    if let Ok(globset) = builder.build() {
+                        let mut matches = Vec::new();
+                        let _ = glob_recursive(&base_path, &globset, &mut matches, 0);
+                        for path in matches {
+                            if loaded_files.insert(path.clone()) {
+                                match std::fs::read_to_string(&path) {
+                                    Ok(file_content) => {
+                                        content.push_str(&format!(
+                                            "\n--- {} ---\n{}\n",
+                                            path, file_content
+                                        ));
+                                    }
+                                    Err(e) => warn!("Failed to read file {}: {}", path, e),
+                                }
+                            }
+                        }
+                    }
+                }
+                Err(e) => warn!("Invalid glob pattern '{}': {}", pattern, e),
+            }
+        } else if let Some(pattern) = resource.strip_prefix("skill://") {
+            let (base_path, glob_pattern) = resolve_path(pattern);
+            match globset::Glob::new(&glob_pattern) {
+                Ok(glob) => {
+                    let mut builder = globset::GlobSetBuilder::new();
+                    builder.add(glob);
+                    if let Ok(globset) = builder.build() {
+                        let mut matches = Vec::new();
+                        let _ = glob_recursive(&base_path, &globset, &mut matches, 0);
+                        for path in matches {
+                            if loaded_files.insert(path.clone()) && path.ends_with(".md") {
+                                match std::fs::read_to_string(&path) {
+                                    Ok(file_content) => {
+                                        let matter =
+                                            gray_matter::Matter::<gray_matter::engine::YAML>::new();
+                                        match matter.parse::<serde_json::Value>(&file_content) {
+                                            Ok(parsed) => {
+                                                let mut md = String::new();
+                                                if let Some(data) = parsed.data {
+                                                    if let Some(obj) = data.as_object() {
+                                                        if let Some(title) = obj
+                                                            .get("title")
+                                                            .and_then(|v| v.as_str())
+                                                        {
+                                                            md.push_str(&format!(
+                                                                "# {}\n\n",
+                                                                title
+                                                            ));
+                                                        }
+                                                        if let Some(desc) = obj
+                                                            .get("description")
+                                                            .and_then(|v| v.as_str())
+                                                        {
+                                                            md.push_str(&format!("{}\n", desc));
+                                                        }
+                                                    }
+                                                }
+                                                content.push_str(&format!(
+                                                    "\n--- {} ---\n{}\n",
+                                                    path, md
+                                                ));
+                                            }
+                                            Err(e) => warn!(
+                                                "Failed to parse frontmatter in {}: {}",
+                                                path, e
+                                            ),
+                                        }
+                                    }
+                                    Err(e) => warn!("Failed to read file {}: {}", path, e),
+                                }
+                            }
+                        }
+                    }
+                }
+                Err(e) => warn!("Invalid glob pattern '{}': {}", pattern, e),
+            }
+        } else if let Some(cmd) = resource.strip_prefix("sh://") {
+            #[cfg(windows)]
+            let output = tokio::process::Command::new("cmd")
+                .arg("/C")
+                .arg(cmd)
+                .output()
+                .await;
+            #[cfg(not(windows))]
+            let output = tokio::process::Command::new("sh")
+                .arg("-c")
+                .arg(cmd)
+                .output()
+                .await;
+
+            match output {
+                Ok(output) => {
+                    if output.status.success() {
+                        content.push_str(&format!(
+                            "\n--- sh://{} ---\n{}\n",
+                            cmd,
+                            String::from_utf8_lossy(&output.stdout)
+                        ));
+                    } else {
+                        warn!("Command failed: sh://{}", cmd);
+                    }
+                }
+                Err(e) => warn!("Failed to execute command 'sh://{}': {}", cmd, e),
+            }
+        } else {
+            warn!("Unknown resource type: {}", resource);
+        }
+    }
+    content
+}
+
+fn glob_recursive(
+    path: &std::path::Path,
+    globset: &globset::GlobSet,
+    matches: &mut Vec<String>,
+    depth: usize,
+) -> std::io::Result<()> {
+    if depth > 20 || matches.len() >= 1000 {
+        return Ok(());
+    }
+
+    for entry in std::fs::read_dir(path)? {
+        let entry = entry?;
+        let entry_path = entry.path();
+
+        if let Some(path_str) = entry_path.to_str() {
+            if entry_path.is_file() && globset.is_match(path_str) {
+                matches.push(path_str.to_string());
+            }
+        }
+
+        if entry_path.is_dir() {
+            glob_recursive(&entry_path, globset, matches, depth + 1)?;
+        }
+    }
+
+    Ok(())
+}
+
 /// Worker result containing violations and optional trace messages
 pub struct WorkerResult {
     pub worker_id: String,
@@ -45,6 +211,7 @@ pub async fn worker(
     trace_enabled: bool,
     shutdown: Arc<Mutex<bool>>,
     is_root_base: bool,
+    global_resources: Vec<String>,
 ) -> Result<WorkerResult, Box<dyn std::error::Error>> {
     let start = std::time::Instant::now();
     info!(
@@ -101,6 +268,13 @@ pub async fn worker(
 
     let mut agent = crate::llm::register_common_tools(agent);
 
+    // Load resources
+    let mut all_resources = global_resources.clone();
+    all_resources.extend(rule.resources.clone());
+    all_resources.sort();
+    all_resources.dedup();
+    let resources_content = load_resources(&all_resources).await;
+
     // Build user message: simplified if focus files match all changed files
     let user_message = if files == all_changed_files {
         let files_list = files.join("\n- ");
@@ -115,20 +289,22 @@ pub async fn worker(
         if is_root_base {
             format!(
                 "Rule:\n\n\
-                <rule>\n\n{}\n\n</rule>\n\n{}",
+                <rule>\n\n{}\n\n</rule>\n\n{}{}",
                 rule.instruction.trim(),
-                diffs_section
+                diffs_section,
+                resources_content
             )
         } else {
             format!(
                 "{}Changed files:\n\n\
                 - {}\n\n\
                 Rule:\n\n\
-                <rule>\n\n{}\n\n</rule>\n\n{}",
+                <rule>\n\n{}\n\n</rule>\n\n{}{}",
                 commits_section,
                 files_list,
                 rule.instruction.trim(),
-                diffs_section
+                diffs_section,
+                resources_content
             )
         }
     } else {
@@ -149,10 +325,11 @@ pub async fn worker(
                 - {}\n\n\
                 Note: For most cases, only read the focused files.\n\n\
                 Rule:\n\n\
-                <rule>\n\n{}\n\n</rule>\n\n{}",
+                <rule>\n\n{}\n\n</rule>\n\n{}{}",
                 focus_files_list,
                 rule.instruction.trim(),
-                diffs_section
+                diffs_section,
+                resources_content
             )
         } else {
             format!(
@@ -162,12 +339,13 @@ pub async fn worker(
                 - {}\n\n\
                 Note: For most cases, only read the focused files.\n\n\
                 Rule:\n\n\
-                <rule>\n\n{}\n\n</rule>\n\n{}",
+                <rule>\n\n{}\n\n</rule>\n\n{}{}",
                 commits_section,
                 all_files_list,
                 focus_files_list,
                 rule.instruction.trim(),
-                diffs_section
+                diffs_section,
+                resources_content
             )
         }
     };

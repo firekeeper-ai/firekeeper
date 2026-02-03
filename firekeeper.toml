@@ -9,6 +9,10 @@ HTTP-Referer = "https://github.com/firekeeper-ai/firekeeper"
 [llm.body]
 parallel_tool_calls = true
 
+[review]
+max_files_per_task = 5
+resources = ["file://README.md", "sh://git ls-files"]
+
 [[rules]]
 name = "Documentation Sync"
 description = "Ensure user-facing documentation is updated with CLI changes"

@@ -10,6 +10,7 @@ anyhow = "1"
 clap = { version = "4", features = ["derive", "env"] }
 futures = "0.3"
 globset = "0.4"
+gray_matter = "0.3"
 grep = "0.4"
 html2md = "0.2"
 ignore = "0.4"

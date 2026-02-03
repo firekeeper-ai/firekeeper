@@ -60,6 +60,7 @@ pub async fn orchestrate_and_run(
     output: Option<&str>,
     trace: Option<&str>,
     config_path: &str,
+    global_resources: &[String],
 ) {
     let base = util::Base::parse(diff_base);
     debug!("Resolved base: {:?}", base);
@@ -115,6 +116,7 @@ pub async fn orchestrate_and_run(
             let body = body.clone();
             let shutdown_clone = shutdown.clone();
             let is_root = matches!(base, util::Base::Root);
+            let resources = global_resources.to_vec();
             worker::worker(
                 worker_id,
                 rule,
@@ -130,6 +132,7 @@ pub async fn orchestrate_and_run(
                 trace_enabled,
                 shutdown_clone,
                 is_root,
+                resources,
             )
         })
         .collect();
@@ -635,6 +638,7 @@ mod tests {
             max_files_per_task: None,
             blocking: true,
             tip: None,
+            resources: vec![],
         };
 
         let files = vec![

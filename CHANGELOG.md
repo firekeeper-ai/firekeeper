@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `resources` field in `ReviewConfig` and `RuleBody` to include additional context in reviews
+  - `file://glob` - Load files matching glob pattern (e.g., `file://**/*.md`)
+  - `skill://glob` - Load markdown files and extract frontmatter (title and description)
+  - `sh://command` - Execute shell command and include output (uses `cmd /C` on Windows)
+  - Global resources in `ReviewConfig` (default: `["file://README.md"]`)
+  - Per-rule resources that are merged with global resources
+  - Automatic deduplication of loaded files
 - `exclude` field in rule configuration to filter files using glob patterns on top of `scope` patterns
 - OpenRouter-specific headers (X-Title, HTTP-Referer) in default LLM config
 - Parallel tool calls support in default LLM config

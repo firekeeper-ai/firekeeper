@@ -74,6 +74,8 @@ pub struct ReviewConfig {
     pub max_files_per_task: usize,
     /// Maximum number of parallel workers (optional, defaults to unlimited)
     pub max_parallel_workers: Option<usize>,
+    /// Global resources to include in review context (file://glob, skill://glob, or sh://command)
+    pub resources: Vec<String>,
 }
 
 impl ReviewConfig {
@@ -88,6 +90,7 @@ impl Default for ReviewConfig {
         Self {
             max_files_per_task: Self::DEFAULT_MAX_FILES_PER_TASK,
             max_parallel_workers: None,
+            resources: vec!["file://README.md".to_string(), "sh://git ls-files".into()],
         }
     }
 }

@@ -70,6 +70,7 @@ async fn main() {
                 args.output.as_deref(),
                 args.trace.as_deref(),
                 &args.config,
+                &config.review.resources,
             )
             .await;
         }

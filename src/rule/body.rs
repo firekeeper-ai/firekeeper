@@ -30,6 +30,9 @@ pub struct RuleBody {
     /// Tip for downstream processors (e.g. coding agents) to fix violations (optional)
     #[serde(default)]
     pub tip: Option<String>,
+    /// Rule-specific resources to include in review context (file://glob, skill://glob, or sh://command)
+    #[serde(default)]
+    pub resources: Vec<String>,
 }
 
 pub fn default_scope() -> Vec<String> {
@@ -91,6 +94,7 @@ Extract common code into shared functions or modules.
 "#
                 .into(),
             ),
+            resources: vec![],
         }
     }
 
@@ -124,6 +128,7 @@ Reject as magic numbers:
             tip: Some(r#"
 Define constants with descriptive names or add explanatory comments.
 "#.into()),
+            resources: vec![],
         }
     }
 
@@ -162,6 +167,7 @@ Replace real values with placeholders in examples.
 "#
                 .into(),
             ),
+            resources: vec![],
         }
     }
 }
