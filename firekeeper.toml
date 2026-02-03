@@ -27,6 +27,7 @@ Internal changes that do NOT require documentation:
 - Code refactoring that doesn't change CLI behavior
 - Internal helper functions or utilities
 - Implementation details not exposed to users
+- Internal tool implementations (files in src/tool/) used by the agent system
 """
 tip = """
 Update README.md with examples and usage.
