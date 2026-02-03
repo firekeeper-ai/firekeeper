@@ -1,25 +1,23 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use toml_scaffold::TomlScaffold;
 
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, TomlScaffold)]
 pub struct RuleBody {
     /// Human-readable rule name, not for LLM
-    /// e.g. "Prefer Async instead of Promise Chain in JS/TS"
     pub name: String,
-    /// Human-readable description, not for LLM, can be empty
+    /// Human-readable description, not for LLM, optional
     #[serde(default)]
     pub description: String,
-    /// Instruction for LLM
-    /// e.g. "for js/ts files, reject any Promise Chain, prefer async/await"
+    /// Detailed instructions for the LLM on how to check this rule
     pub instruction: String,
-    /// Glob pattern strings
-    /// e.g. ["src/**/*.ts"]
+    /// Glob patterns to match files this rule applies to (optional, defaults to ["**/*"])
     #[serde(default = "default_scope")]
     pub scope: Vec<String>,
-    /// Maximum files per task for this rule (overrides global config)
+    /// Maximum number of files to review per task (overrides global config)
     #[serde(default)]
     pub max_files_per_task: Option<usize>,
-    /// Whether violations of this rule should block the pipeline (exit 1)
+    /// Whether violations should block the pipeline (exit 1) (optional, defaults to true)
     #[serde(default = "default_blocking")]
     pub blocking: bool,
     /// Optional tip for downstream processors to fix violations

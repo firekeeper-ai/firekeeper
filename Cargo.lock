@@ -359,6 +359,7 @@ dependencies = [
  "tiny-loop",
  "tokio",
  "toml",
+ "toml-scaffold",
  "tracing",
  "tracing-subscriber",
 ]
@@ -2019,6 +2020,30 @@ dependencies = [
  "toml_parser",
  "toml_writer",
  "winnow",
+]
+
+[[package]]
+name = "toml-scaffold"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8be82a022a4555a525394ccea1d815d005dbffb9eb77dc14b025f8918bc3907d"
+dependencies = [
+ "schemars",
+ "serde",
+ "serde_json",
+ "toml",
+ "toml-scaffold-macros",
+]
+
+[[package]]
+name = "toml-scaffold-macros"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c8ded45dbc9bda2bdee31c65d90cc5b4af47d33af947dcd081814d25a67df3f"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

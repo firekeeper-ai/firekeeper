@@ -1,59 +1,48 @@
-use serde::Deserialize;
-use serde_json::Value;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::fs;
+use toml_scaffold::TomlScaffold;
+
+use crate::rule::body::RuleBody;
 
 pub const DEFAULT_BASE_URL: &str = "https://openrouter.ai/api/v1";
 pub const DEFAULT_MODEL: &str = "google/gemini-3-flash-preview";
 pub const DEFAULT_MAX_FILES_PER_TASK: usize = 5;
 
 pub fn default_config_template() -> String {
-    let default_scope = crate::rule::body::default_scope();
-    format!(
-        r#"[llm]
-base_url = "{}"
-model = "{}"
-# Custom HTTP headers (optional)
-# [llm.headers]
-# x-custom-header = "value"
-# Custom request body fields (optional)
-# [llm.body]
-# temperature = 0.7
-# max_tokens = 4096
-
-[worker]
-# Maximum number of files to process per task (optional, defaults to {})
-max_files_per_task = {}
-# Maximum number of parallel workers (optional, defaults to unlimited)
-# max_parallel_workers = 10
-
-[[rules]]
-# Name of the rule (required)
-name = ""
-# Brief description of the rule (optional, defaults to empty string)
-description = ""
-# Detailed instructions for the LLM on how to check this rule (required)
-instruction = """
-"""
-# Glob patterns to match files this rule applies to (optional, defaults to {:?})
-scope = {:?}
-# Maximum number of files to process per task (overrides global config)
-# max_files_per_task = {}
-# Whether violations should block the pipeline (optional, defaults to true)
-# blocking = true
-"#,
-        DEFAULT_BASE_URL,
-        DEFAULT_MODEL,
-        DEFAULT_MAX_FILES_PER_TASK,
-        DEFAULT_MAX_FILES_PER_TASK,
-        default_scope,
-        default_scope,
-        DEFAULT_MAX_FILES_PER_TASK
-    )
+    Config {
+        llm: LlmConfig {
+            base_url: DEFAULT_BASE_URL.into(),
+            model: DEFAULT_MODEL.into(),
+            headers: HashMap::from([("x-custom-header".to_string(), "value".to_string())]),
+            body: json!({
+                "temperature": 0.7,
+                "max_tokens": 4096
+            }),
+        },
+        worker: WorkerConfig {
+            max_files_per_task: DEFAULT_MAX_FILES_PER_TASK,
+            max_parallel_workers: None,
+        },
+        rules: vec![RuleBody {
+            name: "Prefer Async instead of Promise Chain in JS/TS".into(),
+            description: "".into(),
+            instruction: "\nFor js/ts files:\nReject any Promise Chain, prefer async/await\n"
+                .into(),
+            scope: vec!["src/**/*.ts".into()],
+            max_files_per_task: DEFAULT_MAX_FILES_PER_TASK.into(),
+            blocking: true,
+            tip: Some("tip".into()),
+        }],
+    }
+    .to_scaffold()
+    .unwrap()
 }
 
 /// Configuration for Firekeeper code review
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, JsonSchema, TomlScaffold)]
 pub struct Config {
     /// LLM provider configuration
     pub llm: LlmConfig,
@@ -65,7 +54,7 @@ pub struct Config {
 }
 
 /// LLM provider configuration
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, JsonSchema, TomlScaffold)]
 pub struct LlmConfig {
     /// LLM API base URL
     #[serde(default = "default_base_url")]
@@ -73,10 +62,10 @@ pub struct LlmConfig {
     /// LLM model name
     #[serde(default = "default_model")]
     pub model: String,
-    /// Custom HTTP headers
+    /// Custom HTTP headers (optional)
     #[serde(default)]
     pub headers: HashMap<String, String>,
-    /// Custom request body fields
+    /// Custom request body fields (optional)
     #[serde(default)]
     pub body: Value,
 }
@@ -94,12 +83,12 @@ fn default_max_files_per_task() -> usize {
 }
 
 /// Worker configuration
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, JsonSchema, TomlScaffold)]
 pub struct WorkerConfig {
-    /// Maximum number of files per review task
+    /// Maximum number of files to review per task (optional, defaults to 5)
     #[serde(default = "default_max_files_per_task")]
     pub max_files_per_task: usize,
-    /// Maximum number of parallel workers
+    /// Maximum number of parallel workers (optional, defaults to unlimited)
     #[serde(default)]
     pub max_parallel_workers: Option<usize>,
 }
