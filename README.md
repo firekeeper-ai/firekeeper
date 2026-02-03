@@ -6,6 +6,38 @@
 
 Firekeeper reviews your current working state against a base commit using custom rules.
 
+## Installation
+
+<details open>
+
+<summary>Shell (macOS/Linux)</summary>
+
+```sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/firekeeper-ai/firekeeper/releases/latest/download/firekeeper-installer.sh | sh
+```
+
+</details>
+
+<details>
+
+<summary>PowerShell (Windows)</summary>
+
+```powershell
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/firekeeper-ai/firekeeper/releases/latest/download/firekeeper-installer.ps1 | iex"
+```
+
+</details>
+
+<details>
+
+<summary>npm</summary>
+
+```sh
+npm install -g @firekeeper.ai/firekeeper
+```
+
+</details>
+
 ## Usage
 
 ### Examples
