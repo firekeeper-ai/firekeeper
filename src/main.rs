@@ -27,7 +27,7 @@ async fn main() {
 
     match &cli.command {
         Commands::Init(args) => {
-            if std::path::Path::new(&args.config).exists() {
+            if std::path::Path::new(&args.config).exists() && !args.r#override {
                 error!("Error: {} already exists", args.config);
                 std::process::exit(1);
             }

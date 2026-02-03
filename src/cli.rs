@@ -45,6 +45,10 @@ pub struct InitArgs {
     /// Path to config file
     #[arg(long, default_value = "firekeeper.toml")]
     pub config: String,
+
+    /// Override existing config file
+    #[arg(long)]
+    pub r#override: bool,
 }
 
 /// Arguments for the review command
