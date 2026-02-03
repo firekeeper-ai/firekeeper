@@ -53,6 +53,7 @@ Ignore acceptable duplication:
 - Similar but contextually different logic (e.g., different validation rules)
 - Common patterns like builder methods, getters/setters
 - Standard boilerplate (e.g., CLI argument parsing, config loading)
+- Factory methods or templates that intentionally duplicate configuration
 
 Focus on substantial logic duplication:
 - Business logic duplicated across multiple files (>30 lines)
