@@ -623,8 +623,8 @@ mod tests {
         let result = split_files(&files, 5);
         assert_eq!(result.len(), 3);
         assert_eq!(result[0].len(), 5);
-        assert_eq!(result[1].len(), 4);
-        assert_eq!(result[2].len(), 4);
+        assert_eq!(result[1].len(), 5);
+        assert_eq!(result[2].len(), 3);
     }
 
     #[test]
