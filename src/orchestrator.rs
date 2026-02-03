@@ -399,6 +399,17 @@ fn format_trace_markdown(traces: &[TraceEntry]) -> String {
                                 tc.function.name, backticks, args._reasoning, backticks
                             ));
                         }
+                    } else if tc.function.name == crate::tool::lua::LuaArgs::TOOL_NAME {
+                        // Render lua tool script as lua code block
+                        if let Ok(args) = serde_json::from_str::<crate::tool::lua::LuaArgs>(
+                            &tc.function.arguments,
+                        ) {
+                            let backticks = get_fence_backticks(&args.script);
+                            output.push_str(&format!(
+                                "- **{}**\n\n{}lua\n{}\n{}\n\n",
+                                tc.function.name, backticks, args.script, backticks
+                            ));
+                        }
                     } else {
                         // Render other tools with JSON arguments
                         let formatted_args =
