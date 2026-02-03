@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-02-03
+
 ### Added
 
 - Initial release with `review` and `suggest` commands
@@ -17,4 +19,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multiple output formats (markdown, JSON)
 - Trace logging for debugging
 
-[unreleased]: https://github.com/firekeeper-ai/firekeeper/commits/main/
+[unreleased]: https://github.com/firekeeper-ai/firekeeper/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/firekeeper-ai/firekeeper/releases/tag/v0.1.0
