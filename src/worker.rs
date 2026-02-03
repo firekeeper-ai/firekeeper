@@ -79,7 +79,10 @@ pub async fn worker(
         if diffs_content.is_empty() {
             String::new()
         } else {
-            format!("<diff>\n\n{}\n\n</diff>\n\n", diffs_content.trim())
+            format!(
+                "Here are diffs of focused files (no need to call diff tool on them):\n\n{}\n\n",
+                diffs_content.trim()
+            )
         }
     };
 
