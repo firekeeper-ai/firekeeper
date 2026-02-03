@@ -21,6 +21,7 @@ User-facing changes that MUST be documented:
 - New features visible to end users
 - New configuration options or changes to configuration schema
 - Breaking changes to existing functionality
+- Bug fixes that affect user-visible behavior
 
 Internal changes that do NOT require documentation:
 - Internal function implementations
@@ -32,6 +33,7 @@ Internal changes that do NOT require documentation:
 """
 tip = """
 Update README.md with examples and usage.
+Update CHANGELOG.md under the [Unreleased] section.
 Ensure CLI help text matches actual behavior.
 Update configuration examples to reflect current format.
 """
