@@ -4,9 +4,9 @@ use toml_scaffold::TomlScaffold;
 
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, TomlScaffold)]
 pub struct RuleBody {
-    /// Human-readable rule name, not for LLM
+    /// Human-readable rule name, invisible to LLM
     pub name: String,
-    /// Human-readable description, not for LLM, optional
+    /// Human-readable description, invisible to LLM (optional)
     #[serde(default)]
     pub description: String,
     /// Detailed instructions for the LLM on how to check this rule
@@ -14,7 +14,7 @@ pub struct RuleBody {
     /// Glob patterns to match files this rule applies to (optional, defaults to ["**/*"])
     #[serde(default = "default_scope")]
     pub scope: Vec<String>,
-    /// Maximum number of files to review per task (overrides global config).
+    /// Maximum number of files to review per task (optional, overrides global config).
     ///
     /// Increase for simple rules that only check changed files (e.g. scan for hardcoded credentials).
     ///
@@ -24,7 +24,7 @@ pub struct RuleBody {
     /// Whether violations should block the pipeline (exit 1) (optional, defaults to true)
     #[serde(default = "default_blocking")]
     pub blocking: bool,
-    /// Optional tip for downstream processors to fix violations
+    /// Tip for downstream processors (e.g. coding agents) to fix violations (optional)
     #[serde(default)]
     pub tip: Option<String>,
 }
