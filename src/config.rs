@@ -24,16 +24,11 @@ impl Default for Config {
         Self {
             llm: LlmConfig::default(),
             review: ReviewConfig::default(),
-            rules: vec![RuleBody {
-                name: "Prefer Async instead of Promise Chain in JS/TS".into(),
-                description: "".into(),
-                instruction: "\nFor js/ts files:\nReject any Promise Chain, prefer async/await\n"
-                    .into(),
-                scope: vec!["src/**/*.ts".into()],
-                max_files_per_task: None,
-                blocking: true,
-                tip: Some("tip".into()),
-            }],
+            rules: vec![
+                RuleBody::no_code_duplication(),
+                RuleBody::no_magic_numbers(),
+                RuleBody::no_hardcoded_credentials(),
+            ],
         }
     }
 }

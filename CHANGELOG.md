@@ -11,11 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - OpenRouter-specific headers (X-Title, HTTP-Referer) in default LLM config
 - Parallel tool calls support in default LLM config
+- General-purpose rule factory methods: `no_code_duplication()`, `no_magic_numbers()`, `no_hardcoded_credentials()`
 
 ### Changed
 
 - Renamed `WorkerConfig` to `ReviewConfig`
 - Renamed config field `worker` to `review`
+- Default config now uses three general-purpose rules instead of JS/TS-specific example
 
 ## [0.1.0] - 2026-02-03
 
