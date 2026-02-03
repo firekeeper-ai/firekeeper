@@ -105,3 +105,5 @@ Options:
 ```
 
 </details>
+
+## [CHANGELOG](./CHANGELOG.md)
