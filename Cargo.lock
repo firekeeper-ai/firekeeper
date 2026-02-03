@@ -355,7 +355,6 @@ name = "firekeeper"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-trait",
  "clap",
  "futures",
  "globset",
