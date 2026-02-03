@@ -337,7 +337,8 @@ fn format_trace_markdown(traces: &[TraceEntry]) -> String {
         // Write worker and rule header information
         output.push_str(&format!("# Worker: {}\n\n", trace.worker_id));
         output.push_str(&format!("## Rule: {}\n\n", trace.rule_name));
-        output.push_str(&format!("{}\n\n", trace.rule_instruction.trim()));
+        let backticks = get_fence_backticks(&trace.rule_instruction);
+        output.push_str(&format!("{}markdown\n{}\n{}\n\n", backticks, trace.rule_instruction.trim(), backticks));
         output.push_str(&format!(
             "**Elapsed:** {:.prec$}s\n\n",
             trace.elapsed_secs,
@@ -382,7 +383,10 @@ fn format_trace_markdown(traces: &[TraceEntry]) -> String {
                     if role == "tool" {
                         output.push_str(&format!("{}\n{}\n{}\n\n", backticks, content, backticks));
                     } else if role == "system" || role == "user" {
-                        output.push_str(&format!("{}markdown\n{}\n{}\n\n", backticks, content, backticks));
+                        output.push_str(&format!(
+                            "{}markdown\n{}\n{}\n\n",
+                            backticks, content, backticks
+                        ));
                     } else {
                         output.push_str(&format!("{}\n\n", content));
                     }

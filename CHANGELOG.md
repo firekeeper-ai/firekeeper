@@ -27,6 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Renamed `WorkerConfig` to `ReviewConfig`
 - Renamed config field `worker` to `review`
 - Default config now uses three general-purpose rules instead of JS/TS-specific example
+- Trace output now wraps system messages, user messages, and rule instructions in markdown code blocks for better readability
+
+### Fixed
+
+- Resource loading with `file://` now correctly matches relative paths like `README.md` and `src/*.rs` by stripping `./` prefix during glob matching
 
 ### Removed
 
