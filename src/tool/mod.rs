@@ -5,7 +5,6 @@ pub mod grep;
 pub mod ls;
 pub mod read;
 pub mod report;
-pub mod suggest;
 pub mod think;
 pub mod utils;
 // pub mod lua;

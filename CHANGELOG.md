@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Renamed config field `worker` to `review`
 - Default config now uses three general-purpose rules instead of JS/TS-specific example
 
+### Removed
+
+- `suggest` command and related functionality
+- Lua tool (disabled, kept in codebase for reference)
+
 ### Fixed
 
 - Exit with failure code (1) when workers fail or abort, not just when violations are found

@@ -3,7 +3,6 @@ mod config;
 mod llm;
 mod review;
 mod rule;
-mod suggest;
 mod tool;
 mod types;
 mod util;
@@ -73,32 +72,6 @@ async fn main() {
                 &args.config,
             )
             .await;
-        }
-        Commands::Suggest(args) => {
-            let mut config = Config::load(&args.config).unwrap_or_else(|e| {
-                error!("Failed to load config: {}", e);
-                std::process::exit(1);
-            });
-
-            if let Err(e) = config.apply_overrides(&args.config_overrides) {
-                error!("Failed to apply config overrides: {}", e);
-                std::process::exit(1);
-            }
-
-            suggest::suggest(
-                &args.base,
-                &config,
-                &args.api_key,
-                &config.llm.base_url,
-                &config.llm.model,
-                args.output.as_deref(),
-                args.trace.as_deref(),
-            )
-            .await
-            .unwrap_or_else(|e| {
-                error!("Failed to suggest rules: {}", e);
-                std::process::exit(1);
-            });
         }
     }
 }
