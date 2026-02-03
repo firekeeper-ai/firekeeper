@@ -11,7 +11,7 @@ parallel_tool_calls = true
 
 [review]
 max_files_per_task = 5
-resources = ["file://README.md", "sh://git ls-files"]
+resources = []
 
 [[rules]]
 name = "Documentation Sync"
@@ -43,6 +43,7 @@ Update configuration examples to reflect current format.
 """
 scope = ["**/*.rs"]
 max_files_per_task = 3
+resources = ["file://README.md", "sh://git ls-files"]
 
 [[rules]]
 name = "No Code Duplication"
@@ -70,11 +71,14 @@ Extract common code into shared functions or modules.
 """
 scope = ["**/*.rs"]
 max_files_per_task = 3
+resources = ["file://README.md", "sh://git ls-files"]
 
 [[rules]]
 name = "No Magic Numbers"
 description = "Prevent hardcoded numeric literals"
 instruction = """
+Only read the focused files. Don't read any other files.
+
 Reject unexplained numeric literals in production code.
 
 Allowed numbers (not magic):
@@ -103,6 +107,8 @@ max_files_per_task = 10
 name = "No Hardcoded Credentials"
 description = "Prevent credential leaks"
 instruction = """
+Only read the focused files. Don't read any other files.
+
 Reject hardcoded credentials in code.
 
 Forbidden:

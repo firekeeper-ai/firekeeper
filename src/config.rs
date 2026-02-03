@@ -90,7 +90,7 @@ impl Default for ReviewConfig {
         Self {
             max_files_per_task: Self::DEFAULT_MAX_FILES_PER_TASK,
             max_parallel_workers: None,
-            resources: vec!["file://README.md".to_string(), "sh://git ls-files".into()],
+            resources: vec!["file://README.md".to_string()],
         }
     }
 }

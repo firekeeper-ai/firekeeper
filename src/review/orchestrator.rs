@@ -338,7 +338,12 @@ fn format_trace_markdown(traces: &[TraceEntry]) -> String {
         output.push_str(&format!("# Worker: {}\n\n", trace.worker_id));
         output.push_str(&format!("## Rule: {}\n\n", trace.rule_name));
         let backticks = get_fence_backticks(&trace.rule_instruction);
-        output.push_str(&format!("{}markdown\n{}\n{}\n\n", backticks, trace.rule_instruction.trim(), backticks));
+        output.push_str(&format!(
+            "{}markdown\n{}\n{}\n\n",
+            backticks,
+            trace.rule_instruction.trim(),
+            backticks
+        ));
         output.push_str(&format!(
             "**Elapsed:** {:.prec$}s\n\n",
             trace.elapsed_secs,

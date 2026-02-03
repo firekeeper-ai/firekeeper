@@ -94,7 +94,7 @@ Extract common code into shared functions or modules.
 "#
                 .into(),
             ),
-            resources: vec![],
+            resources: vec!["sh://git ls-files".into()],
         }
     }
 
@@ -103,6 +103,8 @@ Extract common code into shared functions or modules.
             name: "No Magic Numbers".into(),
             description: "Prevent hardcoded numeric literals".into(),
             instruction: r#"
+Only read the focused files. Don't read any other files.
+
 Reject unexplained numeric literals in production code.
 
 Allowed numbers (not magic):
@@ -137,6 +139,8 @@ Define constants with descriptive names or add explanatory comments.
             name: "No Hardcoded Credentials".into(),
             description: "Prevent credential leaks".into(),
             instruction: r#"
+Only read the focused files. Don't read any other files.
+
 Reject hardcoded credentials in code.
 
 Forbidden:
