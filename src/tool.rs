@@ -3,6 +3,7 @@ pub mod fetch;
 pub mod glob;
 pub mod grep;
 pub mod ls;
+pub mod lua;
 pub mod read;
 pub mod report;
 pub mod suggest;

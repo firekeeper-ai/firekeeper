@@ -24,7 +24,7 @@ pub fn create_provider(
     Ok(provider)
 }
 
-/// Register common tools (read, fetch, ls, grep, glob, think) to an agent
+/// Register common tools (read, fetch, ls, grep, glob, think, lua) to an agent
 pub fn register_common_tools(agent: Agent) -> Agent {
     agent
         .tool(crate::tool::read::read)
@@ -32,5 +32,6 @@ pub fn register_common_tools(agent: Agent) -> Agent {
         .tool(crate::tool::ls::ls)
         .tool(crate::tool::grep::grep)
         .tool(crate::tool::glob::glob)
+        .tool(crate::tool::lua::lua)
         .tool(crate::tool::think::think)
 }
