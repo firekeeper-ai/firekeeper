@@ -1,6 +1,6 @@
 # Firekeeper
 
-[![npm version](https://img.shields.io/npm/v/firekeeper.ai)](https://www.npmjs.com/package/firekeeper.ai)
+[![npm version](https://img.shields.io/npm/v/@firekeeper.ai/firekeeper)](https://www.npmjs.com/package/@firekeeper.ai/firekeeper)
 [![GitHub release](https://img.shields.io/github/v/release/firekeeper-ai/firekeeper)](https://github.com/firekeeper-ai/firekeeper/releases)
 [![License](https://img.shields.io/github/license/firekeeper-ai/firekeeper)](https://github.com/firekeeper-ai/firekeeper/blob/main/LICENSE)
 
