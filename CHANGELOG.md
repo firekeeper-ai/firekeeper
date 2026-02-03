@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-02-03
+
 ### Added
 
 - `resources` field in `ReviewConfig` and `RuleBody` to include additional context in reviews
@@ -32,15 +34,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Resource loading with `file://` now correctly matches relative paths like `README.md` and `src/*.rs` by stripping `./` prefix during glob matching
+- Exit with failure code (1) when workers fail or abort, not just when violations are found
 
 ### Removed
 
 - `suggest` command and related functionality
 - Lua tool (disabled, kept in codebase for reference)
-
-### Fixed
-
-- Exit with failure code (1) when workers fail or abort, not just when violations are found
 
 ## [0.1.0] - 2026-02-03
 
@@ -54,5 +53,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multiple output formats (markdown, JSON)
 - Trace logging for debugging
 
-[unreleased]: https://github.com/firekeeper-ai/firekeeper/compare/v0.1.0...HEAD
+[unreleased]: https://github.com/firekeeper-ai/firekeeper/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/firekeeper-ai/firekeeper/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/firekeeper-ai/firekeeper/releases/tag/v0.1.0
