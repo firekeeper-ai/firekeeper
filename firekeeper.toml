@@ -34,7 +34,7 @@ Update README.md with examples and usage.
 Ensure CLI help text matches actual behavior.
 Update configuration examples to reflect current format.
 """
-scope = ["**/*"]
+scope = ["**/*.rs", "**/*.toml"]
 max_files_per_task = 3
 
 [[rules]]
@@ -61,7 +61,7 @@ Focus on substantial logic duplication:
 tip = """
 Extract common code into shared functions or modules.
 """
-scope = ["**/*"]
+scope = ["**/*.rs"]
 max_files_per_task = 3
 
 [[rules]]
@@ -88,7 +88,7 @@ Reject as magic numbers:
 tip = """
 Define constants with descriptive names or add explanatory comments.
 """
-scope = ["**/*"]
+scope = ["**/*.rs"]
 max_files_per_task = 10
 
 [[rules]]
