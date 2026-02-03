@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenRouter-specific headers (X-Title, HTTP-Referer) in default LLM config
 - Parallel tool calls support in default LLM config
 
+### Changed
+
+- Renamed `WorkerConfig` to `ReviewConfig`
+- Renamed config field `worker` to `review`
+
 ## [0.1.0] - 2026-02-03
 
 ### Added

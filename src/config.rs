@@ -11,15 +11,15 @@ pub const DEFAULT_BASE_URL: &str = "https://openrouter.ai/api/v1";
 pub const DEFAULT_MODEL: &str = "google/gemini-3-flash-preview";
 pub const DEFAULT_MAX_FILES_PER_TASK: usize = 5;
 
-/// Configuration for Firekeeper code review
+/// Configuration for Firekeeper
 #[derive(Deserialize, Serialize, Debug, JsonSchema, TomlScaffold)]
 pub struct Config {
     /// LLM provider configuration
     pub llm: LlmConfig,
     /// Worker configuration
     #[serde(default)]
-    pub worker: WorkerConfig,
-    /// Review rules
+    pub review: ReviewConfig,
+    /// Code review rules
     pub rules: Vec<crate::rule::body::RuleBody>,
 }
 
@@ -52,9 +52,9 @@ fn default_max_files_per_task() -> usize {
     DEFAULT_MAX_FILES_PER_TASK
 }
 
-/// Worker configuration
+/// Code review configuration
 #[derive(Deserialize, Serialize, Debug, JsonSchema, TomlScaffold)]
-pub struct WorkerConfig {
+pub struct ReviewConfig {
     /// Maximum number of files to review per task (optional, defaults to 5)
     #[serde(default = "default_max_files_per_task")]
     pub max_files_per_task: usize,
@@ -63,7 +63,7 @@ pub struct WorkerConfig {
     pub max_parallel_workers: Option<usize>,
 }
 
-impl Default for WorkerConfig {
+impl Default for ReviewConfig {
     fn default() -> Self {
         Self {
             max_files_per_task: default_max_files_per_task(),
@@ -89,10 +89,7 @@ impl Config {
                     "parallel_tool_calls": true
                 }),
             },
-            worker: WorkerConfig {
-                max_files_per_task: DEFAULT_MAX_FILES_PER_TASK,
-                max_parallel_workers: None,
-            },
+            review: ReviewConfig::default(),
             rules: vec![RuleBody {
                 name: "Prefer Async instead of Promise Chain in JS/TS".into(),
                 description: "".into(),

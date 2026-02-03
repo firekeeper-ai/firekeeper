@@ -58,8 +58,8 @@ async fn main() {
             orchestrator::orchestrate_and_run(
                 &config.rules,
                 &args.base,
-                config.worker.max_files_per_task,
-                config.worker.max_parallel_workers,
+                config.review.max_files_per_task,
+                config.review.max_parallel_workers,
                 &config.llm.base_url,
                 &args.api_key,
                 &config.llm.model,
