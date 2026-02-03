@@ -18,30 +18,35 @@ impl Diff {
 
 #[tool]
 impl Diff {
-    /// Get git diff for a file.
+    /// Get git diff for files.
     pub async fn diff(
         self,
-        /// File path
-        path: String,
+        /// File paths
+        path: Vec<String>,
         /// Force read files that are normally excluded.
         /// These files are usually large and not meaningful to review. (default: false)
         force_read: Option<bool>,
     ) -> String {
         let force = force_read.unwrap_or(false);
 
-        if !force && !crate::util::should_include_diff(&path) {
-            return format!(
-                "Skipped '{}':\n\
-                File is excluded.\n\
-                These files are usually large and not meaningful to review.\n\
-                Use force_read=true to override if necessary.",
-                path
-            );
-        }
-
-        self.diffs
-            .get(&path)
-            .cloned()
-            .unwrap_or_else(|| format!("No diff available for file: {}", path))
+        path.into_iter()
+            .map(|p| {
+                if !force && !crate::util::should_include_diff(&p) {
+                    format!(
+                        "Skipped '{}':\n\
+                        File is excluded.\n\
+                        These files are usually large and not meaningful to review.\n\
+                        Use force_read=true to override if necessary.",
+                        p
+                    )
+                } else {
+                    self.diffs
+                        .get(&p)
+                        .cloned()
+                        .unwrap_or_else(|| format!("No diff available for file: {}", p))
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n\n")
     }
 }

@@ -20,31 +20,31 @@ fn process_html(html: String, start_char: usize, num_chars: usize) -> String {
     }
 }
 
-/// Fetch a webpage and convert HTML to Markdown
+/// Fetch webpages and convert HTML to Markdown
 #[tool]
 pub async fn fetch(
-    /// URL to fetch
-    url: String,
+    /// URLs to fetch
+    url: Vec<String>,
     /// Optional start character index (default: 0)
     start_char: Option<usize>,
     /// Optional number of characters to return (default: 5000)
     num_chars: Option<usize>,
 ) -> String {
-    let response = match reqwest::get(&url).await {
-        Ok(r) => r,
-        Err(e) => return format!("Error fetching URL: {}", e),
-    };
+    let start = start_char.unwrap_or(0);
+    let num = num_chars.unwrap_or(DEFAULT_NUM_CHARS);
 
-    let html = match response.text().await {
-        Ok(h) => h,
-        Err(e) => return format!("Error reading response: {}", e),
-    };
-
-    process_html(
-        html,
-        start_char.unwrap_or(0),
-        num_chars.unwrap_or(DEFAULT_NUM_CHARS),
-    )
+    let mut results = Vec::new();
+    for u in url {
+        let result = match reqwest::get(&u).await {
+            Ok(response) => match response.text().await {
+                Ok(html) => format!("=== {} ===\n{}", u, process_html(html, start, num)),
+                Err(e) => format!("=== {} ===\nError reading response: {}", u, e),
+            },
+            Err(e) => format!("=== {} ===\nError fetching URL: {}", u, e),
+        };
+        results.push(result);
+    }
+    results.join("\n\n")
 }
 
 #[cfg(test)]

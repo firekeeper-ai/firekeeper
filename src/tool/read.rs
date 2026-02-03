@@ -50,8 +50,8 @@ fn process_file_content(
 /// Read file contents with optional line range
 #[tool]
 pub async fn read(
-    /// File path
-    path: String,
+    /// File paths
+    path: Vec<String>,
     /// Optional start line index (default: 0)
     start_line: Option<usize>,
     /// Optional number of lines to return (default: 250)
@@ -59,15 +59,23 @@ pub async fn read(
     /// Optional maximum characters per line (default: 200)
     max_line_len: Option<usize>,
 ) -> String {
-    match tokio::fs::read_to_string(&path).await {
-        Ok(content) => process_file_content(
-            content,
-            start_line.unwrap_or(0),
-            num_lines.unwrap_or(DEFAULT_NUM_LINES),
-            max_line_len.unwrap_or(DEFAULT_MAX_LINE_LEN),
-        ),
-        Err(e) => format!("Error reading file: {}", e),
+    let start = start_line.unwrap_or(0);
+    let num = num_lines.unwrap_or(DEFAULT_NUM_LINES);
+    let max_len = max_line_len.unwrap_or(DEFAULT_MAX_LINE_LEN);
+
+    let mut results = Vec::new();
+    for p in path {
+        let result = match tokio::fs::read_to_string(&p).await {
+            Ok(content) => format!(
+                "=== {} ===\n{}",
+                p,
+                process_file_content(content, start, num, max_len)
+            ),
+            Err(e) => format!("=== {} ===\nError reading file: {}", p, e),
+        };
+        results.push(result);
     }
+    results.join("\n\n")
 }
 
 #[cfg(test)]
