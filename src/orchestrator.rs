@@ -517,7 +517,10 @@ fn build_globset(patterns: &[String], rule_name: &str, pattern_type: &str) -> Op
         match Glob::new(pattern) {
             Ok(glob) => builder.add(glob),
             Err(e) => {
-                warn!("Invalid {} pattern '{}' in rule '{}': {}", pattern_type, pattern, rule_name, e);
+                warn!(
+                    "Invalid {} pattern '{}' in rule '{}': {}",
+                    pattern_type, pattern, rule_name, e
+                );
                 continue;
             }
         };
@@ -525,7 +528,10 @@ fn build_globset(patterns: &[String], rule_name: &str, pattern_type: &str) -> Op
     match builder.build() {
         Ok(gs) => Some(gs),
         Err(e) => {
-            error!("Failed to build {} globset for rule '{}': {}", pattern_type, rule_name, e);
+            error!(
+                "Failed to build {} globset for rule '{}': {}",
+                pattern_type, rule_name, e
+            );
             None
         }
     }
