@@ -1,10 +1,24 @@
-# Firekeeper
+<h1 align="center">
+
+<img src="images/banner.jpg" alt="firekeeper" width="670" />
+
+<span style="font-family: 'Cinzel', serif; color: rgb(212 197 161); text-shadow: 0 0 10px rgba(212, 197, 161, 0.5)">
+FIREKEEPER.AI
+</span>
+
+</h1>
+
+<span align="center">
+
+<p style="font-family: ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif; color: rgb(212 197 161); font-size: 14px; font-style: italic; text-shadow: 0 0 10px rgba(212, 197, 161, 0.5)">
+"Ashen one, hearken my words. Your codebase withers in the shadow of debt. Let the Firekeeper purify your craft and keep the flame of innovation alive."
+</p>
 
 [![npm version](https://img.shields.io/npm/v/@firekeeper.ai/firekeeper)](https://www.npmjs.com/package/@firekeeper.ai/firekeeper)
 [![GitHub release](https://img.shields.io/github/v/release/firekeeper-ai/firekeeper)](https://github.com/firekeeper-ai/firekeeper/releases)
 [![License](https://img.shields.io/github/license/firekeeper-ai/firekeeper)](https://github.com/firekeeper-ai/firekeeper/blob/main/LICENSE)
 
-Firekeeper reviews your current working state against a base commit using custom rules.
+</span>
 
 ## Features
 
