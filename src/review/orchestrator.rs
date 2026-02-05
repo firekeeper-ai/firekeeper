@@ -477,7 +477,10 @@ fn format_violations(
                 ));
             }
             if let Some(tip) = tips_by_rule.get(rule) {
-                output.push_str(&format!("\n**Tip:** {}\n", tip));
+                let trimmed_tip = tip.trim();
+                if !trimmed_tip.is_empty() {
+                    output.push_str(&format!("\n**Tip:** {}\n", trimmed_tip));
+                }
             }
             output.push('\n');
         }
