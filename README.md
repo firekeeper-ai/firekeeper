@@ -21,13 +21,13 @@ _Parallel review, custom rules, agent skills, run anywhere_
 
 ## Features
 
-- Customizable LLM configuration & bring your own API key for privacy
-- Context engineering with files, shell commands, and Agent Skills
-- Custom review range by commit, date, or entire repo
-- Same tool for local dev, git hooks, and CI/CD
-- Parallel review for speed and focus
-- Structured output with `--output`
-- Traceability with `--trace`
+- **_Privacy-first_**: Bring your own LLM API key and model—works with any OpenAI-compatible endpoint
+- **_Agentic review_**: Uses an agentic loop with tools to intelligently investigate code changes, not just one-shot LLM calls
+- **_Custom rules_**: Define project-specific review rules in `firekeeper.toml` with detailed instructions for the AI agent
+- **_Flexible scope_**: Review uncommitted changes, specific commits, date ranges, or entire repositories
+- **_Parallel execution_**: Splits review tasks across multiple workers for speed **_and focus_**, with configurable file batching
+- **_Structured output_**: JSON output and markdown trace files for integration with CI/CD and debugging
+- **_Context engineering_**: Include files, shell command outputs, and Agent Skills as context for reviews
 
 ## Installation
 
