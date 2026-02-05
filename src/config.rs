@@ -74,7 +74,12 @@ pub struct ReviewConfig {
     pub max_files_per_task: usize,
     /// Maximum number of parallel workers (optional, defaults to unlimited)
     pub max_parallel_workers: Option<usize>,
-    /// Global resources to include in review context (file://glob, skill://glob, or sh://command)
+    /// Global resources to include in review context.
+    ///
+    /// Supported formats:
+    /// - `file://glob` - Include matched files' full text, e.g. `file://**/README.md`
+    /// - `sh://command` - Include command output, e.g. `sh://git ls-files`
+    /// - `skill://glob` - Include matched skills, e.g. `skill://~/skills/**/SKILL.md`
     pub resources: Vec<String>,
 }
 

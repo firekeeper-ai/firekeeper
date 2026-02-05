@@ -30,7 +30,12 @@ pub struct RuleBody {
     /// Tip for downstream processors (e.g. coding agents) to fix violations (optional)
     #[serde(default)]
     pub tip: Option<String>,
-    /// Rule-specific resources to include in review context (file://glob, skill://glob, or sh://command)
+    /// Rule-specific resources to include in review context.
+    ///
+    /// Supported formats:
+    /// - `file://glob` - Include matched files' full text, e.g. `file://**/README.md`
+    /// - `sh://command` - Include command output, e.g. `sh://git ls-files`
+    /// - `skill://glob` - Include matched skills, e.g. `skill://~/skills/**/SKILL.md`
     #[serde(default)]
     pub resources: Vec<String>,
 }
