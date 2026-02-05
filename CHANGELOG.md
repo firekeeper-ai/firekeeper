@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-02-05
+
 ### Changed
 
 - Improved rule instruction format with structured Steps, Violation criteria, and Exemptions sections
@@ -60,6 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multiple output formats (markdown, JSON)
 - Trace logging for debugging
 
-[unreleased]: https://github.com/firekeeper-ai/firekeeper/compare/v0.2.0...HEAD
+[unreleased]: https://github.com/firekeeper-ai/firekeeper/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/firekeeper-ai/firekeeper/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/firekeeper-ai/firekeeper/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/firekeeper-ai/firekeeper/releases/tag/v0.1.0
