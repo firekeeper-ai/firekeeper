@@ -65,22 +65,26 @@ impl RuleBody {
             name: "No Code Duplication".into(),
             description: "Prevent duplicate code across files".into(),
             instruction: r#"
-Ensure modified content does not duplicate code from other files.
-- If duplicating an existing function, the code should call that function instead.
-- If duplicating a code block, a shared function should be extracted.
+Check if modified code duplicates existing code in other files.
 
-Ignore acceptable duplication:
-- Trivial code (simple one-liners, common patterns like error handling)
+Steps:
+1. Read focused files to understand the modified logic
+2. Search for similar code patterns in other files
+3. Report violations if substantial duplication is found
+
+Violation criteria - Report if:
+- Business logic duplicated across files (>30 lines of similar code)
+- Complex algorithms or calculations repeated identically
+- Data transformation logic that's the same in multiple places
+- Functions that could be extracted into shared utilities
+
+Exemptions - Do NOT report:
+- Trivial code (one-liners, common patterns like error handling)
 - Test code and test utilities
 - Similar but contextually different logic (e.g., different validation rules)
-- Common patterns like builder methods, getters/setters
-- Standard boilerplate (e.g., CLI argument parsing, config loading)
-- Factory methods or templates that intentionally duplicate configuration
-
-Focus on substantial logic duplication:
-- Business logic duplicated across multiple files (>30 lines)
-- Complex algorithms or calculations repeated
-- Data transformation logic that's identical
+- Common patterns (builder methods, getters/setters)
+- Standard boilerplate (CLI parsing, config loading)
+- Factory methods or templates with intentional configuration duplication
 "#
             .into(),
             scope: default_scope(),
@@ -105,31 +109,41 @@ Extract common code into shared functions or modules.
             instruction: r#"
 Only read the focused files. Don't read any other files.
 
-Reject unexplained numeric literals in production code.
+Check for unexplained numeric literals in diff.
 
-Allowed numbers (not magic):
-- 0, 1, -1 in common contexts (array indexing, loop increments, exit codes, boolean-like values)
+Steps:
+1. Read focused files and identify numeric literals
+2. Check if numbers have explanatory comments or clear context
+3. Report violations for unexplained numbers
+
+Violation criteria - Report if:
+- Business logic constants without explanation (thresholds, multipliers, limits)
+- Arbitrary timeouts or delays without context
+- Numeric configuration values hardcoded in logic without comments
+- Calculation constants without explanation
+
+Exemptions - Do NOT report:
+- 0, 1, -1 in common contexts (indexing, loops, exit codes, boolean-like)
 - Numbers in test files
 - Numbers in configuration files
-- Numbers with nearby explanatory comments (within 3 lines)
+- Numbers with nearby comments (within 3 lines above or inline)
+- Numbers in default value functions with descriptive context
 - HTTP status codes (200, 404, etc.)
-- Common time values with clear context (60 for seconds/minutes, 24 for hours, 1000 for milliseconds)
-- Array/collection sizes in obvious contexts (e.g., Vec::with_capacity(10) in tests)
-
-Reject as magic numbers:
-- Business logic constants without explanation (e.g., threshold values, multipliers, limits)
-- Arbitrary timeouts or delays without context
-- Numeric configuration values hardcoded in logic
-- Calculation constants without explanation
-"#.into(),
+- Common time values with clear context (60 for seconds, 24 for hours, 1000 for ms)
+- Array/collection sizes in obvious contexts
+"#
+            .into(),
             scope: default_scope(),
             exclude: default_non_code_exclude(),
             // High value for simple rule that only checks changed files
             max_files_per_task: Some(10),
             blocking: true,
-            tip: Some(r#"
+            tip: Some(
+                r#"
 Define constants with descriptive names or add explanatory comments.
-"#.into()),
+"#
+                .into(),
+            ),
             resources: vec![],
         }
     }
@@ -141,16 +155,21 @@ Define constants with descriptive names or add explanatory comments.
             instruction: r#"
 Only read the focused files. Don't read any other files.
 
-Reject hardcoded credentials in code.
+Check for hardcoded credentials in diff.
 
-Forbidden:
+Steps:
+1. Read focused files and scan for credential-like strings
+2. Determine if they are real credentials or placeholders
+3. Report violations for any real credentials found
+
+Violation criteria - Report if ANY found:
 - API keys, tokens, secrets (e.g., "sk-...", "Bearer ...", actual secret values)
 - Passwords or password hashes
 - Private keys or certificates
 - OAuth client secrets
 - Database connection strings with credentials
 
-Allowed:
+Exemptions - Do NOT report:
 - Placeholder/example values (e.g., "your-api-key", "sk-xxxxxx", "<API_KEY>")
 - Environment variable names (e.g., "API_KEY", "DATABASE_URL")
 - Public URLs and endpoints

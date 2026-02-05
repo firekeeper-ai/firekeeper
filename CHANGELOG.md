@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Improved rule instruction format with structured Steps, Violation criteria, and Exemptions sections
+- Enhanced firekeeper.toml with inline comments for better self-documentation
+- Updated Documentation Sync rule to check code comments and prioritize CHANGELOG updates
+- Made builtin rules more generic and language-agnostic
+
 ## [0.2.0] - 2026-02-03
 
 ### Added
