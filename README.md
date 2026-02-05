@@ -1,7 +1,7 @@
 <h1 align="center">
 
 <img src="images/banner.jpg" alt="firekeeper" width="670" />
-
+<br>
 <span>
 firekeeper
 </span>
@@ -10,9 +10,7 @@ firekeeper
 
 <span align="center">
 
-<p>
-Agentic AI code reviewer CLI. Parallel review, agent skills, run anywhere.
-</p>
+_Agentic AI code reviewer CLI. Parallel review, agent skills, run anywhere._
 
 [![npm version](https://img.shields.io/npm/v/@firekeeper.ai/firekeeper)](https://www.npmjs.com/package/@firekeeper.ai/firekeeper)
 [![GitHub release](https://img.shields.io/github/v/release/firekeeper-ai/firekeeper)](https://github.com/firekeeper-ai/firekeeper/releases)
