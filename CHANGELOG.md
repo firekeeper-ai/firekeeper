@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- SIGTERM signal handling for graceful shutdown on Unix systems (in addition to existing SIGINT/Ctrl+C support)
+
 ## [0.2.1] - 2026-02-05
 
 ### Changed

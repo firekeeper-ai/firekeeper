@@ -92,14 +92,27 @@ pub async fn orchestrate_and_run(
         return;
     }
 
-    // Setup Ctrl+C handler for graceful shutdown
+    // Setup signal handlers for graceful shutdown (SIGINT/SIGTERM)
     // When triggered, sets shutdown flag that workers poll during execution
     // Workers stop mid-execution and return partial results including trace data
     let shutdown = Arc::new(Mutex::new(false));
     let shutdown_clone = shutdown.clone();
     tokio::spawn(async move {
-        tokio::signal::ctrl_c().await.ok();
-        warn!("Received Ctrl+C, stopping workers...");
+        #[cfg(unix)]
+        {
+            use tokio::signal::unix::{signal, SignalKind};
+            let mut sigint = signal(SignalKind::interrupt()).unwrap();
+            let mut sigterm = signal(SignalKind::terminate()).unwrap();
+            tokio::select! {
+                _ = sigint.recv() => warn!("Received SIGINT, stopping workers..."),
+                _ = sigterm.recv() => warn!("Received SIGTERM, stopping workers..."),
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            tokio::signal::ctrl_c().await.ok();
+            warn!("Received Ctrl+C, stopping workers...");
+        }
         *shutdown_clone.lock().await = true;
     });
 
