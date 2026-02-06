@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `firekeeper render` command to convert JSON trace/output files to Markdown format
   - Supports both trace and output JSON formats
   - Optional `--output` flag (prints to stdout if omitted)
+- SIGTERM signal handling for graceful shutdown on Unix systems (in addition to existing SIGINT/Ctrl+C support)
 
 ## [0.2.1] - 2026-02-05
 
