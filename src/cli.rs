@@ -34,6 +34,8 @@ pub enum Commands {
     Init(InitArgs),
     /// Review code changes against rules
     Review(ReviewArgs),
+    /// Render JSON trace/output to Markdown
+    Render(RenderArgs),
 }
 
 /// Arguments for the init command
@@ -86,4 +88,16 @@ pub struct ReviewArgs {
     /// Trace file path to record agent responses and tool use (.md or .json)
     #[arg(long)]
     pub trace: Option<String>,
+}
+
+/// Arguments for the render command
+#[derive(Parser, Debug)]
+pub struct RenderArgs {
+    /// Input JSON file path (trace or output)
+    #[arg(long)]
+    pub input: String,
+
+    /// Output Markdown file path (prints to stdout if omitted)
+    #[arg(long)]
+    pub output: Option<String>,
 }

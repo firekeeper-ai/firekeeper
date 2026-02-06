@@ -1,41 +1,15 @@
-use super::worker;
+use super::{render, worker};
 use crate::rule::body::RuleBody;
-use crate::types::Violation;
 use crate::util;
 use futures::future::join_all;
 use globset::{Glob, GlobSet, GlobSetBuilder};
-use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tiny_loop::tool::ToolArgs;
-use tiny_loop::types::{Message, ToolDefinition};
 use tokio::sync::Mutex;
-
-/// Number of decimal places for elapsed time display
-const ELAPSED_TIME_PRECISION: usize = 2;
 use tracing::{debug, error, info, trace, warn};
 
 const EXIT_FAILURE: i32 = 1;
-
-/// Trace entry containing worker task details and agent conversation
-#[derive(Serialize)]
-struct TraceEntry {
-    /// Unique identifier for the worker
-    worker_id: String,
-    /// Name of the rule being checked
-    rule_name: String,
-    /// Instruction text for the rule
-    rule_instruction: String,
-    /// List of files being reviewed
-    files: Vec<String>,
-    /// Time taken to complete the task in seconds
-    elapsed_secs: f64,
-    /// Tool definitions available to the agent
-    tools: Vec<ToolDefinition>,
-    /// Conversation messages between agent and tools
-    messages: Vec<Message>,
-}
 
 /// Orchestrate and run code review tasks
 ///
@@ -203,7 +177,8 @@ pub async fn orchestrate_and_run(
     }
 
     // Group violations by file, then by rule name
-    let mut violations_by_file: HashMap<String, HashMap<String, Vec<Violation>>> = HashMap::new();
+    let mut violations_by_file: HashMap<String, HashMap<String, Vec<crate::types::Violation>>> =
+        HashMap::new();
     let mut tips_by_rule: HashMap<String, String> = HashMap::new();
     let mut blocking_rules_with_violations = std::collections::HashSet::new();
     let mut all_traces = Vec::new();
@@ -226,13 +201,18 @@ pub async fn orchestrate_and_run(
                 tips_by_rule.insert(worker_result.rule_name.clone(), tip.clone());
             }
             if let Some(messages) = worker_result.messages {
-                all_traces.push(TraceEntry {
+                all_traces.push(render::TraceEntry {
                     worker_id: worker_result.worker_id,
                     rule_name: worker_result.rule_name,
                     rule_instruction: worker_result.rule_instruction,
                     files: worker_result.files,
                     elapsed_secs: worker_result.elapsed_secs,
-                    tools: worker_result.tools.unwrap_or_default(),
+                    tools: worker_result
+                        .tools
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|t| serde_json::to_value(t).unwrap_or_default())
+                        .collect(),
                     messages,
                 });
             }
@@ -272,7 +252,7 @@ pub async fn orchestrate_and_run(
 }
 
 fn print_violations(
-    violations_by_file: &HashMap<String, HashMap<String, Vec<Violation>>>,
+    violations_by_file: &HashMap<String, HashMap<String, Vec<crate::types::Violation>>>,
     tips_by_rule: &HashMap<String, String>,
 ) {
     if violations_by_file.is_empty() {
@@ -280,14 +260,14 @@ fn print_violations(
         return;
     }
 
-    for line in format_violations(violations_by_file, tips_by_rule).lines() {
+    for line in render::format_violations(violations_by_file, tips_by_rule).lines() {
         info!("{}", line);
     }
 }
 
 fn write_output(
     path: &str,
-    violations_by_file: &HashMap<String, HashMap<String, Vec<Violation>>>,
+    violations_by_file: &HashMap<String, HashMap<String, Vec<crate::types::Violation>>>,
     tips_by_rule: &HashMap<String, String>,
 ) {
     let content = if path.ends_with(".json") {
@@ -297,7 +277,7 @@ fn write_output(
         });
         serde_json::to_string_pretty(&output).unwrap()
     } else if path.ends_with(".md") {
-        format_violations(violations_by_file, tips_by_rule)
+        render::format_violations(violations_by_file, tips_by_rule)
     } else {
         error!("Output file must end with .md or .json");
         std::process::exit(EXIT_FAILURE);
@@ -312,11 +292,11 @@ fn write_output(
 }
 
 /// Write trace data to file in JSON or Markdown format
-fn write_trace(path: &str, traces: &[TraceEntry]) {
+fn write_trace(path: &str, traces: &[render::TraceEntry]) {
     let content = if path.ends_with(".json") {
         serde_json::to_string_pretty(traces).unwrap()
     } else if path.ends_with(".md") {
-        format_trace_markdown(traces)
+        render::format_trace_markdown(traces)
     } else {
         error!("Trace file must end with .md or .json");
         std::process::exit(EXIT_FAILURE);
@@ -328,164 +308,6 @@ fn write_trace(path: &str, traces: &[TraceEntry]) {
     }
 
     info!("Trace written to {}", path);
-}
-
-/// Format trace entries as Markdown with rule details, files, and agent messages
-fn format_trace_markdown(traces: &[TraceEntry]) -> String {
-    let mut output = String::new();
-    for trace in traces {
-        // Write worker and rule header information
-        output.push_str(&format!("# Worker: {}\n\n", trace.worker_id));
-        output.push_str(&format!("## Rule: {}\n\n", trace.rule_name));
-        let backticks = get_fence_backticks(&trace.rule_instruction);
-        output.push_str(&format!(
-            "{}markdown\n{}\n{}\n\n",
-            backticks,
-            trace.rule_instruction.trim(),
-            backticks
-        ));
-        output.push_str(&format!(
-            "**Elapsed:** {:.prec$}s\n\n",
-            trace.elapsed_secs,
-            prec = ELAPSED_TIME_PRECISION
-        ));
-
-        // List files being reviewed
-        output.push_str("## Files\n\n");
-        for file in &trace.files {
-            output.push_str(&format!("- {}\n", file));
-        }
-
-        // Show tool schemas as JSON
-        output.push_str("\n## Tools\n\n");
-        let tools_json = serde_json::to_string_pretty(&trace.tools).unwrap_or_default();
-        output.push_str(&format!("```json\n{}\n```\n\n", tools_json));
-
-        // Format conversation messages
-        output.push_str("## Messages\n\n");
-        for (i, msg) in trace.messages.iter().enumerate() {
-            // Extract role, content, and tool calls from message variants
-            let (role, content, tool_calls) = match msg {
-                Message::System(m) => ("system", Some(m.content.as_str()), None),
-                Message::User(m) => ("user", Some(m.content.as_str()), None),
-                Message::Assistant(m) => {
-                    ("assistant", Some(m.content.as_str()), m.tool_calls.as_ref())
-                }
-                Message::Tool(m) => ("tool", Some(m.content.as_str()), None),
-                Message::Custom(m) => (
-                    m.role.as_str(),
-                    m.body.get("content").and_then(|v| v.as_str()),
-                    None,
-                ),
-            };
-
-            output.push_str(&format!("### Message {} - Role: {}\n\n", i + 1, role));
-
-            // Format message content with appropriate code fences for tool responses
-            if let Some(content) = content {
-                if !content.is_empty() {
-                    let backticks = get_fence_backticks(content);
-                    if role == "tool" {
-                        output.push_str(&format!("{}\n{}\n{}\n\n", backticks, content, backticks));
-                    } else if role == "system" || role == "user" {
-                        output.push_str(&format!(
-                            "{}markdown\n{}\n{}\n\n",
-                            backticks, content, backticks
-                        ));
-                    } else {
-                        output.push_str(&format!("{}\n\n", content));
-                    }
-                }
-            }
-
-            // Format tool calls: special handling for 'think' tool vs others
-            if let Some(tool_calls) = tool_calls {
-                output.push_str("**Tool Calls:**\n\n");
-                for tc in tool_calls {
-                    if tc.function.name == crate::tool::think::ThinkArgs::TOOL_NAME {
-                        // Render think tool reasoning as markdown
-                        if let Ok(args) = serde_json::from_str::<crate::tool::think::ThinkArgs>(
-                            &tc.function.arguments,
-                        ) {
-                            let backticks = get_fence_backticks(&args._reasoning);
-                            output.push_str(&format!(
-                                "- **{}**\n\n{}markdown\n{}\n{}\n\n",
-                                tc.function.name, backticks, args._reasoning, backticks
-                            ));
-                        }
-                    // } else if tc.function.name == crate::tool::lua::LuaArgs::TOOL_NAME {
-                    //     // Render lua tool script as lua code block
-                    //     if let Ok(args) = serde_json::from_str::<crate::tool::lua::LuaArgs>(
-                    //         &tc.function.arguments,
-                    //     ) {
-                    //         let backticks = get_fence_backticks(&args.script);
-                    //         output.push_str(&format!(
-                    //             "- **{}**\n\n{}lua\n{}\n{}\n\n",
-                    //             tc.function.name, backticks, args.script, backticks
-                    //         ));
-                    //     }
-                    } else {
-                        // Render other tools with JSON arguments
-                        let formatted_args =
-                            serde_json::from_str::<serde_json::Value>(&tc.function.arguments)
-                                .and_then(|v| serde_json::to_string_pretty(&v))
-                                .unwrap_or_else(|_| tc.function.arguments.clone());
-                        output.push_str(&format!(
-                            "- **{}**\n\n```json\n{}\n```\n\n",
-                            tc.function.name, formatted_args
-                        ));
-                    }
-                }
-            }
-        }
-        output.push_str("\n---\n\n");
-    }
-    output
-}
-
-/// Get appropriate number of backticks for Markdown code fence
-/// Returns at least 3 backticks, or more if content contains backtick sequences
-fn get_fence_backticks(content: &str) -> String {
-    const MIN_BACKTICKS: usize = 3;
-    let max_backticks = content
-        .as_bytes()
-        .split(|&b| b != b'`')
-        .filter(|s| !s.is_empty())
-        .map(|s| s.len())
-        .max()
-        .unwrap_or(0);
-    "`".repeat((max_backticks + 1).max(MIN_BACKTICKS))
-}
-
-fn format_violations(
-    violations_by_file: &HashMap<String, HashMap<String, Vec<Violation>>>,
-    tips_by_rule: &HashMap<String, String>,
-) -> String {
-    if violations_by_file.is_empty() {
-        return "No violations found".to_string();
-    }
-
-    let mut output = String::new();
-    for (file, rules) in violations_by_file {
-        output.push_str(&format!("# Violations in {}\n\n", file));
-        for (rule, violations) in rules {
-            output.push_str(&format!("## Rule: {}\n\n", rule));
-            for violation in violations {
-                output.push_str(&format!(
-                    "- Lines {}-{}: {}\n",
-                    violation.start_line, violation.end_line, violation.detail
-                ));
-            }
-            if let Some(tip) = tips_by_rule.get(rule) {
-                let trimmed_tip = tip.trim();
-                if !trimmed_tip.is_empty() {
-                    output.push_str(&format!("\n**Tip:** {}\n", trimmed_tip));
-                }
-            }
-            output.push('\n');
-        }
-    }
-    output.trim_end().to_string()
 }
 
 /// Split rules and files into worker tasks

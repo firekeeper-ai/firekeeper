@@ -74,5 +74,40 @@ async fn main() {
             )
             .await;
         }
+        Commands::Render(args) => {
+            let json = std::fs::read_to_string(&args.input).unwrap_or_else(|e| {
+                error!("Failed to read input file: {}", e);
+                std::process::exit(1);
+            });
+
+            let markdown = if let Ok(traces) =
+                serde_json::from_str::<Vec<review::render::TraceEntry>>(&json)
+            {
+                review::render::format_trace_markdown(&traces)
+            } else if let Ok(output) = serde_json::from_str::<serde_json::Value>(&json) {
+                let violations = output
+                    .get("violations")
+                    .and_then(|v| serde_json::from_value(v.clone()).ok())
+                    .unwrap_or_default();
+                let tips = output
+                    .get("tips")
+                    .and_then(|v| serde_json::from_value(v.clone()).ok())
+                    .unwrap_or_default();
+                review::render::format_violations(&violations, &tips)
+            } else {
+                error!("Invalid JSON format");
+                std::process::exit(1);
+            };
+
+            if let Some(output_path) = &args.output {
+                std::fs::write(output_path, markdown).unwrap_or_else(|e| {
+                    error!("Failed to write output file: {}", e);
+                    std::process::exit(1);
+                });
+                info!("Rendered to {}", output_path);
+            } else {
+                println!("{}", markdown);
+            }
+        }
     }
 }
