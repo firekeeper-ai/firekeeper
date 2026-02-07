@@ -74,7 +74,7 @@ pub async fn orchestrate_and_run(
     tokio::spawn(async move {
         #[cfg(unix)]
         {
-            use tokio::signal::unix::{signal, SignalKind};
+            use tokio::signal::unix::{SignalKind, signal};
             let mut sigint = signal(SignalKind::interrupt()).unwrap();
             let mut sigterm = signal(SignalKind::terminate()).unwrap();
             tokio::select! {
