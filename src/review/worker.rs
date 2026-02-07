@@ -34,130 +34,121 @@ async fn load_resources(resources: &[String]) -> String {
 
     for resource in resources {
         if let Some(pattern) = resource.strip_prefix("file://") {
-            let (base_path, glob_pattern) = resolve_path(pattern);
-            match globset::Glob::new(&glob_pattern) {
-                Ok(glob) => {
-                    let mut builder = globset::GlobSetBuilder::new();
-                    builder.add(glob);
-                    if let Ok(globset) = builder.build() {
-                        let mut matches = Vec::new();
-                        let _ = crate::tool::glob::glob_recursive(
-                            &base_path,
-                            &globset,
-                            &mut matches,
-                            0,
-                        );
-                        for path in matches {
-                            if loaded_files.insert(path.clone()) {
-                                match std::fs::read_to_string(&path) {
-                                    Ok(file_content) => {
-                                        content.push_str(&format!(
-                                            "\n--- {} ---\n{}\n",
-                                            path, file_content
-                                        ));
-                                    }
-                                    Err(e) => warn!("Failed to read file {}: {}", path, e),
-                                }
-                            }
-                        }
-                    }
-                }
-                Err(e) => warn!("Invalid glob pattern '{}': {}", pattern, e),
-            }
+            load_file_resource(pattern, &mut content, &mut loaded_files);
         } else if let Some(pattern) = resource.strip_prefix("skill://") {
-            let (base_path, glob_pattern) = resolve_path(pattern);
-            match globset::Glob::new(&glob_pattern) {
-                Ok(glob) => {
-                    let mut builder = globset::GlobSetBuilder::new();
-                    builder.add(glob);
-                    if let Ok(globset) = builder.build() {
-                        let mut matches = Vec::new();
-                        let _ = crate::tool::glob::glob_recursive(
-                            &base_path,
-                            &globset,
-                            &mut matches,
-                            0,
-                        );
-                        for path in matches {
-                            if loaded_files.insert(path.clone()) && path.ends_with(".md") {
-                                match std::fs::read_to_string(&path) {
-                                    Ok(file_content) => {
-                                        let matter =
-                                            gray_matter::Matter::<gray_matter::engine::YAML>::new();
-                                        match matter.parse::<serde_json::Value>(&file_content) {
-                                            Ok(parsed) => {
-                                                let mut md = String::new();
-                                                if let Some(data) = parsed.data {
-                                                    if let Some(obj) = data.as_object() {
-                                                        if let Some(title) = obj
-                                                            .get("title")
-                                                            .and_then(|v| v.as_str())
-                                                        {
-                                                            md.push_str(&format!(
-                                                                "# {}\n\n",
-                                                                title
-                                                            ));
-                                                        }
-                                                        if let Some(desc) = obj
-                                                            .get("description")
-                                                            .and_then(|v| v.as_str())
-                                                        {
-                                                            md.push_str(&format!("{}\n", desc));
-                                                        }
-                                                    }
-                                                }
-                                                content.push_str(&format!(
-                                                    "\n--- {} ---\n{}\n",
-                                                    path, md
-                                                ));
-                                            }
-                                            Err(e) => warn!(
-                                                "Failed to parse frontmatter in {}: {}",
-                                                path, e
-                                            ),
-                                        }
-                                    }
-                                    Err(e) => warn!("Failed to read file {}: {}", path, e),
-                                }
-                            }
-                        }
-                    }
-                }
-                Err(e) => warn!("Invalid glob pattern '{}': {}", pattern, e),
-            }
+            load_skill_resource(pattern, &mut content, &mut loaded_files);
         } else if let Some(cmd) = resource.strip_prefix("sh://") {
-            #[cfg(windows)]
-            let output = tokio::process::Command::new("cmd")
-                .arg("/C")
-                .arg(cmd)
-                .output()
-                .await;
-            #[cfg(not(windows))]
-            let output = tokio::process::Command::new("sh")
-                .arg("-c")
-                .arg(cmd)
-                .output()
-                .await;
-
-            match output {
-                Ok(output) => {
-                    if output.status.success() {
-                        content.push_str(&format!(
-                            "\n--- sh://{} ---\n{}\n",
-                            cmd,
-                            String::from_utf8_lossy(&output.stdout)
-                        ));
-                    } else {
-                        warn!("Command failed: sh://{}", cmd);
-                    }
-                }
-                Err(e) => warn!("Failed to execute command 'sh://{}': {}", cmd, e),
-            }
+            load_shell_resource(cmd, &mut content).await;
         } else {
             warn!("Unknown resource type: {}", resource);
         }
     }
     content
+}
+
+/// Find files matching a glob pattern
+fn find_files_by_glob(pattern: &str) -> Vec<String> {
+    let (base_path, glob_pattern) = resolve_path(pattern);
+    let Ok(glob) = globset::Glob::new(&glob_pattern) else {
+        warn!("Invalid glob pattern '{}'", pattern);
+        return vec![];
+    };
+
+    let mut builder = globset::GlobSetBuilder::new();
+    builder.add(glob);
+    let Ok(globset) = builder.build() else {
+        return vec![];
+    };
+
+    let mut matches = Vec::new();
+    let _ = crate::tool::glob::glob_recursive(&base_path, &globset, &mut matches, 0);
+    matches
+}
+
+/// Load file:// resources
+fn load_file_resource(
+    pattern: &str,
+    content: &mut String,
+    loaded_files: &mut std::collections::HashSet<String>,
+) {
+    for path in find_files_by_glob(pattern) {
+        if !loaded_files.insert(path.clone()) {
+            continue;
+        }
+        match std::fs::read_to_string(&path) {
+            Ok(file_content) => {
+                content.push_str(&format!("\n--- {} ---\n{}\n", path, file_content));
+            }
+            Err(e) => warn!("Failed to read file {}: {}", path, e),
+        }
+    }
+}
+
+/// Load skill:// resources
+fn load_skill_resource(
+    pattern: &str,
+    content: &mut String,
+    loaded_files: &mut std::collections::HashSet<String>,
+) {
+    for path in find_files_by_glob(pattern) {
+        if !loaded_files.insert(path.clone()) || !path.ends_with(".md") {
+            continue;
+        }
+        let Ok(file_content) = std::fs::read_to_string(&path) else {
+            warn!("Failed to read file {}", path);
+            continue;
+        };
+
+        let matter = gray_matter::Matter::<gray_matter::engine::YAML>::new();
+        let Ok(parsed) = matter.parse::<serde_json::Value>(&file_content) else {
+            warn!("Failed to parse frontmatter in {}", path);
+            continue;
+        };
+
+        let mut md = String::new();
+        if let Some(data) = parsed.data {
+            if let Some(obj) = data.as_object() {
+                if let Some(title) = obj.get("title").and_then(|v| v.as_str()) {
+                    md.push_str(&format!("# {}\n\n", title));
+                }
+                if let Some(desc) = obj.get("description").and_then(|v| v.as_str()) {
+                    md.push_str(&format!("{}\n", desc));
+                }
+            }
+        }
+        content.push_str(&format!("\n--- {} ---\n{}\n", path, md));
+    }
+}
+
+/// Load sh:// resources
+async fn load_shell_resource(cmd: &str, content: &mut String) {
+    #[cfg(windows)]
+    let output = tokio::process::Command::new("cmd")
+        .arg("/C")
+        .arg(cmd)
+        .output()
+        .await;
+    #[cfg(not(windows))]
+    let output = tokio::process::Command::new("sh")
+        .arg("-c")
+        .arg(cmd)
+        .output()
+        .await;
+
+    match output {
+        Ok(output) => {
+            if output.status.success() {
+                content.push_str(&format!(
+                    "\n--- sh://{} ---\n{}\n",
+                    cmd,
+                    String::from_utf8_lossy(&output.stdout)
+                ));
+            } else {
+                warn!("Command failed: sh://{}", cmd);
+            }
+        }
+        Err(e) => warn!("Failed to execute command 'sh://{}': {}", cmd, e),
+    }
 }
 
 /// Worker result containing violations and optional trace messages
@@ -172,6 +163,184 @@ pub struct WorkerResult {
     pub tools: Option<Vec<ToolDefinition>>,
     pub tip: Option<String>,
     pub elapsed_secs: f64,
+}
+
+/// Build diffs section for focused files
+fn build_diffs_section(files: &[String], diffs: &HashMap<String, String>) -> String {
+    let mut diffs_content = String::new();
+    for file in files {
+        if crate::util::should_include_diff(file) {
+            if let Some(diff) = diffs.get(file) {
+                diffs_content.push_str(&format!("```diff\n{}\n```\n\n", diff));
+            }
+        }
+    }
+    if diffs_content.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "Here are diffs of focused files (no need to call diff tool on them):\n\n{}\n\n",
+            diffs_content.trim()
+        )
+    }
+}
+
+/// Build user message: simplified if focus files match all changed files
+fn build_user_message(
+    files: &[String],
+    all_changed_files: &[String],
+    commit_messages: &str,
+    is_root_base: bool,
+    rule_instruction: &str,
+    diffs: &HashMap<String, String>,
+    resources_content: &str,
+) -> String {
+    if files == all_changed_files {
+        let files_list = files.join("\n- ");
+        let commits_section = if is_root_base || commit_messages.is_empty() {
+            String::new()
+        } else {
+            format!("Commit messages:\n\n{}\n\n", commit_messages)
+        };
+
+        let diffs_section = build_diffs_section(files, diffs);
+
+        if is_root_base {
+            format!(
+                "Rule:\n\n\
+                <rule>\n\n{}\n\n</rule>\n\n{}{}",
+                rule_instruction.trim(),
+                diffs_section,
+                resources_content
+            )
+        } else {
+            format!(
+                "{}Changed files:\n\n\
+                - {}\n\n\
+                Rule:\n\n\
+                <rule>\n\n{}\n\n</rule>\n\n{}{}",
+                commits_section,
+                files_list,
+                rule_instruction.trim(),
+                diffs_section,
+                resources_content
+            )
+        }
+    } else {
+        // Include all changed files for context, but focus on specific files
+        let all_files_list = all_changed_files.join("\n- ");
+        let focus_files_list = files.join("\n- ");
+        let commits_section = if is_root_base || commit_messages.is_empty() {
+            String::new()
+        } else {
+            format!("Commit messages:\n\n{}\n\n", commit_messages)
+        };
+
+        let diffs_section = build_diffs_section(files, diffs);
+
+        if is_root_base {
+            format!(
+                "Focus on these files:\n\n\
+                - {}\n\n\
+                Note: For most cases, only read the focused files.\n\n\
+                Rule:\n\n\
+                <rule>\n\n{}\n\n</rule>\n\n{}{}",
+                focus_files_list,
+                rule_instruction.trim(),
+                diffs_section,
+                resources_content
+            )
+        } else {
+            format!(
+                "{}All changed files:\n\n\
+                - {}\n\n\
+                Focus on these files:\n\n\
+                - {}\n\n\
+                Note: For most cases, only read the focused files.\n\n\
+                Rule:\n\n\
+                <rule>\n\n{}\n\n</rule>\n\n{}{}",
+                commits_section,
+                all_files_list,
+                focus_files_list,
+                rule_instruction.trim(),
+                diffs_section,
+                resources_content
+            )
+        }
+    }
+}
+
+/// Run agent loop with cancellation support
+/// Uses tokio::select to race between agent chat completion and shutdown signal
+/// Polls shutdown flag every 100ms to allow graceful cancellation mid-execution
+async fn run_agent_with_cancellation(
+    mut agent: Agent,
+    user_message: String,
+    shutdown: Arc<Mutex<bool>>,
+    worker_id: &str,
+    rule_name: &str,
+) -> Result<(bool, Agent), Box<dyn std::error::Error>> {
+    debug!(
+        "[Worker {}] Starting agent loop for rule '{}'",
+        worker_id, rule_name
+    );
+
+    let chat_future = agent.chat(user_message);
+    let shutdown_check = async {
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_millis(
+                SHUTDOWN_POLL_INTERVAL_MS,
+            ))
+            .await;
+            if *shutdown.lock().await {
+                break;
+            }
+        }
+    };
+
+    let cancelled = tokio::select! {
+        result = chat_future => {
+            result?;
+            false
+        }
+        _ = shutdown_check => {
+            warn!("[Worker {}] Cancelled due to shutdown", worker_id);
+            true
+        }
+    };
+
+    Ok((cancelled, agent))
+}
+
+/// Collect trace data if enabled
+fn collect_trace_data(
+    trace_enabled: bool,
+    agent: &Agent,
+) -> (Option<Vec<Message>>, Option<Vec<ToolDefinition>>) {
+    if trace_enabled {
+        // Collect conversation history and tool schemas for trace output
+        (
+            Some(agent.history.get_all().to_vec()),
+            Some(agent.tools().to_vec()),
+        )
+    } else {
+        (None, None)
+    }
+}
+
+/// Log worker completion status
+fn log_completion(cancelled: bool, worker_id: &str, rule_name: &str, elapsed: f64) {
+    if cancelled {
+        info!(
+            "[Worker {}] Cancelled reviewing rule '{}' ({:.2}s) - returning partial results",
+            worker_id, rule_name, elapsed
+        );
+    } else {
+        info!(
+            "[Worker {}] Done reviewing rule '{}' ({:.2}s)",
+            worker_id, rule_name, elapsed
+        );
+    }
 }
 
 /// Run a review worker for a specific rule and set of files
@@ -215,25 +384,7 @@ pub async fn worker(
     let report = Report::new();
     let diff = Diff::new(diffs.clone());
 
-    // Helper function to build diffs section for focused files
-    let build_diffs_section = |files: &[String]| -> String {
-        let mut diffs_content = String::new();
-        for file in files {
-            if crate::util::should_include_diff(file) {
-                if let Some(diff) = diffs.get(file) {
-                    diffs_content.push_str(&format!("```diff\n{}\n```\n\n", diff));
-                }
-            }
-        }
-        if diffs_content.is_empty() {
-            String::new()
-        } else {
-            format!(
-                "Here are diffs of focused files (no need to call diff tool on them):\n\n{}\n\n",
-                diffs_content.trim()
-            )
-        }
-    };
+
 
     // Create agent with system prompt and bind tools
     let agent = Agent::new(llm)
@@ -248,7 +399,7 @@ pub async fn worker(
         .bind(diff.clone(), Diff::diff)
         .bind(report.clone(), Report::report);
 
-    let mut agent = crate::llm::register_common_tools(agent);
+    let agent = crate::llm::register_common_tools(agent);
 
     // Load resources
     let mut all_resources = global_resources.clone();
@@ -257,80 +408,16 @@ pub async fn worker(
     all_resources.dedup();
     let resources_content = load_resources(&all_resources).await;
 
-    // Build user message: simplified if focus files match all changed files
-    let user_message = if files == all_changed_files {
-        let files_list = files.join("\n- ");
-        let commits_section = if is_root_base || commit_messages.is_empty() {
-            String::new()
-        } else {
-            format!("Commit messages:\n\n{}\n\n", commit_messages)
-        };
-
-        let diffs_section = build_diffs_section(&files);
-
-        if is_root_base {
-            format!(
-                "Rule:\n\n\
-                <rule>\n\n{}\n\n</rule>\n\n{}{}",
-                rule.instruction.trim(),
-                diffs_section,
-                resources_content
-            )
-        } else {
-            format!(
-                "{}Changed files:\n\n\
-                - {}\n\n\
-                Rule:\n\n\
-                <rule>\n\n{}\n\n</rule>\n\n{}{}",
-                commits_section,
-                files_list,
-                rule.instruction.trim(),
-                diffs_section,
-                resources_content
-            )
-        }
-    } else {
-        // Include all changed files for context, but focus on specific files
-        let all_files_list = all_changed_files.join("\n- ");
-        let focus_files_list = files.join("\n- ");
-        let commits_section = if is_root_base || commit_messages.is_empty() {
-            String::new()
-        } else {
-            format!("Commit messages:\n\n{}\n\n", commit_messages)
-        };
-
-        let diffs_section = build_diffs_section(&files);
-
-        if is_root_base {
-            format!(
-                "Focus on these files:\n\n\
-                - {}\n\n\
-                Note: For most cases, only read the focused files.\n\n\
-                Rule:\n\n\
-                <rule>\n\n{}\n\n</rule>\n\n{}{}",
-                focus_files_list,
-                rule.instruction.trim(),
-                diffs_section,
-                resources_content
-            )
-        } else {
-            format!(
-                "{}All changed files:\n\n\
-                - {}\n\n\
-                Focus on these files:\n\n\
-                - {}\n\n\
-                Note: For most cases, only read the focused files.\n\n\
-                Rule:\n\n\
-                <rule>\n\n{}\n\n</rule>\n\n{}{}",
-                commits_section,
-                all_files_list,
-                focus_files_list,
-                rule.instruction.trim(),
-                diffs_section,
-                resources_content
-            )
-        }
-    };
+    // Build user message
+    let user_message = build_user_message(
+        &files,
+        &all_changed_files,
+        &commit_messages,
+        is_root_base,
+        &rule.instruction,
+        &diffs,
+        &resources_content,
+    );
     trace!(
         "[Worker {}] Adding user message with {} files",
         worker_id,
@@ -339,64 +426,17 @@ pub async fn worker(
     trace!("[Worker {}] User message: {}", worker_id, user_message);
 
     // Run agent loop to review code with cancellation support
-    // Uses tokio::select to race between agent chat completion and shutdown signal
-    // Polls shutdown flag every 100ms to allow graceful cancellation mid-execution
-    debug!(
-        "[Worker {}] Starting agent loop for rule '{}'",
-        worker_id, rule.name
-    );
-
-    let chat_future = agent.chat(user_message);
-    let shutdown_check = async {
-        loop {
-            tokio::time::sleep(tokio::time::Duration::from_millis(
-                SHUTDOWN_POLL_INTERVAL_MS,
-            ))
-            .await;
-            if *shutdown.lock().await {
-                break;
-            }
-        }
-    };
-
-    let cancelled = tokio::select! {
-        result = chat_future => {
-            result?;
-            false
-        }
-        _ = shutdown_check => {
-            warn!("[Worker {}] Cancelled due to shutdown", worker_id);
-            true
-        }
-    };
+    let (cancelled, agent) = run_agent_with_cancellation(agent, user_message, shutdown, &worker_id, &rule.name).await?;
 
     // Collect trace data if enabled (even if cancelled)
-    let (messages, tools) = if trace_enabled {
-        // Collect conversation history and tool schemas for trace output
-        (
-            Some(agent.history.get_all().to_vec()),
-            Some(agent.tools().to_vec()),
-        )
-    } else {
-        (None, None)
-    };
+    let (messages, tools) = collect_trace_data(trace_enabled, &agent);
 
     // Extract violations from report tool's shared state
     let violations = report.violations.lock().await.clone();
 
     let elapsed = start.elapsed().as_secs_f64();
 
-    if cancelled {
-        info!(
-            "[Worker {}] Cancelled reviewing rule '{}' ({:.2}s) - returning partial results",
-            worker_id, rule.name, elapsed
-        );
-    } else {
-        info!(
-            "[Worker {}] Done reviewing rule '{}' ({:.2}s)",
-            worker_id, rule.name, elapsed
-        );
-    }
+    log_completion(cancelled, &worker_id, &rule.name, elapsed);
 
     Ok(WorkerResult {
         worker_id,

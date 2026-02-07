@@ -131,137 +131,29 @@ pub async fn orchestrate_and_run(
     }
 
     // Execute workers with optional concurrency limit
-    let results = if let Some(max_workers) = max_parallel_workers {
-        // Limit parallel execution using a worker pool
-        use futures::stream::{FuturesUnordered, StreamExt};
-        let mut stream = FuturesUnordered::new();
-        let mut results = Vec::new();
-        let mut futures_iter = futures.into_iter();
+    let results = execute_workers(futures, max_parallel_workers, shutdown.clone()).await;
 
-        // Fill initial pool up to max_workers
-        for _ in 0..max_workers.min(futures_iter.len()) {
-            if let Some(fut) = futures_iter.next() {
-                stream.push(fut);
-            }
-        }
+    let (_succeeded, failed, _was_interrupted) = log_results(&results, total_tasks, &shutdown).await;
 
-        // As workers complete, spawn new ones to maintain pool size
-        // Stop spawning new workers if shutdown is requested
-        while let Some(result) = stream.next().await {
-            results.push(result);
-            if *shutdown.lock().await {
-                warn!("Shutdown requested, not spawning new workers");
-                break;
-            }
-            if let Some(fut) = futures_iter.next() {
-                stream.push(fut);
-            }
-        }
-
-        results
-    } else {
-        // No limit - run all workers in parallel
-        join_all(futures).await
-    };
-
-    for (i, result) in results.iter().enumerate() {
-        if let Err(e) = result {
-            error!("[Worker {}] Task failed: {}", i, e);
-        } else {
-            debug!("[Worker {}] Task completed successfully", i);
-        }
-    }
-
-    let failed = results.iter().filter(|r| r.is_err()).count();
-    let succeeded = results.len() - failed;
-    let was_interrupted = *shutdown.lock().await;
-    if was_interrupted {
-        warn!(
-            "Review interrupted: {} succeeded, {} failed, {} cancelled",
-            succeeded,
-            failed,
-            total_tasks - results.len()
-        );
-    } else {
-        info!(
-            "Review complete: {} succeeded, {} failed",
-            succeeded, failed
-        );
-    }
-
-    // Group violations by file, then by rule name
-    let mut violations_by_file: HashMap<String, HashMap<String, Vec<crate::types::Violation>>> =
-        HashMap::new();
-    let mut tips_by_rule: HashMap<String, String> = HashMap::new();
-    let mut blocking_rules_with_violations = std::collections::HashSet::new();
-    let mut all_traces = Vec::new();
-
-    for result in results {
-        if let Ok(worker_result) = result {
-            let has_violations = !worker_result.violations.is_empty();
-            for violation in &worker_result.violations {
-                violations_by_file
-                    .entry(violation.file.clone())
-                    .or_insert_with(HashMap::new)
-                    .entry(worker_result.rule_name.clone())
-                    .or_insert_with(Vec::new)
-                    .push(violation.clone());
-            }
-            if has_violations && worker_result.blocking {
-                blocking_rules_with_violations.insert(worker_result.rule_name.clone());
-            }
-            if let Some(tip) = &worker_result.tip {
-                tips_by_rule.insert(worker_result.rule_name.clone(), tip.clone());
-            }
-            if let Some(messages) = worker_result.messages {
-                all_traces.push(render::TraceEntry {
-                    worker_id: worker_result.worker_id,
-                    rule_name: worker_result.rule_name,
-                    rule_instruction: worker_result.rule_instruction,
-                    files: worker_result.files,
-                    elapsed_secs: worker_result.elapsed_secs,
-                    tools: worker_result
-                        .tools
-                        .unwrap_or_default()
-                        .into_iter()
-                        .map(|t| serde_json::to_value(t).unwrap_or_default())
-                        .collect(),
-                    messages,
-                });
-            }
-        }
-    }
+    let grouped = group_violations(results);
 
     // Output results to file or console
     if let Some(output_path) = output {
-        write_output(output_path, &violations_by_file, &tips_by_rule);
+        write_output(output_path, &grouped.violations_by_file, &grouped.tips_by_rule);
     } else {
-        print_violations(&violations_by_file, &tips_by_rule);
+        print_violations(&grouped.violations_by_file, &grouped.tips_by_rule);
     }
 
     // Write trace if enabled
     if let Some(trace_path) = trace {
-        write_trace(trace_path, &all_traces);
+        write_trace(trace_path, &grouped.all_traces);
     }
 
     // Exit with error if blocking rules have violations
-    if !blocking_rules_with_violations.is_empty() {
-        error!(
-            "Blocking rules with violations: {:?}",
-            blocking_rules_with_violations
-        );
-        info!(
-            "If violations are misreported, refine rules in {}",
-            config_path
-        );
-        std::process::exit(EXIT_FAILURE);
-    }
+    check_blocking_violations(&grouped.blocking_rules_with_violations, config_path);
 
     // Exit with error if any workers failed
-    if failed > 0 {
-        error!("{} worker(s) failed", failed);
-        std::process::exit(EXIT_FAILURE);
-    }
+    check_worker_failures(failed);
 }
 
 fn print_violations(
@@ -428,6 +320,167 @@ fn split_files(files: &[String], max_per_task: usize) -> Vec<Vec<String>> {
         .chunks(chunk_size)
         .map(|chunk| chunk.to_vec())
         .collect()
+}
+
+struct GroupedResults {
+    violations_by_file: HashMap<String, HashMap<String, Vec<crate::types::Violation>>>,
+    tips_by_rule: HashMap<String, String>,
+    blocking_rules_with_violations: std::collections::HashSet<String>,
+    all_traces: Vec<render::TraceEntry>,
+}
+
+/// Group violations by file, then by rule name
+fn group_violations(results: Vec<Result<worker::WorkerResult, Box<dyn std::error::Error>>>) -> GroupedResults {
+    let mut violations_by_file = HashMap::new();
+    let mut tips_by_rule = HashMap::new();
+    let mut blocking_rules_with_violations = std::collections::HashSet::new();
+    let mut all_traces = Vec::new();
+
+    for result in results {
+        if let Ok(worker_result) = result {
+            let has_violations = !worker_result.violations.is_empty();
+            for violation in &worker_result.violations {
+                violations_by_file
+                    .entry(violation.file.clone())
+                    .or_insert_with(HashMap::new)
+                    .entry(worker_result.rule_name.clone())
+                    .or_insert_with(Vec::new)
+                    .push(violation.clone());
+            }
+            if has_violations && worker_result.blocking {
+                blocking_rules_with_violations.insert(worker_result.rule_name.clone());
+            }
+            if let Some(tip) = &worker_result.tip {
+                tips_by_rule.insert(worker_result.rule_name.clone(), tip.clone());
+            }
+            if let Some(messages) = worker_result.messages {
+                all_traces.push(render::TraceEntry {
+                    worker_id: worker_result.worker_id,
+                    rule_name: worker_result.rule_name,
+                    rule_instruction: worker_result.rule_instruction,
+                    files: worker_result.files,
+                    elapsed_secs: worker_result.elapsed_secs,
+                    tools: worker_result
+                        .tools
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|t| serde_json::to_value(t).unwrap_or_default())
+                        .collect(),
+                    messages,
+                });
+            }
+        }
+    }
+
+    GroupedResults {
+        violations_by_file,
+        tips_by_rule,
+        blocking_rules_with_violations,
+        all_traces,
+    }
+}
+
+/// Execute workers with optional concurrency limit
+async fn execute_workers<F>(
+    futures: Vec<F>,
+    max_parallel_workers: Option<usize>,
+    shutdown: Arc<Mutex<bool>>,
+) -> Vec<Result<worker::WorkerResult, Box<dyn std::error::Error>>>
+where
+    F: std::future::Future<Output = Result<worker::WorkerResult, Box<dyn std::error::Error>>>,
+{
+    if let Some(max_workers) = max_parallel_workers {
+        // Limit parallel execution using a worker pool
+        use futures::stream::{FuturesUnordered, StreamExt};
+        let mut stream = FuturesUnordered::new();
+        let mut results = Vec::new();
+        let mut futures_iter = futures.into_iter();
+
+        // Fill initial pool up to max_workers
+        for _ in 0..max_workers.min(futures_iter.len()) {
+            if let Some(fut) = futures_iter.next() {
+                stream.push(fut);
+            }
+        }
+
+        // As workers complete, spawn new ones to maintain pool size
+        // Stop spawning new workers if shutdown is requested
+        while let Some(result) = stream.next().await {
+            results.push(result);
+            if *shutdown.lock().await {
+                warn!("Shutdown requested, not spawning new workers");
+                break;
+            }
+            if let Some(fut) = futures_iter.next() {
+                stream.push(fut);
+            }
+        }
+
+        results
+    } else {
+        // No limit - run all workers in parallel
+        join_all(futures).await
+    }
+}
+
+/// Log worker results and return success/failure counts
+async fn log_results(
+    results: &[Result<worker::WorkerResult, Box<dyn std::error::Error>>],
+    total_tasks: usize,
+    shutdown: &Arc<Mutex<bool>>,
+) -> (usize, usize, bool) {
+    for (i, result) in results.iter().enumerate() {
+        if let Err(e) = result {
+            error!("[Worker {}] Task failed: {}", i, e);
+        } else {
+            debug!("[Worker {}] Task completed successfully", i);
+        }
+    }
+
+    let failed = results.iter().filter(|r| r.is_err()).count();
+    let succeeded = results.len() - failed;
+    let was_interrupted = *shutdown.lock().await;
+    if was_interrupted {
+        warn!(
+            "Review interrupted: {} succeeded, {} failed, {} cancelled",
+            succeeded,
+            failed,
+            total_tasks - results.len()
+        );
+    } else {
+        info!(
+            "Review complete: {} succeeded, {} failed",
+            succeeded, failed
+        );
+    }
+
+    (succeeded, failed, was_interrupted)
+}
+
+/// Exit with error if blocking rules have violations
+fn check_blocking_violations(
+    blocking_rules_with_violations: &std::collections::HashSet<String>,
+    config_path: &str,
+) {
+    if !blocking_rules_with_violations.is_empty() {
+        error!(
+            "Blocking rules with violations: {:?}",
+            blocking_rules_with_violations
+        );
+        info!(
+            "If violations are misreported, refine rules in {}",
+            config_path
+        );
+        std::process::exit(EXIT_FAILURE);
+    }
+}
+
+/// Exit with error if any workers failed
+fn check_worker_failures(failed: usize) {
+    if failed > 0 {
+        error!("{} worker(s) failed", failed);
+        std::process::exit(EXIT_FAILURE);
+    }
 }
 
 #[cfg(test)]
