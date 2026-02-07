@@ -1,5 +1,6 @@
 use crate::rule::body::RuleBody;
 use crate::types::Violation;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tiny_loop::tool::ToolArgs;
@@ -150,7 +151,17 @@ fn format_message(msg: &TimedMessage, index: usize) -> String {
         ),
     };
 
-    let mut output = format!("### Message {} - Role: {}\n\n", index + 1, role);
+    let timestamp_str = DateTime::<Utc>::from(msg.timestamp)
+        .format("%Y-%m-%d %H:%M:%S")
+        .to_string();
+
+    let mut output = format!(
+        "### Message {} - Role: {} (Timestamp: {}, Elapsed: {:.2}s)\n\n",
+        index + 1,
+        role,
+        timestamp_str,
+        msg.elapsed.as_secs_f64()
+    );
 
     if let Some(content) = content {
         if !content.is_empty() {

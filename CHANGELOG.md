@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Version field to JSON output schemas (`TraceFile` and `ViolationFile`)
 - Version compatibility check in `render` command (checks minor version)
+- Timestamp and elapsed time display for each message in trace markdown output
+- `chrono` dependency for timestamp formatting
 
 ### Changed
 
