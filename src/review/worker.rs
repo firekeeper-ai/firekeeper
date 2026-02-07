@@ -34,130 +34,121 @@ async fn load_resources(resources: &[String]) -> String {
 
     for resource in resources {
         if let Some(pattern) = resource.strip_prefix("file://") {
-            let (base_path, glob_pattern) = resolve_path(pattern);
-            match globset::Glob::new(&glob_pattern) {
-                Ok(glob) => {
-                    let mut builder = globset::GlobSetBuilder::new();
-                    builder.add(glob);
-                    if let Ok(globset) = builder.build() {
-                        let mut matches = Vec::new();
-                        let _ = crate::tool::glob::glob_recursive(
-                            &base_path,
-                            &globset,
-                            &mut matches,
-                            0,
-                        );
-                        for path in matches {
-                            if loaded_files.insert(path.clone()) {
-                                match std::fs::read_to_string(&path) {
-                                    Ok(file_content) => {
-                                        content.push_str(&format!(
-                                            "\n--- {} ---\n{}\n",
-                                            path, file_content
-                                        ));
-                                    }
-                                    Err(e) => warn!("Failed to read file {}: {}", path, e),
-                                }
-                            }
-                        }
-                    }
-                }
-                Err(e) => warn!("Invalid glob pattern '{}': {}", pattern, e),
-            }
+            load_file_resource(pattern, &mut content, &mut loaded_files);
         } else if let Some(pattern) = resource.strip_prefix("skill://") {
-            let (base_path, glob_pattern) = resolve_path(pattern);
-            match globset::Glob::new(&glob_pattern) {
-                Ok(glob) => {
-                    let mut builder = globset::GlobSetBuilder::new();
-                    builder.add(glob);
-                    if let Ok(globset) = builder.build() {
-                        let mut matches = Vec::new();
-                        let _ = crate::tool::glob::glob_recursive(
-                            &base_path,
-                            &globset,
-                            &mut matches,
-                            0,
-                        );
-                        for path in matches {
-                            if loaded_files.insert(path.clone()) && path.ends_with(".md") {
-                                match std::fs::read_to_string(&path) {
-                                    Ok(file_content) => {
-                                        let matter =
-                                            gray_matter::Matter::<gray_matter::engine::YAML>::new();
-                                        match matter.parse::<serde_json::Value>(&file_content) {
-                                            Ok(parsed) => {
-                                                let mut md = String::new();
-                                                if let Some(data) = parsed.data {
-                                                    if let Some(obj) = data.as_object() {
-                                                        if let Some(title) = obj
-                                                            .get("title")
-                                                            .and_then(|v| v.as_str())
-                                                        {
-                                                            md.push_str(&format!(
-                                                                "# {}\n\n",
-                                                                title
-                                                            ));
-                                                        }
-                                                        if let Some(desc) = obj
-                                                            .get("description")
-                                                            .and_then(|v| v.as_str())
-                                                        {
-                                                            md.push_str(&format!("{}\n", desc));
-                                                        }
-                                                    }
-                                                }
-                                                content.push_str(&format!(
-                                                    "\n--- {} ---\n{}\n",
-                                                    path, md
-                                                ));
-                                            }
-                                            Err(e) => warn!(
-                                                "Failed to parse frontmatter in {}: {}",
-                                                path, e
-                                            ),
-                                        }
-                                    }
-                                    Err(e) => warn!("Failed to read file {}: {}", path, e),
-                                }
-                            }
-                        }
-                    }
-                }
-                Err(e) => warn!("Invalid glob pattern '{}': {}", pattern, e),
-            }
+            load_skill_resource(pattern, &mut content, &mut loaded_files);
         } else if let Some(cmd) = resource.strip_prefix("sh://") {
-            #[cfg(windows)]
-            let output = tokio::process::Command::new("cmd")
-                .arg("/C")
-                .arg(cmd)
-                .output()
-                .await;
-            #[cfg(not(windows))]
-            let output = tokio::process::Command::new("sh")
-                .arg("-c")
-                .arg(cmd)
-                .output()
-                .await;
-
-            match output {
-                Ok(output) => {
-                    if output.status.success() {
-                        content.push_str(&format!(
-                            "\n--- sh://{} ---\n{}\n",
-                            cmd,
-                            String::from_utf8_lossy(&output.stdout)
-                        ));
-                    } else {
-                        warn!("Command failed: sh://{}", cmd);
-                    }
-                }
-                Err(e) => warn!("Failed to execute command 'sh://{}': {}", cmd, e),
-            }
+            load_shell_resource(cmd, &mut content).await;
         } else {
             warn!("Unknown resource type: {}", resource);
         }
     }
     content
+}
+
+/// Find files matching a glob pattern
+fn find_files_by_glob(pattern: &str) -> Vec<String> {
+    let (base_path, glob_pattern) = resolve_path(pattern);
+    let Ok(glob) = globset::Glob::new(&glob_pattern) else {
+        warn!("Invalid glob pattern '{}'", pattern);
+        return vec![];
+    };
+
+    let mut builder = globset::GlobSetBuilder::new();
+    builder.add(glob);
+    let Ok(globset) = builder.build() else {
+        return vec![];
+    };
+
+    let mut matches = Vec::new();
+    let _ = crate::tool::glob::glob_recursive(&base_path, &globset, &mut matches, 0);
+    matches
+}
+
+/// Load file:// resources
+fn load_file_resource(
+    pattern: &str,
+    content: &mut String,
+    loaded_files: &mut std::collections::HashSet<String>,
+) {
+    for path in find_files_by_glob(pattern) {
+        if !loaded_files.insert(path.clone()) {
+            continue;
+        }
+        match std::fs::read_to_string(&path) {
+            Ok(file_content) => {
+                content.push_str(&format!("\n--- {} ---\n{}\n", path, file_content));
+            }
+            Err(e) => warn!("Failed to read file {}: {}", path, e),
+        }
+    }
+}
+
+/// Load skill:// resources
+fn load_skill_resource(
+    pattern: &str,
+    content: &mut String,
+    loaded_files: &mut std::collections::HashSet<String>,
+) {
+    for path in find_files_by_glob(pattern) {
+        if !loaded_files.insert(path.clone()) || !path.ends_with(".md") {
+            continue;
+        }
+        let Ok(file_content) = std::fs::read_to_string(&path) else {
+            warn!("Failed to read file {}", path);
+            continue;
+        };
+
+        let matter = gray_matter::Matter::<gray_matter::engine::YAML>::new();
+        let Ok(parsed) = matter.parse::<serde_json::Value>(&file_content) else {
+            warn!("Failed to parse frontmatter in {}", path);
+            continue;
+        };
+
+        let mut md = String::new();
+        if let Some(data) = parsed.data {
+            if let Some(obj) = data.as_object() {
+                if let Some(title) = obj.get("title").and_then(|v| v.as_str()) {
+                    md.push_str(&format!("# {}\n\n", title));
+                }
+                if let Some(desc) = obj.get("description").and_then(|v| v.as_str()) {
+                    md.push_str(&format!("{}\n", desc));
+                }
+            }
+        }
+        content.push_str(&format!("\n--- {} ---\n{}\n", path, md));
+    }
+}
+
+/// Load sh:// resources
+async fn load_shell_resource(cmd: &str, content: &mut String) {
+    #[cfg(windows)]
+    let output = tokio::process::Command::new("cmd")
+        .arg("/C")
+        .arg(cmd)
+        .output()
+        .await;
+    #[cfg(not(windows))]
+    let output = tokio::process::Command::new("sh")
+        .arg("-c")
+        .arg(cmd)
+        .output()
+        .await;
+
+    match output {
+        Ok(output) => {
+            if output.status.success() {
+                content.push_str(&format!(
+                    "\n--- sh://{} ---\n{}\n",
+                    cmd,
+                    String::from_utf8_lossy(&output.stdout)
+                ));
+            } else {
+                warn!("Command failed: sh://{}", cmd);
+            }
+        }
+        Err(e) => warn!("Failed to execute command 'sh://{}': {}", cmd, e),
+    }
 }
 
 /// Worker result containing violations and optional trace messages
@@ -408,7 +399,7 @@ pub async fn worker(
         .bind(diff.clone(), Diff::diff)
         .bind(report.clone(), Report::report);
 
-    let mut agent = crate::llm::register_common_tools(agent);
+    let agent = crate::llm::register_common_tools(agent);
 
     // Load resources
     let mut all_resources = global_resources.clone();
