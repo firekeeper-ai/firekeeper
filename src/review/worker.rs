@@ -174,6 +174,184 @@ pub struct WorkerResult {
     pub elapsed_secs: f64,
 }
 
+/// Build diffs section for focused files
+fn build_diffs_section(files: &[String], diffs: &HashMap<String, String>) -> String {
+    let mut diffs_content = String::new();
+    for file in files {
+        if crate::util::should_include_diff(file) {
+            if let Some(diff) = diffs.get(file) {
+                diffs_content.push_str(&format!("```diff\n{}\n```\n\n", diff));
+            }
+        }
+    }
+    if diffs_content.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "Here are diffs of focused files (no need to call diff tool on them):\n\n{}\n\n",
+            diffs_content.trim()
+        )
+    }
+}
+
+/// Build user message: simplified if focus files match all changed files
+fn build_user_message(
+    files: &[String],
+    all_changed_files: &[String],
+    commit_messages: &str,
+    is_root_base: bool,
+    rule_instruction: &str,
+    diffs: &HashMap<String, String>,
+    resources_content: &str,
+) -> String {
+    if files == all_changed_files {
+        let files_list = files.join("\n- ");
+        let commits_section = if is_root_base || commit_messages.is_empty() {
+            String::new()
+        } else {
+            format!("Commit messages:\n\n{}\n\n", commit_messages)
+        };
+
+        let diffs_section = build_diffs_section(files, diffs);
+
+        if is_root_base {
+            format!(
+                "Rule:\n\n\
+                <rule>\n\n{}\n\n</rule>\n\n{}{}",
+                rule_instruction.trim(),
+                diffs_section,
+                resources_content
+            )
+        } else {
+            format!(
+                "{}Changed files:\n\n\
+                - {}\n\n\
+                Rule:\n\n\
+                <rule>\n\n{}\n\n</rule>\n\n{}{}",
+                commits_section,
+                files_list,
+                rule_instruction.trim(),
+                diffs_section,
+                resources_content
+            )
+        }
+    } else {
+        // Include all changed files for context, but focus on specific files
+        let all_files_list = all_changed_files.join("\n- ");
+        let focus_files_list = files.join("\n- ");
+        let commits_section = if is_root_base || commit_messages.is_empty() {
+            String::new()
+        } else {
+            format!("Commit messages:\n\n{}\n\n", commit_messages)
+        };
+
+        let diffs_section = build_diffs_section(files, diffs);
+
+        if is_root_base {
+            format!(
+                "Focus on these files:\n\n\
+                - {}\n\n\
+                Note: For most cases, only read the focused files.\n\n\
+                Rule:\n\n\
+                <rule>\n\n{}\n\n</rule>\n\n{}{}",
+                focus_files_list,
+                rule_instruction.trim(),
+                diffs_section,
+                resources_content
+            )
+        } else {
+            format!(
+                "{}All changed files:\n\n\
+                - {}\n\n\
+                Focus on these files:\n\n\
+                - {}\n\n\
+                Note: For most cases, only read the focused files.\n\n\
+                Rule:\n\n\
+                <rule>\n\n{}\n\n</rule>\n\n{}{}",
+                commits_section,
+                all_files_list,
+                focus_files_list,
+                rule_instruction.trim(),
+                diffs_section,
+                resources_content
+            )
+        }
+    }
+}
+
+/// Run agent loop with cancellation support
+/// Uses tokio::select to race between agent chat completion and shutdown signal
+/// Polls shutdown flag every 100ms to allow graceful cancellation mid-execution
+async fn run_agent_with_cancellation(
+    mut agent: Agent,
+    user_message: String,
+    shutdown: Arc<Mutex<bool>>,
+    worker_id: &str,
+    rule_name: &str,
+) -> Result<(bool, Agent), Box<dyn std::error::Error>> {
+    debug!(
+        "[Worker {}] Starting agent loop for rule '{}'",
+        worker_id, rule_name
+    );
+
+    let chat_future = agent.chat(user_message);
+    let shutdown_check = async {
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_millis(
+                SHUTDOWN_POLL_INTERVAL_MS,
+            ))
+            .await;
+            if *shutdown.lock().await {
+                break;
+            }
+        }
+    };
+
+    let cancelled = tokio::select! {
+        result = chat_future => {
+            result?;
+            false
+        }
+        _ = shutdown_check => {
+            warn!("[Worker {}] Cancelled due to shutdown", worker_id);
+            true
+        }
+    };
+
+    Ok((cancelled, agent))
+}
+
+/// Collect trace data if enabled
+fn collect_trace_data(
+    trace_enabled: bool,
+    agent: &Agent,
+) -> (Option<Vec<Message>>, Option<Vec<ToolDefinition>>) {
+    if trace_enabled {
+        // Collect conversation history and tool schemas for trace output
+        (
+            Some(agent.history.get_all().to_vec()),
+            Some(agent.tools().to_vec()),
+        )
+    } else {
+        (None, None)
+    }
+}
+
+/// Log worker completion status
+fn log_completion(cancelled: bool, worker_id: &str, rule_name: &str, elapsed: f64) {
+    if cancelled {
+        info!(
+            "[Worker {}] Cancelled reviewing rule '{}' ({:.2}s) - returning partial results",
+            worker_id, rule_name, elapsed
+        );
+    } else {
+        info!(
+            "[Worker {}] Done reviewing rule '{}' ({:.2}s)",
+            worker_id, rule_name, elapsed
+        );
+    }
+}
+
 /// Run a review worker for a specific rule and set of files
 ///
 /// Returns a WorkerResult containing violations found and optionally the agent conversation trace.
@@ -215,25 +393,7 @@ pub async fn worker(
     let report = Report::new();
     let diff = Diff::new(diffs.clone());
 
-    // Helper function to build diffs section for focused files
-    let build_diffs_section = |files: &[String]| -> String {
-        let mut diffs_content = String::new();
-        for file in files {
-            if crate::util::should_include_diff(file) {
-                if let Some(diff) = diffs.get(file) {
-                    diffs_content.push_str(&format!("```diff\n{}\n```\n\n", diff));
-                }
-            }
-        }
-        if diffs_content.is_empty() {
-            String::new()
-        } else {
-            format!(
-                "Here are diffs of focused files (no need to call diff tool on them):\n\n{}\n\n",
-                diffs_content.trim()
-            )
-        }
-    };
+
 
     // Create agent with system prompt and bind tools
     let agent = Agent::new(llm)
@@ -257,80 +417,16 @@ pub async fn worker(
     all_resources.dedup();
     let resources_content = load_resources(&all_resources).await;
 
-    // Build user message: simplified if focus files match all changed files
-    let user_message = if files == all_changed_files {
-        let files_list = files.join("\n- ");
-        let commits_section = if is_root_base || commit_messages.is_empty() {
-            String::new()
-        } else {
-            format!("Commit messages:\n\n{}\n\n", commit_messages)
-        };
-
-        let diffs_section = build_diffs_section(&files);
-
-        if is_root_base {
-            format!(
-                "Rule:\n\n\
-                <rule>\n\n{}\n\n</rule>\n\n{}{}",
-                rule.instruction.trim(),
-                diffs_section,
-                resources_content
-            )
-        } else {
-            format!(
-                "{}Changed files:\n\n\
-                - {}\n\n\
-                Rule:\n\n\
-                <rule>\n\n{}\n\n</rule>\n\n{}{}",
-                commits_section,
-                files_list,
-                rule.instruction.trim(),
-                diffs_section,
-                resources_content
-            )
-        }
-    } else {
-        // Include all changed files for context, but focus on specific files
-        let all_files_list = all_changed_files.join("\n- ");
-        let focus_files_list = files.join("\n- ");
-        let commits_section = if is_root_base || commit_messages.is_empty() {
-            String::new()
-        } else {
-            format!("Commit messages:\n\n{}\n\n", commit_messages)
-        };
-
-        let diffs_section = build_diffs_section(&files);
-
-        if is_root_base {
-            format!(
-                "Focus on these files:\n\n\
-                - {}\n\n\
-                Note: For most cases, only read the focused files.\n\n\
-                Rule:\n\n\
-                <rule>\n\n{}\n\n</rule>\n\n{}{}",
-                focus_files_list,
-                rule.instruction.trim(),
-                diffs_section,
-                resources_content
-            )
-        } else {
-            format!(
-                "{}All changed files:\n\n\
-                - {}\n\n\
-                Focus on these files:\n\n\
-                - {}\n\n\
-                Note: For most cases, only read the focused files.\n\n\
-                Rule:\n\n\
-                <rule>\n\n{}\n\n</rule>\n\n{}{}",
-                commits_section,
-                all_files_list,
-                focus_files_list,
-                rule.instruction.trim(),
-                diffs_section,
-                resources_content
-            )
-        }
-    };
+    // Build user message
+    let user_message = build_user_message(
+        &files,
+        &all_changed_files,
+        &commit_messages,
+        is_root_base,
+        &rule.instruction,
+        &diffs,
+        &resources_content,
+    );
     trace!(
         "[Worker {}] Adding user message with {} files",
         worker_id,
@@ -339,64 +435,17 @@ pub async fn worker(
     trace!("[Worker {}] User message: {}", worker_id, user_message);
 
     // Run agent loop to review code with cancellation support
-    // Uses tokio::select to race between agent chat completion and shutdown signal
-    // Polls shutdown flag every 100ms to allow graceful cancellation mid-execution
-    debug!(
-        "[Worker {}] Starting agent loop for rule '{}'",
-        worker_id, rule.name
-    );
-
-    let chat_future = agent.chat(user_message);
-    let shutdown_check = async {
-        loop {
-            tokio::time::sleep(tokio::time::Duration::from_millis(
-                SHUTDOWN_POLL_INTERVAL_MS,
-            ))
-            .await;
-            if *shutdown.lock().await {
-                break;
-            }
-        }
-    };
-
-    let cancelled = tokio::select! {
-        result = chat_future => {
-            result?;
-            false
-        }
-        _ = shutdown_check => {
-            warn!("[Worker {}] Cancelled due to shutdown", worker_id);
-            true
-        }
-    };
+    let (cancelled, agent) = run_agent_with_cancellation(agent, user_message, shutdown, &worker_id, &rule.name).await?;
 
     // Collect trace data if enabled (even if cancelled)
-    let (messages, tools) = if trace_enabled {
-        // Collect conversation history and tool schemas for trace output
-        (
-            Some(agent.history.get_all().to_vec()),
-            Some(agent.tools().to_vec()),
-        )
-    } else {
-        (None, None)
-    };
+    let (messages, tools) = collect_trace_data(trace_enabled, &agent);
 
     // Extract violations from report tool's shared state
     let violations = report.violations.lock().await.clone();
 
     let elapsed = start.elapsed().as_secs_f64();
 
-    if cancelled {
-        info!(
-            "[Worker {}] Cancelled reviewing rule '{}' ({:.2}s) - returning partial results",
-            worker_id, rule.name, elapsed
-        );
-    } else {
-        info!(
-            "[Worker {}] Done reviewing rule '{}' ({:.2}s)",
-            worker_id, rule.name, elapsed
-        );
-    }
+    log_completion(cancelled, &worker_id, &rule.name, elapsed);
 
     Ok(WorkerResult {
         worker_id,
