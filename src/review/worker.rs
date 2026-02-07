@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tiny_loop::Agent;
 use tiny_loop::tool::ToolArgs;
-use tiny_loop::types::{Message, ToolDefinition, UserMessage};
+use tiny_loop::types::{Message, TimedMessage, ToolDefinition, UserMessage};
 use tokio::sync::Mutex;
 use tracing::{debug, info, trace, warn};
 
@@ -314,9 +314,13 @@ async fn run_agent_with_cancellation(
 }
 
 async fn run_agent_loop(agent: &mut Agent, user_message: String) -> anyhow::Result<()> {
-    agent.history.add(Message::User(UserMessage {
-        content: user_message,
-    }));
+    agent.history.add(TimedMessage {
+        message: Message::User(UserMessage {
+            content: user_message,
+        }),
+        timestamp: std::time::SystemTime::now(),
+        elapsed: std::time::Duration::ZERO,
+    });
 
     let mut seen_tool_calls = std::collections::HashSet::new();
 
@@ -326,8 +330,8 @@ async fn run_agent_loop(agent: &mut Agent, user_message: String) -> anyhow::Resu
         }
 
         // Check for empty report
-        for msg in agent.history.get_all() {
-            if let Message::Assistant(am) = msg {
+        for timed_msg in agent.history.get_all() {
+            if let Message::Assistant(am) = &timed_msg.message {
                 if let Some(tool_calls) = &am.tool_calls {
                     for tc in tool_calls {
                         if tc.function.name == crate::tool::report::ReportArgs::TOOL_NAME {
@@ -346,15 +350,17 @@ async fn run_agent_loop(agent: &mut Agent, user_message: String) -> anyhow::Resu
         }
 
         // Check for duplicated tool calls
-        if let Some(Message::Assistant(am)) = agent.history.get_all().last() {
-            if let Some(tool_calls) = &am.tool_calls {
-                for tc in tool_calls {
-                    let key = format!("{}:{}", tc.function.name, tc.function.arguments);
-                    if !seen_tool_calls.insert(key) {
-                        debug!("Early stop with duplicated tool call, might be dead loop");
-                        return Err(anyhow::anyhow!(
-                            "Duplicated tool call detected, might be dead loop"
-                        ));
+        if let Some(timed_msg) = agent.history.get_all().last() {
+            if let Message::Assistant(am) = &timed_msg.message {
+                if let Some(tool_calls) = &am.tool_calls {
+                    for tc in tool_calls {
+                        let key = format!("{}:{}", tc.function.name, tc.function.arguments);
+                        if !seen_tool_calls.insert(key) {
+                            debug!("Early stop with duplicated tool call, might be dead loop");
+                            return Err(anyhow::anyhow!(
+                                "Duplicated tool call detected, might be dead loop"
+                            ));
+                        }
                     }
                 }
             }
@@ -370,7 +376,14 @@ fn collect_trace_data(
     if trace_enabled {
         // Collect conversation history and tool schemas for trace output
         (
-            Some(agent.history.get_all().to_vec()),
+            Some(
+                agent
+                    .history
+                    .get_all()
+                    .iter()
+                    .map(|tm| tm.message.clone())
+                    .collect(),
+            ),
             Some(agent.tools().to_vec()),
         )
     } else {
