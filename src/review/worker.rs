@@ -159,7 +159,7 @@ pub struct WorkerResult {
     pub files: Vec<String>,
     pub blocking: bool,
     pub violations: Vec<Violation>,
-    pub messages: Option<Vec<Message>>,
+    pub messages: Option<Vec<TimedMessage>>,
     pub tools: Option<Vec<ToolDefinition>>,
     pub elapsed_secs: f64,
 }
@@ -370,18 +370,11 @@ async fn run_agent_loop(agent: &mut Agent, user_message: String) -> anyhow::Resu
 fn collect_trace_data(
     trace_enabled: bool,
     agent: &Agent,
-) -> (Option<Vec<Message>>, Option<Vec<ToolDefinition>>) {
+) -> (Option<Vec<TimedMessage>>, Option<Vec<ToolDefinition>>) {
     if trace_enabled {
         // Collect conversation history and tool schemas for trace output
         (
-            Some(
-                agent
-                    .history
-                    .get_all()
-                    .iter()
-                    .map(|tm| tm.message.clone())
-                    .collect(),
-            ),
+            Some(agent.history.get_all().to_vec()),
             Some(agent.tools().to_vec()),
         )
     } else {

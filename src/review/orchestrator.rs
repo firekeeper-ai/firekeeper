@@ -371,12 +371,7 @@ fn group_violations(
                     rule: worker_result.rule,
                     files: worker_result.files,
                     elapsed_secs: worker_result.elapsed_secs,
-                    tools: worker_result
-                        .tools
-                        .unwrap_or_default()
-                        .into_iter()
-                        .map(|t| serde_json::to_value(t).unwrap_or_default())
-                        .collect(),
+                    tools: worker_result.tools.unwrap_or_default(),
                     messages,
                 });
             }

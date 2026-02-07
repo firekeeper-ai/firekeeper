@@ -2153,9 +2153,9 @@ dependencies = [
 
 [[package]]
 name = "tiny-loop"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a3de1cb7821f5b42e5905c2cce5caf8f346de1c935408edd6aab3d683d0c41c"
+checksum = "a65fece8431552a7c285367dc8cbecfcc8a76599d865d2c5960d8e49d0c960a1"
 dependencies = [
  "anyhow",
  "async-trait",

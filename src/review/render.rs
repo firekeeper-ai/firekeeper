@@ -3,7 +3,7 @@ use crate::types::Violation;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tiny_loop::tool::ToolArgs;
-use tiny_loop::types::Message;
+use tiny_loop::types::{Message, TimedMessage, ToolDefinition};
 
 const ELAPSED_TIME_PRECISION: usize = 2;
 
@@ -34,9 +34,9 @@ pub struct TraceEntry {
     /// Time taken to complete the task in seconds
     pub elapsed_secs: f64,
     /// Tool definitions available to the agent
-    pub tools: Vec<serde_json::Value>,
+    pub tools: Vec<ToolDefinition>,
     /// Conversation messages between agent and tools
-    pub messages: Vec<Message>,
+    pub messages: Vec<TimedMessage>,
 }
 
 fn format_violation(violation: &Violation) -> String {
@@ -93,7 +93,7 @@ pub fn format_violations(
     output.trim_end().to_string()
 }
 
-fn format_tools(tools: &[serde_json::Value]) -> String {
+fn format_tools(tools: &[ToolDefinition]) -> String {
     let tools_json = serde_json::to_string_pretty(tools).unwrap_or_default();
     format!("## Tools\n\n```json\n{}\n```\n\n", tools_json)
 }
@@ -137,8 +137,8 @@ fn format_message_content(role: &str, content: &str) -> String {
     }
 }
 
-fn format_message(msg: &Message, index: usize) -> String {
-    let (role, content, tool_calls) = match msg {
+fn format_message(msg: &TimedMessage, index: usize) -> String {
+    let (role, content, tool_calls) = match &msg.message {
         Message::System(m) => ("system", Some(m.content.as_str()), None),
         Message::User(m) => ("user", Some(m.content.as_str()), None),
         Message::Assistant(m) => ("assistant", Some(m.content.as_str()), m.tool_calls.as_ref()),
@@ -304,7 +304,18 @@ mod tests {
 
     #[test]
     fn test_format_tools() {
-        let tools = vec![serde_json::json!({"name": "test_tool"})];
+        use tiny_loop::types::{Parameters, ToolFunction};
+
+        let tools = vec![ToolDefinition {
+            tool_type: "function".to_string(),
+            function: ToolFunction {
+                name: "test_tool".to_string(),
+                description: String::new(),
+                parameters: Parameters::from_schema(
+                    serde_json::from_value(serde_json::json!({})).unwrap(),
+                ),
+            },
+        }];
         let result = format_tools(&tools);
         assert!(result.contains("## Tools"));
         assert!(result.contains("```json"));
