@@ -181,11 +181,12 @@ fn write_output(
     tips_by_rule: &HashMap<String, String>,
 ) {
     let content = if path.ends_with(".json") {
-        let output = serde_json::json!({
-            "violations": violations_by_file,
-            "tips": tips_by_rule,
-        });
-        serde_json::to_string_pretty(&output).unwrap()
+        let violation_file = render::ViolationFile {
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            violations: violations_by_file.clone(),
+            tips: tips_by_rule.clone(),
+        };
+        serde_json::to_string_pretty(&violation_file).unwrap()
     } else if path.ends_with(".md") {
         render::format_violations(violations_by_file, tips_by_rule)
     } else {
@@ -204,7 +205,11 @@ fn write_output(
 /// Write trace data to file in JSON or Markdown format
 fn write_trace(path: &str, traces: &[render::TraceEntry]) {
     let content = if path.ends_with(".json") {
-        serde_json::to_string_pretty(traces).unwrap()
+        let trace_file = render::TraceFile {
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            entries: traces.to_vec(),
+        };
+        serde_json::to_string_pretty(&trace_file).unwrap()
     } else if path.ends_with(".md") {
         render::format_trace_markdown(traces)
     } else {
@@ -350,21 +355,20 @@ fn group_violations(
                 violations_by_file
                     .entry(violation.file.clone())
                     .or_insert_with(HashMap::new)
-                    .entry(worker_result.rule_name.clone())
+                    .entry(worker_result.rule.name.clone())
                     .or_insert_with(Vec::new)
                     .push(violation.clone());
             }
             if has_violations && worker_result.blocking {
-                blocking_rules_with_violations.insert(worker_result.rule_name.clone());
+                blocking_rules_with_violations.insert(worker_result.rule.name.clone());
             }
-            if let Some(tip) = &worker_result.tip {
-                tips_by_rule.insert(worker_result.rule_name.clone(), tip.clone());
+            if let Some(tip) = &worker_result.rule.tip {
+                tips_by_rule.insert(worker_result.rule.name.clone(), tip.clone());
             }
             if let Some(messages) = worker_result.messages {
                 all_traces.push(render::TraceEntry {
                     worker_id: worker_result.worker_id,
-                    rule_name: worker_result.rule_name,
-                    rule_instruction: worker_result.rule_instruction,
+                    rule: worker_result.rule,
                     files: worker_result.files,
                     elapsed_secs: worker_result.elapsed_secs,
                     tools: worker_result

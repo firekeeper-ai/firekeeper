@@ -155,14 +155,12 @@ async fn load_shell_resource(cmd: &str, content: &mut String) {
 /// Worker result containing violations and optional trace messages
 pub struct WorkerResult {
     pub worker_id: String,
-    pub rule_name: String,
-    pub rule_instruction: String,
+    pub rule: RuleBody,
     pub files: Vec<String>,
     pub blocking: bool,
     pub violations: Vec<Violation>,
     pub messages: Option<Vec<Message>>,
     pub tools: Option<Vec<ToolDefinition>>,
-    pub tip: Option<String>,
     pub elapsed_secs: f64,
 }
 
@@ -502,14 +500,12 @@ pub async fn worker(
 
     Ok(WorkerResult {
         worker_id,
-        rule_name: rule.name.clone(),
-        rule_instruction: rule.instruction.clone(),
+        rule: rule.clone(),
         files,
         blocking: rule.blocking,
         violations,
         messages,
         tools,
-        tip: rule.tip.clone(),
         elapsed_secs: elapsed,
     })
 }

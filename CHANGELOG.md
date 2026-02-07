@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Version field to JSON output schemas (`TraceFile` and `ViolationFile`)
+- Version compatibility check in `render` command (checks minor version)
+
+### Changed
+
+- **BREAKING**: Trace JSON schema now uses `TraceFile` wrapper with `version` and `entries` fields
+- **BREAKING**: Trace JSON schema now uses `rule` object (containing full `RuleBody`) instead of separate `rule_name` and `rule_instruction` fields in `TraceEntry`
+- **BREAKING**: Violation JSON schema now uses `ViolationFile` wrapper with `version`, `violations`, and `tips` fields
+- Upgraded `tiny-loop` dependency from 0.3 to 0.4
+
 ## [0.2.2] - 2026-02-07
 
 ### Added

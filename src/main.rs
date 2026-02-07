@@ -80,21 +80,30 @@ async fn main() {
                 std::process::exit(1);
             });
 
-            let markdown = if let Ok(traces) =
-                serde_json::from_str::<Vec<review::render::TraceEntry>>(&json)
+            let markdown = if let Ok(trace_file) =
+                serde_json::from_str::<review::render::TraceFile>(&json)
             {
-                review::render::format_trace_markdown(&traces)
-            } else if let Ok(output) = serde_json::from_str::<serde_json::Value>(&json) {
-                let violations = output
-                    .get("violations")
-                    .and_then(|v| serde_json::from_value(v.clone()).ok())
-                    .unwrap_or_default();
-                let tips = output
-                    .get("tips")
-                    .and_then(|v| serde_json::from_value(v.clone()).ok())
-                    .unwrap_or_default();
-                review::render::format_violations(&violations, &tips)
+                review::render::format_trace_markdown(&trace_file.entries)
+            } else if let Ok(violation_file) =
+                serde_json::from_str::<review::render::ViolationFile>(&json)
+            {
+                review::render::format_violations(&violation_file.violations, &violation_file.tips)
             } else {
+                // Check version compatibility
+                if let Ok(value) = serde_json::from_str::<serde_json::Value>(&json) {
+                    if let Some(file_version) = value.get("version").and_then(|v| v.as_str()) {
+                        let current_version = env!("CARGO_PKG_VERSION");
+                        let file_minor = file_version.split('.').nth(1);
+                        let current_minor = current_version.split('.').nth(1);
+                        if file_minor != current_minor {
+                            error!(
+                                "Incompatible file version: {} (current: {})",
+                                file_version, current_version
+                            );
+                            std::process::exit(1);
+                        }
+                    }
+                }
                 error!("Invalid JSON format");
                 std::process::exit(1);
             };

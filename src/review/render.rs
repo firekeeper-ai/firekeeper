@@ -1,3 +1,4 @@
+use crate::rule::body::RuleBody;
 use crate::types::Violation;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -6,15 +7,28 @@ use tiny_loop::types::Message;
 
 const ELAPSED_TIME_PRECISION: usize = 2;
 
-/// Trace entry containing worker task details and agent conversation
+/// Trace file schema containing all trace entries
 #[derive(Serialize, Deserialize)]
+pub struct TraceFile {
+    pub version: String,
+    pub entries: Vec<TraceEntry>,
+}
+
+/// Violation file schema containing violations and tips
+#[derive(Serialize, Deserialize)]
+pub struct ViolationFile {
+    pub version: String,
+    pub violations: HashMap<String, HashMap<String, Vec<Violation>>>,
+    pub tips: HashMap<String, String>,
+}
+
+/// Trace entry containing worker task details and agent conversation
+#[derive(Serialize, Deserialize, Clone)]
 pub struct TraceEntry {
     /// Unique identifier for the worker
     pub worker_id: String,
-    /// Name of the rule being checked
-    pub rule_name: String,
-    /// Instruction text for the rule
-    pub rule_instruction: String,
+    /// Rule being checked
+    pub rule: RuleBody,
     /// List of files being reviewed
     pub files: Vec<String>,
     /// Time taken to complete the task in seconds
@@ -171,8 +185,8 @@ pub fn format_trace_markdown(traces: &[TraceEntry]) -> String {
     for trace in traces {
         output.push_str(&format!("# Worker: {}\n\n", trace.worker_id));
         output.push_str(&format_trace_rule(
-            &trace.rule_name,
-            &trace.rule_instruction,
+            &trace.rule.name,
+            &trace.rule.instruction,
         ));
         output.push_str(&format!(
             "**Elapsed:** {:.prec$}s\n\n",
