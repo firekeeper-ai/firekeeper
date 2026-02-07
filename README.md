@@ -81,6 +81,12 @@ Review uncommitted changes or the last commit:
 firekeeper review
 ```
 
+To add or update rules, just ask your coding agent to modify the config:
+
+```txt
+add a rule to firekeeper.toml: update CHANGELOG.md when Rust files change
+```
+
 <details>
 
 <summary>More examples</summary>
