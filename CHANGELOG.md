@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Supports both trace and output JSON formats
   - Optional `--output` flag (prints to stdout if omitted)
 - SIGTERM signal handling for graceful shutdown on Unix systems (in addition to existing SIGINT/Ctrl+C support)
+- Early stop optimization in agent loop:
+  - Stops immediately when report tool is called with 0 violations
+  - Detects duplicated tool calls to prevent dead loops (returns error)
 
 ## [0.2.1] - 2026-02-05
 

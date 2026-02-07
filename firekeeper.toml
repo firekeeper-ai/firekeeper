@@ -198,3 +198,44 @@ scope = ["**/*"]
 # Increase for simple rules that only check changed files (e.g. scan for hardcoded credentials).
 # Decrease for complex rules that scan many additional files (e.g. documentation sync).
 max_files_per_task = 10
+
+# Code review rules
+[[rules]]
+# Human-readable rule name, invisible to LLM
+name = "Use Tool Args Structs"
+# Human-readable description, invisible to LLM (optional)
+description = "Use generated tool args structs and TOOL_NAME constants instead of string literals"
+# Detailed instructions for the LLM on how to check this rule
+instruction = """
+Only read the focused files. Don't read any other files.
+
+Check if code uses tool args structs and TOOL_NAME constants instead of hardcoded strings.
+
+Steps:
+1. Read focused files and look for tool-related code
+2. Check if tool names are compared using string literals
+3. Check if tool arguments are accessed via JSON parsing instead of deserializing to args structs
+4. Report violations for hardcoded tool names or manual JSON parsing
+
+Violation criteria - Report if:
+- Tool names compared with string literals (e.g., tc.function.name == "report")
+- Tool arguments parsed manually with serde_json::from_str::<Value> and .get()
+- Should use generated XxxArgs::TOOL_NAME constant and deserialize to XxxArgs struct
+
+Exemptions - Do NOT report:
+- Code in tool definition files (src/tool/*.rs)
+- Test code
+- Generic tool handling code that doesn't know specific tool types
+"""
+# Tip for downstream processors (e.g. coding agents) to fix violations (optional)
+tip = """
+Replace string literals with XxxArgs::TOOL_NAME constants.
+Replace manual JSON parsing with serde_json::from_str::<XxxArgs>().
+Import tiny_loop::tool::ToolArgs trait if needed.
+"""
+# Glob patterns to match files this rule applies to (optional, defaults to ["**/*"])
+scope = ["**/*.rs"]
+# Maximum number of files to review per task (optional, overrides global config).
+# Increase for simple rules that only check changed files (e.g. scan for hardcoded credentials).
+# Decrease for complex rules that scan many additional files (e.g. documentation sync).
+max_files_per_task = 10

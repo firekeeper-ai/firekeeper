@@ -5,7 +5,8 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tiny_loop::Agent;
-use tiny_loop::types::{Message, ToolDefinition};
+use tiny_loop::tool::ToolArgs;
+use tiny_loop::types::{Message, ToolDefinition, UserMessage};
 use tokio::sync::Mutex;
 use tracing::{debug, info, trace, warn};
 
@@ -285,7 +286,7 @@ async fn run_agent_with_cancellation(
         worker_id, rule_name
     );
 
-    let chat_future = agent.chat(user_message);
+    let chat_future = run_agent_loop(&mut agent, user_message);
     let shutdown_check = async {
         loop {
             tokio::time::sleep(tokio::time::Duration::from_millis(
@@ -310,6 +311,55 @@ async fn run_agent_with_cancellation(
     };
 
     Ok((cancelled, agent))
+}
+
+async fn run_agent_loop(agent: &mut Agent, user_message: String) -> anyhow::Result<()> {
+    agent.history.add(Message::User(UserMessage {
+        content: user_message,
+    }));
+
+    let mut seen_tool_calls = std::collections::HashSet::new();
+
+    loop {
+        if let Some(_) = agent.step().await? {
+            return Ok(());
+        }
+
+        // Check for empty report
+        for msg in agent.history.get_all() {
+            if let Message::Assistant(am) = msg {
+                if let Some(tool_calls) = &am.tool_calls {
+                    for tc in tool_calls {
+                        if tc.function.name == crate::tool::report::ReportArgs::TOOL_NAME {
+                            if let Ok(args) = serde_json::from_str::<crate::tool::report::ReportArgs>(
+                                &tc.function.arguments,
+                            ) {
+                                if args.violations.is_empty() {
+                                    debug!("Early stop due to empty violation");
+                                    return Ok(());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Check for duplicated tool calls
+        if let Some(Message::Assistant(am)) = agent.history.get_all().last() {
+            if let Some(tool_calls) = &am.tool_calls {
+                for tc in tool_calls {
+                    let key = format!("{}:{}", tc.function.name, tc.function.arguments);
+                    if !seen_tool_calls.insert(key) {
+                        debug!("Early stop with duplicated tool call, might be dead loop");
+                        return Err(anyhow::anyhow!(
+                            "Duplicated tool call detected, might be dead loop"
+                        ));
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// Collect trace data if enabled
@@ -384,8 +434,6 @@ pub async fn worker(
     let report = Report::new();
     let diff = Diff::new(diffs.clone());
 
-
-
     // Create agent with system prompt and bind tools
     let agent = Agent::new(llm)
         .system("You are a code reviewer. Your task is to review code changes against a specific rule. \
@@ -426,7 +474,8 @@ pub async fn worker(
     trace!("[Worker {}] User message: {}", worker_id, user_message);
 
     // Run agent loop to review code with cancellation support
-    let (cancelled, agent) = run_agent_with_cancellation(agent, user_message, shutdown, &worker_id, &rule.name).await?;
+    let (cancelled, agent) =
+        run_agent_with_cancellation(agent, user_message, shutdown, &worker_id, &rule.name).await?;
 
     // Collect trace data if enabled (even if cancelled)
     let (messages, tools) = collect_trace_data(trace_enabled, &agent);

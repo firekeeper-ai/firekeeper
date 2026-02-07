@@ -133,13 +133,18 @@ pub async fn orchestrate_and_run(
     // Execute workers with optional concurrency limit
     let results = execute_workers(futures, max_parallel_workers, shutdown.clone()).await;
 
-    let (_succeeded, failed, _was_interrupted) = log_results(&results, total_tasks, &shutdown).await;
+    let (_succeeded, failed, _was_interrupted) =
+        log_results(&results, total_tasks, &shutdown).await;
 
     let grouped = group_violations(results);
 
     // Output results to file or console
     if let Some(output_path) = output {
-        write_output(output_path, &grouped.violations_by_file, &grouped.tips_by_rule);
+        write_output(
+            output_path,
+            &grouped.violations_by_file,
+            &grouped.tips_by_rule,
+        );
     } else {
         print_violations(&grouped.violations_by_file, &grouped.tips_by_rule);
     }
@@ -330,7 +335,9 @@ struct GroupedResults {
 }
 
 /// Group violations by file, then by rule name
-fn group_violations(results: Vec<Result<worker::WorkerResult, Box<dyn std::error::Error>>>) -> GroupedResults {
+fn group_violations(
+    results: Vec<Result<worker::WorkerResult, Box<dyn std::error::Error>>>,
+) -> GroupedResults {
     let mut violations_by_file = HashMap::new();
     let mut tips_by_rule = HashMap::new();
     let mut blocking_rules_with_violations = std::collections::HashSet::new();
