@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tool definitions and tool call arguments now displayed in YAML instead of JSON for better readability
 - Simplified markdown fence backtick detection to only check lines that are entirely backticks
 - Trace markdown now uses quote blocks (>) for rule instructions, system/user/assistant messages, and think tool reasoning instead of code blocks
+- Trace markdown now always renders all messages including empty ones with "Empty message." indicator
 - YAML output in trace markdown now trimmed of trailing whitespace
 
 ## [0.3.0] - 2026-02-07

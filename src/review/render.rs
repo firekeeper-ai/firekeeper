@@ -179,14 +179,14 @@ fn format_message(msg: &TimedMessage, index: usize) -> String {
     let mut output = String::new();
 
     if let Some(content) = content {
-        if !content.is_empty() {
-            output.push_str(&format_message_header(
-                index,
-                role,
-                &timestamp_str,
-                msg.elapsed.as_secs_f64(),
-            ));
+        output.push_str(&format_message_header(
+            index,
+            role,
+            &timestamp_str,
+            msg.elapsed.as_secs_f64(),
+        ));
 
+        if !content.is_empty() {
             if role == "system" || role == "user" || role == "tool" {
                 output.push_str("<details>\n<summary>Show content</summary>\n\n");
                 output.push_str(&format_message_content(role, content));
@@ -194,6 +194,8 @@ fn format_message(msg: &TimedMessage, index: usize) -> String {
             } else {
                 output.push_str(&format_message_content(role, content));
             }
+        } else {
+            output.push_str("Empty message.\n\n");
         }
     }
 
