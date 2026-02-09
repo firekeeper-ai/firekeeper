@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `sh` tool uses character-based truncation (default: 5000 chars) instead of line-based
 - `sh` tool has configurable timeout (default: 5 seconds)
 - No Hardcoded Credentials rule now excludes lock files and ignore files by default
+- Trace markdown now renders `sh` and `lua` tool calls as code blocks (```sh, ```lua) when only required arguments are provided
 
 ### Added
 
