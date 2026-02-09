@@ -23,6 +23,15 @@ pub async fn sh(
     /// Optional timeout in seconds (default: 5)
     timeout_secs: Option<u64>,
 ) -> String {
+    let result = execute_sh(command, timeout_secs.unwrap_or(TIMEOUT_SECS)).await;
+    truncate_with_hint(
+        result,
+        start_char.unwrap_or(0),
+        num_chars.unwrap_or(DEFAULT_NUM_CHARS),
+    )
+}
+
+pub async fn execute_sh(command: String, timeout_secs: u64) -> String {
     let parts = match shell_words::split(&command) {
         Ok(p) => p,
         Err(e) => return format!("Failed to parse command: {}", e),
@@ -50,12 +59,10 @@ pub async fn sh(
         Err(e) => return format!("Failed to execute command: {}", e),
     };
 
-    let timeout = tokio::time::sleep(tokio::time::Duration::from_secs(
-        timeout_secs.unwrap_or(TIMEOUT_SECS),
-    ));
+    let timeout = tokio::time::sleep(tokio::time::Duration::from_secs(timeout_secs));
     tokio::pin!(timeout);
 
-    let output = tokio::select! {
+    tokio::select! {
         result = child.wait() => {
             match result {
                 Ok(status) => {
@@ -82,15 +89,9 @@ pub async fn sh(
         }
         _ = &mut timeout => {
             let _ = child.kill().await;
-            format!("Command timed out after {} seconds", timeout_secs.unwrap_or(TIMEOUT_SECS))
+            format!("Command timed out after {} seconds", timeout_secs)
         }
-    };
-
-    truncate_with_hint(
-        output,
-        start_char.unwrap_or(0),
-        num_chars.unwrap_or(DEFAULT_NUM_CHARS),
-    )
+    }
 }
 
 #[cfg(test)]

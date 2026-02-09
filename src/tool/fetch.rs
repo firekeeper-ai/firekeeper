@@ -25,6 +25,15 @@ pub async fn fetch(
 }
 
 async fn fetch_one(url: &str, start_char: Option<usize>, num_chars: Option<usize>) -> String {
+    let markdown = execute_fetch(url).await;
+    truncate_with_hint(
+        markdown,
+        start_char.unwrap_or(0),
+        num_chars.unwrap_or(DEFAULT_NUM_CHARS),
+    )
+}
+
+pub async fn execute_fetch(url: &str) -> String {
     let response = match reqwest::get(url).await {
         Ok(r) => r,
         Err(e) => return format!("Error fetching URL: {}", e),
@@ -35,12 +44,7 @@ async fn fetch_one(url: &str, start_char: Option<usize>, num_chars: Option<usize
         Err(e) => return format!("Error reading response: {}", e),
     };
 
-    let markdown = html2md::parse_html(&html);
-    truncate_with_hint(
-        markdown,
-        start_char.unwrap_or(0),
-        num_chars.unwrap_or(DEFAULT_NUM_CHARS),
-    )
+    html2md::parse_html(&html)
 }
 
 #[cfg(test)]

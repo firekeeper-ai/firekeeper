@@ -24,14 +24,11 @@ pub fn create_provider(
     Ok(provider)
 }
 
-/// Register common tools (sh, fetch, think) to an agent
+/// Register common tools (sh, fetch, think, lua) to an agent
 pub fn register_common_tools(agent: Agent) -> Agent {
     agent
         .tool(crate::tool::sh::sh)
         .tool(crate::tool::fetch::fetch)
         .tool(crate::tool::think::think)
-
-    // Lua tool disabled: limited practical value currently.
-    // Kept as reference for code execution pattern implementation.
-    // .tool(crate::tool::lua::lua)
+        .tool(crate::tool::lua::lua)
 }
