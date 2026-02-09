@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Trace markdown now uses "Focused Files" instead of "Files"
 - Trace markdown now uses h4 heading for "Tool Calls"
 - Tool definitions and tool call arguments now displayed in YAML instead of JSON for better readability
+- Simplified markdown fence backtick detection to only check lines that are entirely backticks
+- Assistant messages in trace markdown now wrapped in markdown code blocks for consistency
+- YAML output in trace markdown now trimmed of trailing whitespace
 
 ## [0.3.0] - 2026-02-07
 

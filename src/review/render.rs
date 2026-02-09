@@ -96,7 +96,7 @@ pub fn format_violations(
 
 fn format_tools(tools: &[ToolDefinition]) -> String {
     let tools_yaml = serde_yaml_ng::to_string(tools).unwrap_or_default();
-    format!("## Tools\n\n```yaml\n{}\n```\n\n", tools_yaml)
+    format!("## Tools\n\n```yaml\n{}\n```\n\n", tools_yaml.trim())
 }
 
 fn format_focused_files(files: &[String]) -> String {
@@ -126,7 +126,8 @@ fn format_tool_call(tc: &tiny_loop::types::ToolCall) -> String {
         .unwrap_or_else(|| tc.function.arguments.clone());
     format!(
         "- **{}**\n\n```yaml\n{}\n```\n\n",
-        tc.function.name, formatted_args
+        tc.function.name,
+        formatted_args.trim()
     )
 }
 
@@ -134,8 +135,7 @@ fn format_message_content(role: &str, content: &str) -> String {
     let backticks = get_fence_backticks(content);
     match role {
         "tool" => format!("{}\n{}\n{}\n\n", backticks, content, backticks),
-        "system" | "user" => format!("{}markdown\n{}\n{}\n\n", backticks, content, backticks),
-        _ => format!("{}\n\n", content),
+        _ => format!("{}markdown\n{}\n{}\n\n", backticks, content, backticks),
     }
 }
 
@@ -213,7 +213,7 @@ pub fn format_trace_markdown(traces: &[TraceEntry]) -> String {
         for (i, msg) in trace.messages.iter().enumerate() {
             output.push_str(&format_message(msg, i));
         }
-        output.push_str("\n---\n\n");
+        output.push_str("---\n\n");
     }
     output
 }
@@ -223,9 +223,9 @@ pub fn format_trace_markdown(traces: &[TraceEntry]) -> String {
 fn get_fence_backticks(content: &str) -> String {
     const MIN_BACKTICKS: usize = 3;
     let max_backticks = content
-        .split(|c: char| c != '`')
-        .filter(|s| !s.is_empty())
-        .map(|s| s.len())
+        .lines()
+        .filter(|line| line.chars().all(|c| c == '`'))
+        .map(|line| line.len())
         .max()
         .unwrap_or(0);
     "`".repeat((max_backticks + 1).max(MIN_BACKTICKS))
@@ -239,8 +239,8 @@ mod tests {
     fn test_get_fence_backticks() {
         assert_eq!(get_fence_backticks("no backticks"), "```");
         assert_eq!(get_fence_backticks("has ` one"), "```");
-        assert_eq!(get_fence_backticks("has ``` three"), "````");
-        assert_eq!(get_fence_backticks("has ```` four"), "`````");
+        assert_eq!(get_fence_backticks("```"), "````");
+        assert_eq!(get_fence_backticks("````"), "`````");
     }
 
     #[test]
@@ -340,7 +340,7 @@ mod tests {
         assert!(format_message_content("user", "content").contains("markdown"));
         assert_eq!(
             format_message_content("assistant", "content"),
-            "content\n\n"
+            "```markdown\ncontent\n```\n\n"
         );
     }
 }
