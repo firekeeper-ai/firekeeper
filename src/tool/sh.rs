@@ -9,7 +9,9 @@ const WHITELIST: &[&str] = &["ls", "cat", "grep", "find", "head", "tail", "wc"];
 /// Default timeout for shell command execution
 const TIMEOUT_SECS: u64 = 5;
 
-/// Execute whitelisted shell commands safely. Allowed commands: ls, cat, grep, find, head, tail, wc
+/// Execute an allowlisted shell command.
+/// Allowed commands: ls, cat, grep, find, head, tail, wc.
+/// Redirections are not allowed.
 #[tool]
 pub async fn sh(
     /// Shell command string (e.g., "ls -la /tmp")
