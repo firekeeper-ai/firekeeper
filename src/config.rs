@@ -7,7 +7,11 @@ use toml_scaffold::TomlScaffold;
 
 use crate::rule::body::RuleBody;
 
-/// Configuration for Firekeeper
+/// Configuration for Firekeeper.
+///
+/// See: https://github.com/firekeeper-ai/firekeeper
+///
+/// Note for AI agents: Preserve all comments when modifying this configuration
 #[derive(Deserialize, Serialize, Debug, JsonSchema, TomlScaffold)]
 #[serde(default)]
 pub struct Config {
