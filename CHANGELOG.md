@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `lua` tool for executing Lua scripts with `sh()` and `fetch()` functions to call multiple tools in one script
+- Default LLM configuration now includes `reasoning.effort = "medium"` for balanced review quality and performance
 - `shell-words` dependency for safe shell command parsing
 - `truncate_with_hint` utility function to eliminate code duplication between tools
 

@@ -64,7 +64,10 @@ impl Default for LlmConfig {
                 ("X-Title".to_string(), "firekeeper.ai".to_string()),
             ]),
             body: json!({
-                "parallel_tool_calls": true
+                "parallel_tool_calls": true,
+                "reasoning": {
+                    "effort": "medium",
+                },
             }),
         }
     }

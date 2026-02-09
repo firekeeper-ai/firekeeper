@@ -18,6 +18,9 @@ HTTP-Referer = "https://github.com/firekeeper-ai/firekeeper"
 [llm.body]
 parallel_tool_calls = true
 
+[llm.body.reasoning]
+effort = "medium"
+
 # Code review configuration
 [review]
 # Maximum number of files to review per task
