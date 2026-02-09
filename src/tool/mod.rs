@@ -1,10 +1,7 @@
 pub mod diff;
 pub mod fetch;
-pub mod glob;
-pub mod grep;
-pub mod ls;
-pub mod read;
 pub mod report;
+pub mod sh;
 pub mod think;
 pub mod utils;
 // pub mod lua;

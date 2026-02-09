@@ -63,8 +63,35 @@ fn find_files_by_glob(pattern: &str) -> Vec<String> {
     };
 
     let mut matches = Vec::new();
-    let _ = crate::tool::glob::glob_recursive(&base_path, &globset, &mut matches, 0);
+    let _ = glob_recursive(&base_path, &globset, &mut matches, 0);
     matches
+}
+
+fn glob_recursive(
+    path: &std::path::Path,
+    globset: &globset::GlobSet,
+    matches: &mut Vec<String>,
+    depth: usize,
+) -> std::io::Result<()> {
+    for entry in std::fs::read_dir(path)? {
+        let entry = entry?;
+        let entry_path = entry.path();
+
+        if entry_path.is_file() {
+            if let Some(path_str) = entry_path.to_str() {
+                let relative = path_str.strip_prefix("./").unwrap_or(path_str);
+                if globset.is_match(path_str) || globset.is_match(relative) {
+                    matches.push(path_str.to_string());
+                }
+            }
+        }
+
+        if entry_path.is_dir() {
+            glob_recursive(&entry_path, globset, matches, depth + 1)?;
+        }
+    }
+
+    Ok(())
 }
 
 /// Load file:// resources

@@ -1,24 +1,6 @@
 use tiny_loop::tool::tool;
 
-use super::utils::truncate_text_by_chars;
-
-/// Default number of characters to fetch from a URL
-const DEFAULT_NUM_CHARS: usize = 5000;
-
-fn process_html(html: String, start_char: usize, num_chars: usize) -> String {
-    let markdown = html2md::parse_html(&html);
-    let result = truncate_text_by_chars(markdown, start_char, num_chars);
-
-    if result.truncated {
-        format!(
-            "{}\nHint: Use start_char={} to read more.",
-            result.content,
-            start_char + num_chars
-        )
-    } else {
-        result.content
-    }
-}
+use super::utils::{DEFAULT_NUM_CHARS, truncate_with_hint};
 
 /// Fetch webpages and convert HTML to Markdown
 #[tool]
@@ -53,8 +35,9 @@ async fn fetch_one(url: &str, start_char: Option<usize>, num_chars: Option<usize
         Err(e) => return format!("Error reading response: {}", e),
     };
 
-    process_html(
-        html,
+    let markdown = html2md::parse_html(&html);
+    truncate_with_hint(
+        markdown,
         start_char.unwrap_or(0),
         num_chars.unwrap_or(DEFAULT_NUM_CHARS),
     )
@@ -65,17 +48,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_process_html_basic() {
+    fn test_fetch_html_basic() {
         let html = "<h1>Title</h1><p>Content</p>".to_string();
-        let result = process_html(html, 0, 5000);
+        let markdown = html2md::parse_html(&html);
+        let result = truncate_with_hint(markdown, 0, 5000);
         assert!(result.contains("Title"));
         assert!(result.contains("Content"));
     }
 
     #[test]
-    fn test_process_html_with_truncation() {
+    fn test_fetch_html_with_truncation() {
         let html = "<p>Hello World</p>".to_string();
-        let result = process_html(html, 0, 5);
+        let markdown = html2md::parse_html(&html);
+        let result = truncate_with_hint(markdown, 0, 5);
         assert!(result.contains("truncated"));
     }
 }
