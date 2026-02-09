@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- No Hardcoded Credentials rule now excludes lock files and ignore files by default
+
 ## [0.3.1] - 2026-02-09
 
 ### Added

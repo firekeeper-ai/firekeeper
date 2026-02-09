@@ -64,6 +64,10 @@ fn default_non_code_exclude() -> Vec<String> {
     ]
 }
 
+fn default_lock_and_ignore_exclude() -> Vec<String> {
+    vec!["*.lock".into(), "*ignore".into()]
+}
+
 impl RuleBody {
     pub fn no_code_duplication() -> Self {
         Self {
@@ -184,7 +188,7 @@ Exemptions - Do NOT report:
 "#
             .into(),
             scope: default_scope(),
-            exclude: vec![],
+            exclude: default_lock_and_ignore_exclude(),
             // High value for simple rule that only checks changed files
             max_files_per_task: Some(10),
             blocking: true,

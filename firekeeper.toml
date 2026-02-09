@@ -223,7 +223,7 @@ Exemptions - Do NOT report:
 # Glob patterns to match files this rule applies to (optional, defaults to ["**/*"])
 scope = ["**/*"]
 # Glob patterns to exclude files from this rule (optional, defaults to [])
-exclude = []
+exclude = ["*.lock", "*ignore"]
 # Maximum number of files to review per task (optional, overrides global config).
 # Increase for simple rules that only check changed files (e.g. scan for hardcoded credentials).
 # Decrease for complex rules that scan many additional files (e.g. documentation sync).
