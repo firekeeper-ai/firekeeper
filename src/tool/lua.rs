@@ -1,4 +1,4 @@
-use mlua::Lua;
+use mlua::{Lua, LuaSerdeExt};
 use tiny_loop::tool::tool;
 
 use super::fetch::execute_fetch;
@@ -55,7 +55,12 @@ pub async fn lua(
                 Ok(str_val) => str_val.to_string(),
                 Err(e) => format!("Error converting Lua string to UTF-8: {}", e),
             },
-            other => format!("{:?}", other),
+            other => match lua.from_value::<serde_json::Value>(other.clone()) {
+                Ok(json_val) => {
+                    serde_json::to_string(&json_val).unwrap_or_else(|e| format!("{:?}", e))
+                }
+                Err(e) => format!("{:?}", e),
+            },
         },
         Err(e) => format!("Lua error: {}", e),
     };
@@ -128,5 +133,18 @@ mod tests {
         };
         let result = lua(args).await;
         assert!(result.contains("Hint: Use start_char=50"));
+    }
+
+    #[tokio::test]
+    async fn test_lua_json_serialization() {
+        let args = LuaArgs {
+            script: r#"return {a = 1, b = "test", c = true}"#.to_string(),
+            start_char: None,
+            num_chars: None,
+        };
+        let result = lua(args).await;
+        assert!(result.contains(r#""a":1"#) || result.contains(r#""a": 1"#));
+        assert!(result.contains(r#""b":"test""#) || result.contains(r#""b": "test""#));
+        assert!(result.contains(r#""c":true"#) || result.contains(r#""c": true"#));
     }
 }
