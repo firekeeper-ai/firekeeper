@@ -75,22 +75,22 @@ async fn main() {
             .await;
         }
         Commands::Render(args) => {
-            let json = std::fs::read_to_string(&args.input).unwrap_or_else(|e| {
+            let content = std::fs::read_to_string(&args.input).unwrap_or_else(|e| {
                 error!("Failed to read input file: {}", e);
                 std::process::exit(1);
             });
 
             let markdown = if let Ok(trace_file) =
-                serde_json::from_str::<review::render::TraceFile>(&json)
+                serde_json::from_str::<review::render::TraceFile>(&content)
             {
                 review::render::format_trace_markdown(&trace_file.entries)
             } else if let Ok(violation_file) =
-                serde_json::from_str::<review::render::ViolationFile>(&json)
+                serde_json::from_str::<review::render::ViolationFile>(&content)
             {
                 review::render::format_violations(&violation_file.violations, &violation_file.tips)
             } else {
                 // Check version compatibility
-                if let Ok(value) = serde_json::from_str::<serde_json::Value>(&json) {
+                if let Ok(value) = serde_json::from_str::<serde_json::Value>(&content) {
                     if let Some(file_version) = value.get("version").and_then(|v| v.as_str()) {
                         let current_version = env!("CARGO_PKG_VERSION");
                         let file_minor = file_version.split('.').nth(1);
@@ -118,5 +118,46 @@ async fn main() {
                 println!("{}", markdown);
             }
         }
+        Commands::Config(args) => match &args.command {
+            cli::ConfigCommands::Format => {
+                let content = std::fs::read_to_string(&args.config).unwrap_or_else(|e| {
+                    error!("Failed to read config file: {}", e);
+                    std::process::exit(1);
+                });
+
+                let config: config::Config = toml::from_str(&content).unwrap_or_else(|e| {
+                    error!("Failed to parse TOML: {}", e);
+                    std::process::exit(1);
+                });
+
+                let output = config.to_scaffold().unwrap_or_else(|e| {
+                    error!("Failed to format TOML: {}", e);
+                    std::process::exit(1);
+                });
+
+                std::fs::write(&args.config, output).unwrap_or_else(|e| {
+                    error!("Failed to write config file: {}", e);
+                    std::process::exit(1);
+                });
+
+                info!("Formatted {}", args.config);
+            }
+            cli::ConfigCommands::Validate => {
+                let content = std::fs::read_to_string(&args.config).unwrap_or_else(|e| {
+                    error!("Failed to read config file: {}", e);
+                    std::process::exit(1);
+                });
+
+                match toml::from_str::<config::Config>(&content) {
+                    Ok(_) => {
+                        info!("Config is valid: {}", args.config);
+                    }
+                    Err(e) => {
+                        error!("Invalid config: {}", e);
+                        std::process::exit(1);
+                    }
+                }
+            }
+        },
     }
 }

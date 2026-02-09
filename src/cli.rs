@@ -36,6 +36,8 @@ pub enum Commands {
     Review(ReviewArgs),
     /// Render JSON trace/output to Markdown
     Render(RenderArgs),
+    /// Config file operations
+    Config(ConfigArgs),
 }
 
 /// Arguments for the init command
@@ -100,4 +102,24 @@ pub struct RenderArgs {
     /// Output Markdown file path (prints to stdout if omitted)
     #[arg(long)]
     pub output: Option<String>,
+}
+
+/// Arguments for the config command
+#[derive(Parser, Debug)]
+pub struct ConfigArgs {
+    /// Config file path
+    #[arg(long, global = true, default_value = "firekeeper.toml")]
+    pub config: String,
+
+    #[command(subcommand)]
+    pub command: ConfigCommands,
+}
+
+/// Config subcommands
+#[derive(Subcommand, Debug)]
+pub enum ConfigCommands {
+    /// Format config file with comments
+    Format,
+    /// Validate config file
+    Validate,
 }

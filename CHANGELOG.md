@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `config` command with `format` and `validate` subcommands for config file operations
+- `config format` re-renders TOML config with schema-derived comments
+- `config validate` checks TOML config syntax and structure
+
+### Changed
+
+- Upgraded `toml-scaffold` dependency from 0.1 to 0.2
+- Added documentation and AI agent note to `Config` struct
+
 ## [0.3.0] - 2026-02-07
 
 ### Added
