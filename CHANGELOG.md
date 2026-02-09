@@ -13,11 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `config format` re-renders TOML config with schema-derived comments
 - `config validate` checks TOML config syntax and structure
 - Overthinking detection in `think` tool (warns when reasoning exceeds 10 lines or 1500 chars)
+- `serde_yaml_ng` dependency for YAML formatting
 
 ### Changed
 
 - Upgraded `toml-scaffold` dependency from 0.1 to 0.2
 - Added documentation and AI agent note to `Config` struct
+- Trace markdown now displays elapsed time in worker heading
+- Trace markdown now uses "Focused Files" instead of "Files"
+- Trace markdown now uses h4 heading for "Tool Calls"
+- Tool definitions and tool call arguments now displayed in YAML instead of JSON for better readability
 
 ## [0.3.0] - 2026-02-07
 

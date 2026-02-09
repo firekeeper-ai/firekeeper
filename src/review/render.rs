@@ -95,12 +95,12 @@ pub fn format_violations(
 }
 
 fn format_tools(tools: &[ToolDefinition]) -> String {
-    let tools_json = serde_json::to_string_pretty(tools).unwrap_or_default();
-    format!("## Tools\n\n```json\n{}\n```\n\n", tools_json)
+    let tools_yaml = serde_yaml_ng::to_string(tools).unwrap_or_default();
+    format!("## Tools\n\n```yaml\n{}\n```\n\n", tools_yaml)
 }
 
-fn format_files(files: &[String]) -> String {
-    let mut output = String::from("## Files\n\n");
+fn format_focused_files(files: &[String]) -> String {
+    let mut output = String::from("## Focused Files\n\n");
     for file in files {
         output.push_str(&format!("- {}\n", file));
     }
@@ -121,10 +121,11 @@ fn format_tool_call(tc: &tiny_loop::types::ToolCall) -> String {
         }
     }
     let formatted_args = serde_json::from_str::<serde_json::Value>(&tc.function.arguments)
-        .and_then(|v| serde_json::to_string_pretty(&v))
-        .unwrap_or_else(|_| tc.function.arguments.clone());
+        .ok()
+        .and_then(|v| serde_yaml_ng::to_string(&v).ok())
+        .unwrap_or_else(|| tc.function.arguments.clone());
     format!(
-        "- **{}**\n\n```json\n{}\n```\n\n",
+        "- **{}**\n\n```yaml\n{}\n```\n\n",
         tc.function.name, formatted_args
     )
 }
@@ -170,7 +171,7 @@ fn format_message(msg: &TimedMessage, index: usize) -> String {
     }
 
     if let Some(tool_calls) = tool_calls {
-        output.push_str("**Tool Calls:**\n\n");
+        output.push_str("#### Tool Calls\n\n");
         for tc in tool_calls {
             output.push_str(&format_tool_call(tc));
         }
@@ -194,18 +195,18 @@ fn format_trace_rule(rule_name: &str, rule_instruction: &str) -> String {
 pub fn format_trace_markdown(traces: &[TraceEntry]) -> String {
     let mut output = String::new();
     for trace in traces {
-        output.push_str(&format!("# Worker: {}\n\n", trace.worker_id));
+        output.push_str(&format!(
+            "# Worker: {} (Elapsed: {:.prec$}s)\n\n",
+            trace.worker_id,
+            trace.elapsed_secs,
+            prec = ELAPSED_TIME_PRECISION
+        ));
         output.push_str(&format_trace_rule(
             &trace.rule.name,
             &trace.rule.instruction,
         ));
-        output.push_str(&format!(
-            "**Elapsed:** {:.prec$}s\n\n",
-            trace.elapsed_secs,
-            prec = ELAPSED_TIME_PRECISION
-        ));
 
-        output.push_str(&format_files(&trace.files));
+        output.push_str(&format_focused_files(&trace.files));
         output.push_str(&format_tools(&trace.tools));
 
         output.push_str("## Messages\n\n");
@@ -222,8 +223,7 @@ pub fn format_trace_markdown(traces: &[TraceEntry]) -> String {
 fn get_fence_backticks(content: &str) -> String {
     const MIN_BACKTICKS: usize = 3;
     let max_backticks = content
-        .as_bytes()
-        .split(|&b| b != b'`')
+        .split(|c: char| c != '`')
         .filter(|s| !s.is_empty())
         .map(|s| s.len())
         .max()
@@ -305,10 +305,10 @@ mod tests {
     }
 
     #[test]
-    fn test_format_files() {
+    fn test_format_focused_files() {
         let files = vec!["file1.rs".to_string(), "file2.rs".to_string()];
-        let result = format_files(&files);
-        assert!(result.contains("## Files"));
+        let result = format_focused_files(&files);
+        assert!(result.contains("## Focused Files"));
         assert!(result.contains("- file1.rs"));
         assert!(result.contains("- file2.rs"));
     }
@@ -329,7 +329,7 @@ mod tests {
         }];
         let result = format_tools(&tools);
         assert!(result.contains("## Tools"));
-        assert!(result.contains("```json"));
+        assert!(result.contains("```yaml"));
         assert!(result.contains("test_tool"));
     }
 
