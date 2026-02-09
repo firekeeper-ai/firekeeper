@@ -213,7 +213,7 @@ fn wrap_in_ref_block(content: &str) -> String {
 
 fn format_trace_rule(rule_name: &str, rule_instruction: &str) -> String {
     format!(
-        "## Rule: {}\n\n{}\n\n",
+        "## Rule: {}\n\n<details>\n<summary>Show rule</summary>\n\n{}\n\n</details>\n\n",
         rule_name,
         wrap_in_ref_block(rule_instruction)
     )
