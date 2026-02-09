@@ -194,7 +194,7 @@ fn format_message(msg: &TimedMessage, index: usize) -> String {
             } else {
                 output.push_str(&format_message_content(role, content));
             }
-        } else {
+        } else if tool_calls.is_none() {
             output.push_str("Empty message.\n\n");
         }
     }
