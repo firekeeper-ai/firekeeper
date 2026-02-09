@@ -144,6 +144,21 @@ fn format_message_content(role: &str, content: &str) -> String {
     }
 }
 
+fn format_message_header(
+    index: usize,
+    role: &str,
+    timestamp_str: &str,
+    elapsed_secs: f64,
+) -> String {
+    format!(
+        "### {}. {} @ {} (+{:.2}s)\n\n",
+        index + 1,
+        role,
+        timestamp_str,
+        elapsed_secs
+    )
+}
+
 fn format_message(msg: &TimedMessage, index: usize) -> String {
     let (role, content, tool_calls) = match &msg.message {
         Message::System(m) => ("system", Some(m.content.as_str()), None),
@@ -165,11 +180,10 @@ fn format_message(msg: &TimedMessage, index: usize) -> String {
 
     if let Some(content) = content {
         if !content.is_empty() {
-            output.push_str(&format!(
-                "### {}. {} @ {} (+{:.2}s)\n\n",
-                index + 1,
+            output.push_str(&format_message_header(
+                index,
                 role,
-                timestamp_str,
+                &timestamp_str,
                 msg.elapsed.as_secs_f64(),
             ));
 
@@ -185,11 +199,10 @@ fn format_message(msg: &TimedMessage, index: usize) -> String {
 
     if let Some(tool_calls) = tool_calls {
         if output.is_empty() {
-            output.push_str(&format!(
-                "### {}. {} @ {} (+{:.2}s)\n\n",
-                index + 1,
+            output.push_str(&format_message_header(
+                index,
                 role,
-                timestamp_str,
+                &timestamp_str,
                 msg.elapsed.as_secs_f64(),
             ));
         }
