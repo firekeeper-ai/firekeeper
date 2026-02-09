@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `config` command with `format` and `validate` subcommands for config file operations
 - `config format` re-renders TOML config with schema-derived comments
 - `config validate` checks TOML config syntax and structure
+- Overthinking detection in `think` tool (warns when reasoning exceeds 10 lines or 1500 chars)
 
 ### Changed
 

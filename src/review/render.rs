@@ -113,10 +113,10 @@ fn format_tool_call(tc: &tiny_loop::types::ToolCall) -> String {
         if let Ok(args) =
             serde_json::from_str::<crate::tool::think::ThinkArgs>(&tc.function.arguments)
         {
-            let backticks = get_fence_backticks(&args._reasoning);
+            let backticks = get_fence_backticks(&args.reasoning);
             return format!(
                 "- **{}**\n\n{}markdown\n{}\n{}\n\n",
-                tc.function.name, backticks, args._reasoning, backticks
+                tc.function.name, backticks, args.reasoning, backticks
             );
         }
     }
