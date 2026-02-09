@@ -9,6 +9,7 @@ const TIMEOUT_SECS: u64 = 5;
 
 /// Execute Lua scripts with access to sh() and fetch() functions.
 /// Use for composing multiple tool calls, filtering results, and reducing context usage.
+/// If you only need one sh() or fetch() call, use those tools directly instead.
 ///
 /// Available functions:
 /// - sh(command): Execute allowlisted shell commands (ls, cat, grep, find, head, tail, wc). Redirections not allowed.
