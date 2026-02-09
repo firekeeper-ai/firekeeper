@@ -220,7 +220,7 @@ pub fn format_trace_markdown(traces: &[TraceEntry]) -> String {
 
 /// Get appropriate number of backticks for Markdown code fence
 /// Returns at least 3 backticks, or more if content contains backtick sequences
-fn get_fence_backticks(content: &str) -> String {
+pub(crate) fn get_fence_backticks(content: &str) -> String {
     const MIN_BACKTICKS: usize = 3;
     let max_backticks = content
         .lines()

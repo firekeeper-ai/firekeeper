@@ -1,3 +1,4 @@
+use crate::review::render::get_fence_backticks;
 use crate::tool::diff::Diff;
 use crate::tool::report::Report;
 use crate::{rule::body::RuleBody, types::Violation};
@@ -78,7 +79,15 @@ fn load_file_resource(
         }
         match std::fs::read_to_string(&path) {
             Ok(file_content) => {
-                content.push_str(&format!("\n--- {} ---\n{}\n", path, file_content));
+                let lang = std::path::Path::new(&path)
+                    .extension()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("");
+                let fence = get_fence_backticks(&file_content);
+                content.push_str(&format!(
+                    "\n### {}\n\n{}{}\n{}\n{}\n",
+                    path, fence, lang, file_content, fence
+                ));
             }
             Err(e) => warn!("Failed to read file {}: {}", path, e),
         }
@@ -106,18 +115,15 @@ fn load_skill_resource(
             continue;
         };
 
-        let mut md = String::new();
         if let Some(data) = parsed.data {
-            if let Some(obj) = data.as_object() {
-                if let Some(title) = obj.get("title").and_then(|v| v.as_str()) {
-                    md.push_str(&format!("# {}\n\n", title));
-                }
-                if let Some(desc) = obj.get("description").and_then(|v| v.as_str()) {
-                    md.push_str(&format!("{}\n", desc));
-                }
+            if let Ok(yaml) = serde_yaml_ng::to_string(&data) {
+                let fence = get_fence_backticks(&yaml);
+                content.push_str(&format!(
+                    "\n### {}\n\nOnly frontmatter loaded. To enable the skill, read the whole md file.\n\n{}yaml\n{}\n{}\n",
+                    path, fence, yaml, fence
+                ));
             }
         }
-        content.push_str(&format!("\n--- {} ---\n{}\n", path, md));
     }
 }
 
@@ -139,10 +145,11 @@ async fn load_shell_resource(cmd: &str, content: &mut String) {
     match output {
         Ok(output) => {
             if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let fence = get_fence_backticks(&stdout);
                 content.push_str(&format!(
-                    "\n--- sh://{} ---\n{}\n",
-                    cmd,
-                    String::from_utf8_lossy(&output.stdout)
+                    "\n### `{}`\n\n{}\n{}\n{}\n",
+                    cmd, fence, stdout, fence
                 ));
             } else {
                 warn!("Command failed: sh://{}", cmd);
@@ -194,79 +201,63 @@ fn build_user_message(
     diffs: &HashMap<String, String>,
     resources_content: &str,
 ) -> String {
-    if files == all_changed_files {
-        let files_list = files.join("\n- ");
-        let commits_section = if is_root_base || commit_messages.is_empty() {
-            String::new()
-        } else {
-            format!("Commit messages:\n\n{}\n\n", commit_messages)
-        };
+    let mut body = String::new();
 
-        let diffs_section = build_diffs_section(files, diffs);
-
-        if is_root_base {
-            format!(
-                "Rule:\n\n\
-                <rule>\n\n{}\n\n</rule>\n\n{}{}",
-                rule_instruction.trim(),
-                diffs_section,
-                resources_content
-            )
-        } else {
-            format!(
-                "{}Changed files:\n\n\
-                - {}\n\n\
-                Rule:\n\n\
-                <rule>\n\n{}\n\n</rule>\n\n{}{}",
-                commits_section,
-                files_list,
-                rule_instruction.trim(),
-                diffs_section,
-                resources_content
-            )
-        }
-    } else {
-        // Include all changed files for context, but focus on specific files
-        let all_files_list = all_changed_files.join("\n- ");
-        let focus_files_list = files.join("\n- ");
-        let commits_section = if is_root_base || commit_messages.is_empty() {
-            String::new()
-        } else {
-            format!("Commit messages:\n\n{}\n\n", commit_messages)
-        };
-
-        let diffs_section = build_diffs_section(files, diffs);
-
-        if is_root_base {
-            format!(
-                "Focus on these files:\n\n\
-                - {}\n\n\
-                Note: For most cases, only read the focused files.\n\n\
-                Rule:\n\n\
-                <rule>\n\n{}\n\n</rule>\n\n{}{}",
-                focus_files_list,
-                rule_instruction.trim(),
-                diffs_section,
-                resources_content
-            )
-        } else {
-            format!(
-                "{}All changed files:\n\n\
-                - {}\n\n\
-                Focus on these files:\n\n\
-                - {}\n\n\
-                Note: For most cases, only read the focused files.\n\n\
-                Rule:\n\n\
-                <rule>\n\n{}\n\n</rule>\n\n{}{}",
-                commits_section,
-                all_files_list,
-                focus_files_list,
-                rule_instruction.trim(),
-                diffs_section,
-                resources_content
-            )
-        }
+    // Commit messages section
+    if !is_root_base && !commit_messages.is_empty() {
+        body.push_str("## Commit Messages\n\n");
+        let fence = get_fence_backticks(commit_messages);
+        body.push_str(&format!("{}\n{}\n{}\n\n", fence, commit_messages, fence));
     }
+
+    // Files section
+    if !is_root_base {
+        if files == all_changed_files {
+            body.push_str("## Changed Files\n\n");
+            for file in files {
+                body.push_str(&format!("- {}\n", file));
+            }
+        } else {
+            body.push_str("## All Changed Files\n\n");
+            for file in all_changed_files {
+                body.push_str(&format!("- {}\n", file));
+            }
+            body.push_str("\n## Focus Files\n\n");
+            for file in files {
+                body.push_str(&format!("- {}\n", file));
+            }
+            body.push_str("\nNote: For most cases, only read the focused files.");
+        }
+        body.push_str("\n\n");
+    } else if files != all_changed_files {
+        body.push_str("## Focus Files\n\n");
+        for file in files {
+            body.push_str(&format!("- {}\n", file));
+        }
+        body.push_str("\nNote: For most cases, only read the focused files.\n\n");
+    }
+
+    // Rule section
+    body.push_str("## Rule\n\n");
+    let fence = get_fence_backticks(rule_instruction);
+    body.push_str(&format!(
+        "{}\n{}\n{}\n\n",
+        fence,
+        rule_instruction.trim(),
+        fence
+    ));
+
+    // Diffs section
+    body.push_str("## Diffs\n\n");
+    body.push_str(&build_diffs_section(files, diffs));
+
+    // Resources section
+    if !resources_content.is_empty() {
+        body.push_str("## Resources\n\n");
+        body.push_str(resources_content);
+    }
+
+    body
 }
 
 /// Run agent loop with cancellation support

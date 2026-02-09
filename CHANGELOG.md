@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Upgraded `toml-scaffold` dependency from 0.1 to 0.2
+- User messages now formatted with markdown headers and code blocks
+- Resources formatted with markdown: file resources use language-specific code blocks, skill resources display YAML frontmatter, shell resources use inline code headers
 - Added documentation and AI agent note to `Config` struct
 - Trace markdown now displays elapsed time in worker heading
 - Trace markdown now uses "Focused Files" instead of "Files"
