@@ -85,7 +85,7 @@ fn load_file_resource(
                     .unwrap_or("");
                 let fence = get_fence_backticks(&file_content);
                 content.push_str(&format!(
-                    "\n### {}\n\n{}{}\n{}\n{}\n",
+                    "### {}\n\n{}{}\n{}\n{}\n\n",
                     path, fence, lang, file_content, fence
                 ));
             }
@@ -119,7 +119,7 @@ fn load_skill_resource(
             if let Ok(yaml) = serde_yaml_ng::to_string(&data) {
                 let fence = get_fence_backticks(&yaml);
                 content.push_str(&format!(
-                    "\n### {}\n\nOnly frontmatter loaded. To enable the skill, read the whole md file.\n\n{}yaml\n{}\n{}\n",
+                    "### {}\n\nOnly frontmatter loaded. To enable the skill, read the whole md file.\n\n{}yaml\n{}\n{}\n\n",
                     path, fence, yaml, fence
                 ));
             }
@@ -148,7 +148,7 @@ async fn load_shell_resource(cmd: &str, content: &mut String) {
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 let fence = get_fence_backticks(&stdout);
                 content.push_str(&format!(
-                    "\n### `{}`\n\n{}\n{}\n{}\n",
+                    "### `{}`\n\n{}\n{}\n{}\n\n",
                     cmd, fence, stdout, fence
                 ));
             } else {
@@ -177,16 +177,20 @@ fn build_diffs_section(files: &[String], diffs: &HashMap<String, String>) -> Str
     for file in files {
         if crate::util::should_include_diff(file) {
             if let Some(diff) = diffs.get(file) {
-                diffs_content.push_str(&format!("```diff\n{}\n```\n\n", diff));
+                diffs_content.push_str(diff);
+                diffs_content.push('\n');
             }
         }
     }
     if diffs_content.is_empty() {
         String::new()
     } else {
+        let fence = get_fence_backticks(&diffs_content);
         format!(
-            "Here are diffs of focused files (no need to call diff tool on them):\n\n{}\n\n",
-            diffs_content.trim()
+            "Here are diffs of focused files (no need to call diff tool on them):\n\n{}diff\n{}\n{}\n\n",
+            fence,
+            diffs_content.trim(),
+            fence
         )
     }
 }
@@ -217,31 +221,34 @@ fn build_user_message(
             for file in files {
                 body.push_str(&format!("- {}\n", file));
             }
+            body.push('\n');
         } else {
             body.push_str("## All Changed Files\n\n");
             for file in all_changed_files {
                 body.push_str(&format!("- {}\n", file));
             }
-            body.push_str("\n## Focus Files\n\n");
+            body.push('\n');
+            body.push_str("## Focus Files\n\n");
             for file in files {
                 body.push_str(&format!("- {}\n", file));
             }
-            body.push_str("\nNote: For most cases, only read the focused files.");
+            body.push('\n');
+            body.push_str("Note: For most cases, only read the focused files.\n\n");
         }
-        body.push_str("\n\n");
     } else if files != all_changed_files {
         body.push_str("## Focus Files\n\n");
         for file in files {
             body.push_str(&format!("- {}\n", file));
         }
-        body.push_str("\nNote: For most cases, only read the focused files.\n\n");
+        body.push('\n');
+        body.push_str("Note: For most cases, only read the focused files.\n\n");
     }
 
     // Rule section
     body.push_str("## Rule\n\n");
     let fence = get_fence_backticks(rule_instruction);
     body.push_str(&format!(
-        "{}\n{}\n{}\n\n",
+        "{}md\n{}\n{}\n\n",
         fence,
         rule_instruction.trim(),
         fence
@@ -431,14 +438,17 @@ pub async fn worker(
 
     // Create agent with system prompt and bind tools
     let agent = Agent::new(llm)
-        .system("You are a code reviewer. Your task is to review code changes against a specific rule. \
-                Focus only on the files provided and only check for violations of the given rule. \
-                You can read related files if needed, but only report issues related to the provided files and rule. \
-                \n\nWorkflow:\n\
-                1. Review the provided diffs to understand what changed\n\
-                2. Read other related diffs or files if needed for context\n\
-                3. Use the 'think' tool to reason about whether the changes violate the rule\n\
-                4. Use the 'report' tool to report all violations found, then exit without summary")
+        .system(
+            r"You are a code reviewer. Your task is to review code changes against a specific rule.
+Focus only on the files provided and only check for violations of the given rule.
+You can read related files if needed, but only report issues related to the provided files and rule.
+
+Workflow:
+1. Review the provided diffs to understand what changed
+2. Read other related diffs or files if needed for context
+3. Use the 'think' tool to reason about whether the changes violate the rule
+4. Use the 'report' tool to report all violations found, then exit without summary",
+        )
         .bind(diff.clone(), Diff::diff)
         .bind(report.clone(), Report::report);
 

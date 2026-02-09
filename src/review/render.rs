@@ -96,7 +96,10 @@ pub fn format_violations(
 
 fn format_tools(tools: &[ToolDefinition]) -> String {
     let tools_yaml = serde_yaml_ng::to_string(tools).unwrap_or_default();
-    format!("## Tools\n\n```yaml\n{}\n```\n\n", tools_yaml.trim())
+    format!(
+        "## Tools\n\n<details>\n<summary>Show tools</summary>\n\n```yaml\n{}\n```\n\n</details>\n\n",
+        tools_yaml.trim()
+    )
 }
 
 fn format_focused_files(files: &[String]) -> String {
@@ -113,10 +116,10 @@ fn format_tool_call(tc: &tiny_loop::types::ToolCall) -> String {
         if let Ok(args) =
             serde_json::from_str::<crate::tool::think::ThinkArgs>(&tc.function.arguments)
         {
-            let backticks = get_fence_backticks(&args.reasoning);
             return format!(
-                "- **{}**\n\n{}markdown\n{}\n{}\n\n",
-                tc.function.name, backticks, args.reasoning, backticks
+                "- **{}**\n\n{}\n\n",
+                tc.function.name,
+                wrap_in_ref_block(&args.reasoning)
             );
         }
     }
@@ -132,10 +135,12 @@ fn format_tool_call(tc: &tiny_loop::types::ToolCall) -> String {
 }
 
 fn format_message_content(role: &str, content: &str) -> String {
-    let backticks = get_fence_backticks(content);
     match role {
-        "tool" => format!("{}\n{}\n{}\n\n", backticks, content, backticks),
-        _ => format!("{}markdown\n{}\n{}\n\n", backticks, content, backticks),
+        "tool" => {
+            let backticks = get_fence_backticks(content);
+            format!("{}\n{}\n{}\n\n", backticks, content, backticks)
+        }
+        _ => format!("{}\n\n", wrap_in_ref_block(content)),
     }
 }
 
@@ -156,21 +161,38 @@ fn format_message(msg: &TimedMessage, index: usize) -> String {
         .format("%Y-%m-%d %H:%M:%S")
         .to_string();
 
-    let mut output = format!(
-        "### Message {} - Role: {} (Timestamp: {}, Elapsed: {:.2}s)\n\n",
-        index + 1,
-        role,
-        timestamp_str,
-        msg.elapsed.as_secs_f64()
-    );
+    let mut output = String::new();
 
     if let Some(content) = content {
         if !content.is_empty() {
-            output.push_str(&format_message_content(role, content));
+            output.push_str(&format!(
+                "### {}. {} @ {} (+{:.2}s)\n\n",
+                index + 1,
+                role,
+                timestamp_str,
+                msg.elapsed.as_secs_f64(),
+            ));
+
+            if role == "system" || role == "user" || role == "tool" {
+                output.push_str("<details>\n<summary>Show content</summary>\n\n");
+                output.push_str(&format_message_content(role, content));
+                output.push_str("</details>\n\n");
+            } else {
+                output.push_str(&format_message_content(role, content));
+            }
         }
     }
 
     if let Some(tool_calls) = tool_calls {
+        if output.is_empty() {
+            output.push_str(&format!(
+                "### {}. {} @ {} (+{:.2}s)\n\n",
+                index + 1,
+                role,
+                timestamp_str,
+                msg.elapsed.as_secs_f64(),
+            ));
+        }
         output.push_str("#### Tool Calls\n\n");
         for tc in tool_calls {
             output.push_str(&format_tool_call(tc));
@@ -180,14 +202,20 @@ fn format_message(msg: &TimedMessage, index: usize) -> String {
     output
 }
 
+fn wrap_in_ref_block(content: &str) -> String {
+    content
+        .trim()
+        .lines()
+        .map(|line| format!("> {}", line))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 fn format_trace_rule(rule_name: &str, rule_instruction: &str) -> String {
-    let backticks = get_fence_backticks(rule_instruction);
     format!(
-        "## Rule: {}\n\n{}markdown\n{}\n{}\n\n",
+        "## Rule: {}\n\n{}\n\n",
         rule_name,
-        backticks,
-        rule_instruction.trim(),
-        backticks
+        wrap_in_ref_block(rule_instruction)
     )
 }
 
@@ -265,8 +293,14 @@ mod tests {
     fn test_format_trace_rule() {
         let result = format_trace_rule("TestRule", "  instruction  ");
         assert!(result.contains("## Rule: TestRule"));
-        assert!(result.contains("instruction"));
-        assert!(result.contains("```markdown"));
+        assert!(result.contains("> instruction"));
+    }
+
+    #[test]
+    fn test_wrap_in_ref_block() {
+        assert_eq!(wrap_in_ref_block("line1"), "> line1");
+        assert_eq!(wrap_in_ref_block("line1\nline2"), "> line1\n> line2");
+        assert_eq!(wrap_in_ref_block("  line1  "), "> line1");
     }
 
     #[test]
@@ -336,11 +370,11 @@ mod tests {
     #[test]
     fn test_format_message_content() {
         assert!(format_message_content("tool", "content").starts_with("```"));
-        assert!(format_message_content("system", "content").contains("markdown"));
-        assert!(format_message_content("user", "content").contains("markdown"));
+        assert!(format_message_content("system", "content").starts_with("> "));
+        assert!(format_message_content("user", "content").starts_with("> "));
         assert_eq!(
             format_message_content("assistant", "content"),
-            "```markdown\ncontent\n```\n\n"
+            "> content\n\n"
         );
     }
 }

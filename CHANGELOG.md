@@ -20,13 +20,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Upgraded `toml-scaffold` dependency from 0.1 to 0.2
 - User messages now formatted with markdown headers and code blocks
 - Resources formatted with markdown: file resources use language-specific code blocks, skill resources display YAML frontmatter, shell resources use inline code headers
+- Trace markdown now hides verbose content (tools, system/user/tool messages) in collapsible details blocks
 - Added documentation and AI agent note to `Config` struct
 - Trace markdown now displays elapsed time in worker heading
 - Trace markdown now uses "Focused Files" instead of "Files"
 - Trace markdown now uses h4 heading for "Tool Calls"
 - Tool definitions and tool call arguments now displayed in YAML instead of JSON for better readability
 - Simplified markdown fence backtick detection to only check lines that are entirely backticks
-- Assistant messages in trace markdown now wrapped in markdown code blocks for consistency
+- Trace markdown now uses quote blocks (>) for rule instructions, system/user/assistant messages, and think tool reasoning instead of code blocks
 - YAML output in trace markdown now trimmed of trailing whitespace
 
 ## [0.3.0] - 2026-02-07
