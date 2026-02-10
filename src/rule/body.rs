@@ -65,7 +65,7 @@ fn default_non_code_exclude() -> Vec<String> {
 }
 
 fn default_lock_and_ignore_exclude() -> Vec<String> {
-    vec!["*.lock".into(), "*ignore".into()]
+    vec!["*.lock".into(), "*lock.json".into(), "*ignore".into()]
 }
 
 impl RuleBody {
