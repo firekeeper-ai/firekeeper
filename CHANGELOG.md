@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **BREAKING**: Replaced `read`, `ls`, `grep`, and `glob` tools with unified `sh` tool that executes whitelisted shell commands (ls, cat, grep, find, head, tail, wc)
+- **BREAKING**: Shell command whitelist is now configurable via `review.allowed_shell_commands` in config file
 - `sh` tool uses character-based truncation (default: 5000 chars) instead of line-based
 - `sh` tool has configurable timeout (default: 5 seconds)
 - No Hardcoded Credentials rule now excludes lock files and ignore files by default
@@ -18,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `lua` tool for executing Lua scripts with `sh()` and `fetch()` functions to call multiple tools in one script
+- `review.allowed_shell_commands` config field to customize allowed shell commands during review (read-only operations only)
 - Default LLM configuration now includes `reasoning.effort = "medium"` for balanced review quality and performance
 - `shell-words` dependency for safe shell command parsing
 - `truncate_with_hint` utility function to eliminate code duplication between tools

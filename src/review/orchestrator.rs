@@ -35,6 +35,7 @@ pub async fn orchestrate_and_run(
     trace: Option<&str>,
     config_path: &str,
     global_resources: &[String],
+    allowed_shell_commands: &[String],
 ) {
     let base = util::Base::parse(diff_base);
     debug!("Resolved base: {:?}", base);
@@ -104,6 +105,7 @@ pub async fn orchestrate_and_run(
             let shutdown_clone = shutdown.clone();
             let is_root = matches!(base, util::Base::Root);
             let resources = global_resources.to_vec();
+            let allowed_cmds = allowed_shell_commands.to_vec();
             worker::worker(
                 worker_id,
                 rule,
@@ -120,6 +122,7 @@ pub async fn orchestrate_and_run(
                 shutdown_clone,
                 is_root,
                 resources,
+                allowed_cmds,
             )
         })
         .collect();

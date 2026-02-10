@@ -1,21 +1,16 @@
 use mlua::{Lua, LuaSerdeExt};
-use tiny_loop::tool::tool;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use tiny_loop::types::{Parameters, ToolDefinition, ToolFunction};
 
 use super::fetch::execute_fetch;
-use super::sh::execute_sh;
+use super::sh::execute_sh_raw;
 use super::utils::{DEFAULT_NUM_CHARS, truncate_with_hint};
 
 const TIMEOUT_SECS: u64 = 5;
 
-/// Execute Lua scripts with access to sh() and fetch() functions.
-/// Use for composing multiple tool calls, filtering results, and reducing context usage.
-/// If you only need one sh() or fetch() call, use those tools directly instead.
-///
-/// Available functions:
-/// - sh(command): Execute allowlisted shell commands (ls, cat, grep, find, head, tail, wc). Redirections not allowed.
-/// - fetch(url): Fetch webpage and convert HTML to Markdown.
-#[tool]
-pub async fn lua(
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct LuaArgs {
     /// Lua script to execute.
     ///
     /// Example - Compose multiple commands and filter with Lua regex:
@@ -37,19 +32,47 @@ pub async fn lua(
     /// local page2 = fetch("https://example.com/page2")
     /// return page1 .. "\n---\n" .. page2
     /// ```
-    script: String,
+    pub script: String,
     /// Optional start character index (default: 0)
-    start_char: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start_char: Option<usize>,
     /// Optional number of characters to return (default: 5000)
-    num_chars: Option<usize>,
-) -> String {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub num_chars: Option<usize>,
+}
+
+impl LuaArgs {
+    pub const TOOL_NAME: &'static str = "lua";
+}
+
+pub fn lua_tool_def(allowed_commands: &[String]) -> ToolDefinition {
+    let commands_str = allowed_commands.join(", ");
+    ToolDefinition {
+        tool_type: "function".into(),
+        function: ToolFunction {
+            name: LuaArgs::TOOL_NAME.into(),
+            description: format!(
+                "Execute Lua scripts with access to sh() and fetch() functions.\n\
+                Use for composing multiple tool calls, filtering results, and reducing context usage.\n\
+                If you only need one sh() or fetch() call, use those tools directly instead.\n\n\
+                Available functions:\n\
+                - sh(command): Execute allowlisted shell commands ({}). Redirections not allowed.\n\
+                - fetch(url): Fetch webpage and convert HTML to Markdown.",
+                commands_str
+            ),
+            parameters: Parameters::from_type::<LuaArgs>(),
+        },
+    }
+}
+
+pub async fn execute_lua_args(args: LuaArgs, allowed_commands: &[String]) -> String {
     let lua = Lua::new();
 
-    if let Err(e) = register_tools(&lua) {
+    if let Err(e) = register_tools(&lua, allowed_commands) {
         return format!("Failed to register tools: {}", e);
     }
 
-    let result = match lua.load(&script).eval_async::<mlua::Value>().await {
+    let result = match lua.load(&args.script).eval_async::<mlua::Value>().await {
         Ok(val) => match val {
             mlua::Value::String(s) => match s.to_str() {
                 Ok(str_val) => str_val.to_string(),
@@ -67,14 +90,16 @@ pub async fn lua(
 
     truncate_with_hint(
         result,
-        start_char.unwrap_or(0),
-        num_chars.unwrap_or(DEFAULT_NUM_CHARS),
+        args.start_char.unwrap_or(0),
+        args.num_chars.unwrap_or(DEFAULT_NUM_CHARS),
     )
 }
 
-fn register_tools(lua: &Lua) -> mlua::Result<()> {
-    let sh_fn = lua.create_async_function(|_, command: String| async move {
-        Ok(execute_sh(command, TIMEOUT_SECS).await)
+fn register_tools(lua: &Lua, allowed_commands: &[String]) -> mlua::Result<()> {
+    let allowed_commands = allowed_commands.to_vec();
+    let sh_fn = lua.create_async_function(move |_, command: String| {
+        let allowed_commands = allowed_commands.clone();
+        async move { Ok(execute_sh_raw(command, TIMEOUT_SECS, &allowed_commands).await) }
     })?;
     lua.globals().set("sh", sh_fn)?;
 
@@ -96,7 +121,8 @@ mod tests {
             start_char: None,
             num_chars: None,
         };
-        let result = lua(args).await;
+        let allowed = vec!["ls".to_string()];
+        let result = execute_lua_args(args, &allowed).await;
         assert!(result.contains("2"));
     }
 
@@ -107,7 +133,8 @@ mod tests {
             start_char: None,
             num_chars: None,
         };
-        let result = lua(args).await;
+        let allowed = vec!["cat".to_string()];
+        let result = execute_lua_args(args, &allowed).await;
         // Should return some content (hostname)
         assert!(!result.is_empty());
         assert!(!result.contains("error"));
@@ -120,7 +147,8 @@ mod tests {
             start_char: None,
             num_chars: None,
         };
-        let result = lua(args).await;
+        let allowed = vec!["ls".to_string()];
+        let result = execute_lua_args(args, &allowed).await;
         assert!(result.contains("not allowed"));
     }
 
@@ -131,7 +159,8 @@ mod tests {
             start_char: Some(0),
             num_chars: Some(50),
         };
-        let result = lua(args).await;
+        let allowed = vec!["ls".to_string()];
+        let result = execute_lua_args(args, &allowed).await;
         assert!(result.contains("Hint: Use start_char=50"));
     }
 
@@ -142,7 +171,8 @@ mod tests {
             start_char: None,
             num_chars: None,
         };
-        let result = lua(args).await;
+        let allowed = vec!["ls".to_string()];
+        let result = execute_lua_args(args, &allowed).await;
         assert!(result.contains(r#""a":1"#) || result.contains(r#""a": 1"#));
         assert!(result.contains(r#""b":"test""#) || result.contains(r#""b": "test""#));
         assert!(result.contains(r#""c":true"#) || result.contains(r#""c": true"#));

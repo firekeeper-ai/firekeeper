@@ -25,10 +25,32 @@ pub fn create_provider(
 }
 
 /// Register common tools (sh, fetch, think, lua) to an agent
-pub fn register_common_tools(agent: Agent) -> Agent {
+pub fn register_common_tools(agent: Agent, allowed_shell_commands: &[String]) -> Agent {
+    let defs = vec![
+        crate::tool::sh::sh_tool_def(allowed_shell_commands),
+        crate::tool::lua::lua_tool_def(allowed_shell_commands),
+    ];
+
+    let allowed_cmds = allowed_shell_commands.to_vec();
+    let exec = move |name: String, args: String| {
+        let allowed_cmds = allowed_cmds.clone();
+        async move {
+            match name.as_str() {
+                crate::tool::sh::ShArgs::TOOL_NAME => {
+                    let args: crate::tool::sh::ShArgs = serde_json::from_str(&args).unwrap();
+                    crate::tool::sh::execute_sh_args(args, &allowed_cmds).await
+                }
+                crate::tool::lua::LuaArgs::TOOL_NAME => {
+                    let args: crate::tool::lua::LuaArgs = serde_json::from_str(&args).unwrap();
+                    crate::tool::lua::execute_lua_args(args, &allowed_cmds).await
+                }
+                _ => format!("Unknown tool: {}", name),
+            }
+        }
+    };
+
     agent
-        .tool(crate::tool::sh::sh)
         .tool(crate::tool::fetch::fetch)
         .tool(crate::tool::think::think)
-        .tool(crate::tool::lua::lua)
+        .external(defs, exec)
 }

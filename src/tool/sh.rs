@@ -1,37 +1,68 @@
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 use std::process::Stdio;
-use tiny_loop::tool::tool;
+use tiny_loop::types::{Parameters, ToolDefinition, ToolFunction};
 use tokio::io::AsyncReadExt;
 use tokio::process::Command;
 
 use super::utils::{DEFAULT_NUM_CHARS, truncate_with_hint};
 
-const WHITELIST: &[&str] = &["ls", "cat", "grep", "find", "head", "tail", "wc"];
-/// Default timeout for shell command execution
-const TIMEOUT_SECS: u64 = 5;
+/// Default timeout for shell command execution in seconds
+const DEFAULT_TIMEOUT_SECS: u64 = 5;
 
-/// Execute an allowlisted shell command.
-/// Allowed commands: ls, cat, grep, find, head, tail, wc.
-/// Redirections are not allowed.
-#[tool]
-pub async fn sh(
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct ShArgs {
     /// Shell command string (e.g., "ls -la /tmp")
-    command: String,
+    pub command: String,
     /// Optional start character index (default: 0)
-    start_char: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start_char: Option<usize>,
     /// Optional number of characters to return (default: 5000)
-    num_chars: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub num_chars: Option<usize>,
     /// Optional timeout in seconds (default: 5)
-    timeout_secs: Option<u64>,
-) -> String {
-    let result = execute_sh(command, timeout_secs.unwrap_or(TIMEOUT_SECS)).await;
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timeout_secs: Option<u64>,
+}
+
+impl ShArgs {
+    pub const TOOL_NAME: &'static str = "sh";
+}
+
+pub fn sh_tool_def(allowed_commands: &[String]) -> ToolDefinition {
+    let commands_str = allowed_commands.join(", ");
+    ToolDefinition {
+        tool_type: "function".into(),
+        function: ToolFunction {
+            name: ShArgs::TOOL_NAME.into(),
+            description: format!(
+                "Execute an allowlisted shell command.\nAllowed commands: {}.\nRedirections are not allowed.",
+                commands_str
+            ),
+            parameters: Parameters::from_type::<ShArgs>(),
+        },
+    }
+}
+
+pub async fn execute_sh_args(args: ShArgs, allowed_commands: &[String]) -> String {
+    let result = execute_sh_raw(
+        args.command,
+        args.timeout_secs.unwrap_or(DEFAULT_TIMEOUT_SECS),
+        allowed_commands,
+    )
+    .await;
     truncate_with_hint(
         result,
-        start_char.unwrap_or(0),
-        num_chars.unwrap_or(DEFAULT_NUM_CHARS),
+        args.start_char.unwrap_or(0),
+        args.num_chars.unwrap_or(DEFAULT_NUM_CHARS),
     )
 }
 
-pub async fn execute_sh(command: String, timeout_secs: u64) -> String {
+pub async fn execute_sh_raw(
+    command: String,
+    timeout_secs: u64,
+    allowed_commands: &[String],
+) -> String {
     let parts = match shell_words::split(&command) {
         Ok(p) => p,
         Err(e) => return format!("Failed to parse command: {}", e),
@@ -42,10 +73,10 @@ pub async fn execute_sh(command: String, timeout_secs: u64) -> String {
     }
 
     let cmd = &parts[0];
-    if !WHITELIST.contains(&cmd.as_str()) {
+    if !allowed_commands.iter().any(|c| c == cmd) {
         return format!(
             "Error: Command '{}' not allowed. Allowed: {:?}",
-            cmd, WHITELIST
+            cmd, allowed_commands
         );
     }
 

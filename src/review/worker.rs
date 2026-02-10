@@ -442,6 +442,7 @@ pub async fn worker(
     shutdown: Arc<Mutex<bool>>,
     is_root_base: bool,
     global_resources: Vec<String>,
+    allowed_shell_commands: Vec<String>,
 ) -> Result<WorkerResult, Box<dyn std::error::Error>> {
     let start = std::time::Instant::now();
     info!(
@@ -479,7 +480,7 @@ Workflow:
         .bind(diff.clone(), Diff::diff)
         .bind(report.clone(), Report::report);
 
-    let agent = crate::llm::register_common_tools(agent);
+    let agent = crate::llm::register_common_tools(agent, &allowed_shell_commands);
 
     // Load resources
     let mut all_resources = global_resources.clone();

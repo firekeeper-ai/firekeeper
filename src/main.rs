@@ -71,6 +71,7 @@ async fn main() {
                 args.trace.as_deref(),
                 &args.config,
                 &config.review.resources,
+                &config.review.allowed_shell_commands,
             )
             .await;
         }

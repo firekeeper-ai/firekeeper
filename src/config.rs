@@ -88,6 +88,9 @@ pub struct ReviewConfig {
     /// - `sh://command` - Include command output, e.g. `sh://git ls-files`
     /// - `skill://glob` - Include matched skills, e.g. `skill://~/skills/**/SKILL.md`
     pub resources: Vec<String>,
+    /// Allowed shell commands during review (read-only operations only).
+    /// Add tools like `rg` (ripgrep), `sg (ast-grep)`, `fd`, `jq` to enhance search capabilities.
+    pub allowed_shell_commands: Vec<String>,
 }
 
 impl ReviewConfig {
@@ -103,6 +106,15 @@ impl Default for ReviewConfig {
             max_files_per_task: Self::DEFAULT_MAX_FILES_PER_TASK,
             max_parallel_workers: None,
             resources: vec!["file://README.md".to_string()],
+            allowed_shell_commands: vec![
+                "ls".to_string(),
+                "cat".to_string(),
+                "grep".to_string(),
+                "find".to_string(),
+                "head".to_string(),
+                "tail".to_string(),
+                "wc".to_string(),
+            ],
         }
     }
 }
