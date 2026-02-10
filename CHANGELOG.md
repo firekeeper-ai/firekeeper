@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Add `*lock.json` pattern to default exclude list to properly match `package-lock.json`
+- Add duplicate report location detection to prevent dead loops when agent reports same violation repeatedly
+
 ### Changed
 
 - **BREAKING**: Replaced `read`, `ls`, `grep`, and `glob` tools with unified `sh` tool that executes whitelisted shell commands (ls, cat, grep, find, head, tail, wc)

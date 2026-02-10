@@ -346,6 +346,7 @@ async fn run_agent_loop(agent: &mut Agent, user_message: String) -> anyhow::Resu
     });
 
     let mut seen_tool_calls = std::collections::HashSet::new();
+    let mut seen_report_locations = std::collections::HashSet::new();
 
     loop {
         if let Some(_) = agent.step().await? {
@@ -364,6 +365,31 @@ async fn run_agent_loop(agent: &mut Agent, user_message: String) -> anyhow::Resu
                                 if args.violations.is_empty() {
                                     debug!("Early stop due to empty violation");
                                     return Ok(());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Check for duplicated report locations
+        if let Some(timed_msg) = agent.history.get_all().last() {
+            if let Message::Assistant(am) = &timed_msg.message {
+                if let Some(tool_calls) = &am.tool_calls {
+                    for tc in tool_calls {
+                        if tc.function.name == crate::tool::report::ReportArgs::TOOL_NAME {
+                            if let Ok(args) = serde_json::from_str::<crate::tool::report::ReportArgs>(
+                                &tc.function.arguments,
+                            ) {
+                                for v in &args.violations {
+                                    let key = format!("{}:{}:{}", v.file, v.start_line, v.end_line);
+                                    if !seen_report_locations.insert(key) {
+                                        warn!(
+                                            "Duplicate report for same location detected, might be dead loop"
+                                        );
+                                        return Ok(());
+                                    }
                                 }
                             }
                         }
