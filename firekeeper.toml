@@ -31,6 +31,9 @@ max_files_per_task = 5
 # - `sh://command` - Include command output, e.g. `sh://git ls-files`
 # - `skill://glob` - Include matched skills, e.g. `skill://~/skills/**/SKILL.md`
 resources = []
+# Allowed shell commands during review (read-only operations only).
+# Add tools like `rg` (ripgrep), `sg (ast-grep)`, `fd`, `jq` to enhance search capabilities.
+allowed_shell_commands = ["ls", "cat", "rg", "sg", "fd", "head", "tail", "wc"]
 # Maximum number of parallel workers (optional, defaults to unlimited)
 # max_parallel_workers = ...
 
