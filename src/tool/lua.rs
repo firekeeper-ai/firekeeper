@@ -15,15 +15,14 @@ pub struct LuaArgs {
     ///
     /// Example - Compose multiple commands and filter with Lua regex:
     /// ```lua
-    /// -- Get file list and filter by pattern
-    /// local files = sh("find . -name '*.rs'")
-    /// local result = {}
-    /// for line in files:gmatch("[^\n]+") do
-    ///   if line:match("tool") then
-    ///     table.insert(result, line)
-    ///   end
+    /// -- Get first 100 lines of a file
+    /// local content = sh("cat file.txt")
+    /// local lines = {}
+    /// for line in content:gmatch("[^\n]+") do
+    ///   lines[#lines + 1] = line
+    ///   if #lines >= 100 then break end
     /// end
-    /// return table.concat(result, "\n")
+    /// return table.concat(lines, "\n")
     /// ```
     ///
     /// Example - Fetch multiple URLs and combine:
@@ -99,7 +98,11 @@ fn register_tools(lua: &Lua, allowed_commands: &[String]) -> mlua::Result<()> {
     let allowed_commands = allowed_commands.to_vec();
     let sh_fn = lua.create_async_function(move |_, command: String| {
         let allowed_commands = allowed_commands.clone();
-        async move { Ok(execute_sh_raw(command, TIMEOUT_SECS, &allowed_commands).await) }
+        async move {
+            execute_sh_raw(command, TIMEOUT_SECS, &allowed_commands)
+                .await
+                .map_err(|e| mlua::Error::RuntimeError(e.to_string()))
+        }
     })?;
     lua.globals().set("sh", sh_fn)?;
 

@@ -44,51 +44,75 @@ pub fn sh_tool_def(allowed_commands: &[String]) -> ToolDefinition {
     }
 }
 
+#[derive(Debug)]
+pub(crate) enum ShError {
+    ParseError(shell_words::ParseError),
+    EmptyCommand,
+    NotAllowed(String),
+    ExecutionError(String),
+    Timeout(u64),
+}
+
+impl std::fmt::Display for ShError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ShError::ParseError(e) => write!(f, "Failed to parse command: {}", e),
+            ShError::EmptyCommand => write!(f, "Error: Empty command"),
+            ShError::NotAllowed(cmd) => write!(f, "Error: Command '{}' not allowed", cmd),
+            ShError::ExecutionError(e) => write!(f, "Failed to execute command: {}", e),
+            ShError::Timeout(secs) => write!(f, "Command timed out after {} seconds", secs),
+        }
+    }
+}
+
 pub async fn execute_sh_args(args: ShArgs, allowed_commands: &[String]) -> String {
-    let result = execute_sh_raw(
+    match execute_sh_raw(
         args.command,
         args.timeout_secs.unwrap_or(DEFAULT_TIMEOUT_SECS),
         allowed_commands,
     )
-    .await;
-    truncate_with_hint(
-        result,
-        args.start_char.unwrap_or(0),
-        args.num_chars.unwrap_or(DEFAULT_NUM_CHARS),
-    )
+    .await
+    {
+        Ok(result) => truncate_with_hint(
+            result,
+            args.start_char.unwrap_or(0),
+            args.num_chars.unwrap_or(DEFAULT_NUM_CHARS),
+        ),
+        Err(ShError::ParseError(e)) => {
+            format!(
+                "Failed to parse command: {}. Hint: Use the lua tool for complex output processing (e.g., redirections, pipes).",
+                e
+            )
+        }
+        Err(e) => e.to_string(),
+    }
 }
 
 pub async fn execute_sh_raw(
     command: String,
     timeout_secs: u64,
     allowed_commands: &[String],
-) -> String {
-    let parts = match shell_words::split(&command) {
-        Ok(p) => p,
-        Err(e) => return format!("Failed to parse command: {}", e),
-    };
+) -> Result<String, ShError> {
+    let parts = shell_words::split(&command).map_err(ShError::ParseError)?;
 
     if parts.is_empty() {
-        return "Error: Empty command".to_string();
+        return Err(ShError::EmptyCommand);
     }
 
     let cmd = &parts[0];
     if !allowed_commands.iter().any(|c| c == cmd) {
-        return format!(
-            "Error: Command '{}' not allowed. Allowed: {:?}",
+        return Err(ShError::NotAllowed(format!(
+            "{}. Allowed: {:?}",
             cmd, allowed_commands
-        );
+        )));
     }
 
-    let mut child = match Command::new(cmd)
+    let mut child = Command::new(cmd)
         .args(&parts[1..])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-    {
-        Ok(c) => c,
-        Err(e) => return format!("Failed to execute command: {}", e),
-    };
+        .map_err(|e| ShError::ExecutionError(e.to_string()))?;
 
     let timeout = tokio::time::sleep(tokio::time::Duration::from_secs(timeout_secs));
     tokio::pin!(timeout);
@@ -108,19 +132,19 @@ pub async fn execute_sh_raw(
                     }
 
                     if !status.success() {
-                        format!("Command failed with status {}\nstdout:\n{}\nstderr:\n{}", status, stdout, stderr)
+                        Ok(format!("Command failed with status {}\nstdout:\n{}\nstderr:\n{}", status, stdout, stderr))
                     } else if !stderr.is_empty() {
-                        format!("{}\nstderr:\n{}", stdout, stderr)
+                        Ok(format!("{}\nstderr:\n{}", stdout, stderr))
                     } else {
-                        stdout
+                        Ok(stdout)
                     }
                 }
-                Err(e) => format!("Failed to wait for command: {}", e),
+                Err(e) => Err(ShError::ExecutionError(format!("Failed to wait for command: {}", e))),
             }
         }
         _ = &mut timeout => {
             let _ = child.kill().await;
-            format!("Command timed out after {} seconds", timeout_secs)
+            Err(ShError::Timeout(timeout_secs))
         }
     }
 }
