@@ -39,7 +39,7 @@ pub fn truncate_with_hint(content: String, start: usize, len: usize) -> String {
     let result = truncate_text_by_chars(content, start, len);
     if result.truncated {
         format!(
-            "{}\nHint: Use start_char={} to read more.",
+            "{}\nHint: Use start_char={} to read more. Use num_chars to control how many chars to return.",
             result.content,
             start + len
         )
