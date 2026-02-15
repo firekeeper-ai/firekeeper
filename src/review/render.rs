@@ -125,8 +125,7 @@ fn format_tool_call(tc: &tiny_loop::types::ToolCall) -> String {
     }
     if tc.function.name == crate::tool::sh::ShArgs::TOOL_NAME {
         if let Ok(args) = serde_json::from_str::<crate::tool::sh::ShArgs>(&tc.function.arguments) {
-            if args.start_char.is_none() && args.num_chars.is_none() && args.timeout_secs.is_none()
-            {
+            if args.start_char.is_none() && args.num_chars.is_none() {
                 return format!(
                     "- **{}**\n\n```sh\n{}\n```\n\n",
                     tc.function.name, args.command

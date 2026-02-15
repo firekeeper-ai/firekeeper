@@ -156,7 +156,7 @@ fn load_skill_resource(
 
 /// Load sh:// resources
 async fn load_shell_resource(cmd: &str, content: &mut String) {
-    match crate::tool::sh::execute_shell_command_no_timeout(cmd).await {
+    match crate::tool::sh::execute_shell_command(cmd).await {
         Ok(stdout) => {
             let fence = get_fence_backticks(&stdout);
             content.push_str(&format!(

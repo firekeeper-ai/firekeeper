@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 - Removed `lua` tool (complex shell operations now handled by `sh` tool)
+- Removed `sh` tool timeout (commands now run without time limit)
 
 ## [0.4.0] - 2026-02-10
 
