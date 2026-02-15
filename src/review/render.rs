@@ -134,17 +134,6 @@ fn format_tool_call(tc: &tiny_loop::types::ToolCall) -> String {
             }
         }
     }
-    if tc.function.name == crate::tool::lua::LuaArgs::TOOL_NAME {
-        if let Ok(args) = serde_json::from_str::<crate::tool::lua::LuaArgs>(&tc.function.arguments)
-        {
-            if args.start_char.is_none() && args.num_chars.is_none() {
-                return format!(
-                    "- **{}**\n\n```lua\n{}\n```\n\n",
-                    tc.function.name, args.script
-                );
-            }
-        }
-    }
     let formatted_args = serde_json::from_str::<serde_json::Value>(&tc.function.arguments)
         .ok()
         .and_then(|v| serde_yaml_ng::to_string(&v).ok())

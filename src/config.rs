@@ -89,7 +89,8 @@ pub struct ReviewConfig {
     /// - `skill://glob` - Include matched skills, e.g. `skill://~/skills/**/SKILL.md`
     pub resources: Vec<String>,
     /// Allowed shell commands during review (read-only operations only).
-    /// Add tools like `rg` (ripgrep), `sg (ast-grep)`, `fd`, `jq` to enhance search capabilities.
+    /// Commands are executed via sh on Unix/Linux, PowerShell on Windows.
+    /// Add tools like `rg` (ripgrep), `sg` (ast-grep), `fd`, `jq` to enhance search capabilities.
     pub allowed_shell_commands: Vec<String>,
 }
 
@@ -106,15 +107,27 @@ impl Default for ReviewConfig {
             max_files_per_task: Self::DEFAULT_MAX_FILES_PER_TASK,
             max_parallel_workers: None,
             resources: vec!["file://README.md".to_string()],
-            allowed_shell_commands: vec![
-                "ls".to_string(),
-                "cat".to_string(),
-                "grep".to_string(),
-                "find".to_string(),
-                "head".to_string(),
-                "tail".to_string(),
-                "wc".to_string(),
-            ],
+            allowed_shell_commands: if cfg!(windows) {
+                vec![
+                    "Get-ChildItem".to_string(),
+                    "Get-Content".to_string(),
+                    "Select-String".to_string(),
+                    "Get-Item".to_string(),
+                    "Select-Object".to_string(),
+                    "Measure-Object".to_string(),
+                    "Where-Object".to_string(),
+                ]
+            } else {
+                vec![
+                    "ls".to_string(),
+                    "cat".to_string(),
+                    "grep".to_string(),
+                    "find".to_string(),
+                    "head".to_string(),
+                    "tail".to_string(),
+                    "wc".to_string(),
+                ]
+            },
         }
     }
 }

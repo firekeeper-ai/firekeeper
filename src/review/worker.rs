@@ -156,31 +156,13 @@ fn load_skill_resource(
 
 /// Load sh:// resources
 async fn load_shell_resource(cmd: &str, content: &mut String) {
-    #[cfg(windows)]
-    let output = tokio::process::Command::new("cmd")
-        .arg("/C")
-        .arg(cmd)
-        .output()
-        .await;
-    #[cfg(not(windows))]
-    let output = tokio::process::Command::new("sh")
-        .arg("-c")
-        .arg(cmd)
-        .output()
-        .await;
-
-    match output {
-        Ok(output) => {
-            if output.status.success() {
-                let stdout = String::from_utf8_lossy(&output.stdout);
-                let fence = get_fence_backticks(&stdout);
-                content.push_str(&format!(
-                    "### `{}`\n\n{}\n{}\n{}\n\n",
-                    cmd, fence, stdout, fence
-                ));
-            } else {
-                warn!("Command failed: sh://{}", cmd);
-            }
+    match crate::tool::sh::execute_shell_command_no_timeout(cmd).await {
+        Ok(stdout) => {
+            let fence = get_fence_backticks(&stdout);
+            content.push_str(&format!(
+                "### `{}`\n\n{}\n{}\n{}\n\n",
+                cmd, fence, stdout, fence
+            ));
         }
         Err(e) => warn!("Failed to execute command 'sh://{}': {}", cmd, e),
     }
