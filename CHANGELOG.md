@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Updated `tiny-loop` dependency from 0.4 to 0.5
+- **BREAKING**: Updated `tiny-loop` dependency from 0.4 to 0.5 (trace message timestamps now show completion time instead of start time)
 - Replaced `shell-words` with `sheath` for shell command validation
 - `sh` tool now supports complex commands with pipes and redirections
 - `sh` tool uses PowerShell on Windows, sh on Unix/Linux
