@@ -90,7 +90,7 @@ impl Default for LlmConfig {
 #[derive(Deserialize, Serialize, Debug, JsonSchema, TomlScaffold)]
 #[serde(default)]
 pub struct ReviewConfig {
-    /// Maximum number of files to review per task
+    /// Default maximum number of files to review per task
     pub max_files_per_task: usize,
     /// Maximum number of parallel workers (optional, defaults to unlimited)
     pub max_parallel_workers: Option<usize>,

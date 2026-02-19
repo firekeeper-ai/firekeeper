@@ -14,30 +14,23 @@ pub struct RuleBody {
     /// Glob patterns to match files this rule applies to (optional, defaults to ["**/*"])
     #[serde(default = "default_scope")]
     pub scope: Vec<String>,
-    /// Glob patterns to exclude files from this rule (optional, defaults to [])
+    /// Glob patterns to exclude from the matched scope (optional, defaults to [])
     #[serde(default)]
     pub exclude: Vec<String>,
     /// Maximum number of files to review per task (optional, overrides global config).
-    ///
     /// Increase for simple rules that only check changed files (e.g. scan for hardcoded credentials).
-    ///
     /// Decrease for complex rules that scan many additional files (e.g. documentation sync).
     #[serde(default)]
     pub max_files_per_task: Option<usize>,
+    /// Rule-specific resources to include in review context.
+    #[serde(default)]
+    pub resources: Vec<String>,
     /// Whether violations should block the pipeline (exit 1) (optional, defaults to true)
     #[serde(default = "default_blocking")]
     pub blocking: bool,
     /// Tip for downstream processors (e.g. coding agents) to fix violations (optional)
     #[serde(default)]
     pub tip: Option<String>,
-    /// Rule-specific resources to include in review context.
-    ///
-    /// Supported formats:
-    /// - `file://glob` - Include matched files' full text, e.g. `file://**/README.md`
-    /// - `sh://command` - Include command output, e.g. `sh://git ls-files`
-    /// - `skill://glob` - Include matched skills, e.g. `skill://~/skills/**/SKILL.md`
-    #[serde(default)]
-    pub resources: Vec<String>,
 }
 
 pub fn default_scope() -> Vec<String> {

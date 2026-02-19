@@ -11,8 +11,8 @@ model = "google/gemini-3-flash-preview"
 
 # Custom HTTP headers (optional)
 [llm.headers]
-X-Title = "firekeeper.ai"
 HTTP-Referer = "https://github.com/firekeeper-ai/firekeeper"
+X-Title = "firekeeper.ai"
 
 # Custom request body fields (optional)
 [llm.body]
@@ -21,7 +21,7 @@ reasoning.effort = "medium"
 
 # Code review configuration
 [review]
-# Maximum number of files to review per task
+# Default maximum number of files to review per task
 max_files_per_task = 5
 # Global resources to include in review context.
 # Supported formats:
@@ -72,22 +72,18 @@ Exemptions - Do NOT report if changes are:
 """
 # Glob patterns to match files this rule applies to (optional, defaults to ["**/*"])
 scope = ["**/*.rs"]
-# Glob patterns to exclude files from this rule (optional, defaults to [])
+# Glob patterns to exclude from the matched scope (optional, defaults to [])
 exclude = []
 # Maximum number of files to review per task (optional, overrides global config).
 # Increase for simple rules that only check changed files (e.g. scan for hardcoded credentials).
 # Decrease for complex rules that scan many additional files (e.g. documentation sync).
 max_files_per_task = 3
+# Rule-specific resources to include in review context.
+resources = ["file://README.md", "sh://git ls-files"]
 # Whether violations should block the pipeline (exit 1) (optional, defaults to true)
 blocking = true
 # Tip for downstream processors (e.g. coding agents) to fix violations (optional)
 tip = ""
-# Rule-specific resources to include in review context.
-# Supported formats:
-# - `file://glob` - Include matched files' full text, e.g. `file://**/README.md`
-# - `sh://command` - Include command output, e.g. `sh://git ls-files`
-# - `skill://glob` - Include matched skills, e.g. `skill://~/skills/**/SKILL.md`
-resources = ["file://README.md", "sh://git ls-files"]
 
 # Code review rules
 [[rules]]
@@ -120,24 +116,20 @@ Exemptions - Do NOT report:
 """
 # Glob patterns to match files this rule applies to (optional, defaults to ["**/*"])
 scope = ["**/*.rs"]
-# Glob patterns to exclude files from this rule (optional, defaults to [])
+# Glob patterns to exclude from the matched scope (optional, defaults to [])
 exclude = []
 # Maximum number of files to review per task (optional, overrides global config).
 # Increase for simple rules that only check changed files (e.g. scan for hardcoded credentials).
 # Decrease for complex rules that scan many additional files (e.g. documentation sync).
 max_files_per_task = 3
+# Rule-specific resources to include in review context.
+resources = ["file://README.md", "sh://git ls-files"]
 # Whether violations should block the pipeline (exit 1) (optional, defaults to true)
 blocking = true
 # Tip for downstream processors (e.g. coding agents) to fix violations (optional)
 tip = """
 Extract common code into shared functions or modules.
 """
-# Rule-specific resources to include in review context.
-# Supported formats:
-# - `file://glob` - Include matched files' full text, e.g. `file://**/README.md`
-# - `sh://command` - Include command output, e.g. `sh://git ls-files`
-# - `skill://glob` - Include matched skills, e.g. `skill://~/skills/**/SKILL.md`
-resources = ["file://README.md", "sh://git ls-files"]
 
 # Code review rules
 [[rules]]
@@ -174,24 +166,20 @@ Exemptions - Do NOT report:
 """
 # Glob patterns to match files this rule applies to (optional, defaults to ["**/*"])
 scope = ["**/*.rs"]
-# Glob patterns to exclude files from this rule (optional, defaults to [])
+# Glob patterns to exclude from the matched scope (optional, defaults to [])
 exclude = []
 # Maximum number of files to review per task (optional, overrides global config).
 # Increase for simple rules that only check changed files (e.g. scan for hardcoded credentials).
 # Decrease for complex rules that scan many additional files (e.g. documentation sync).
 max_files_per_task = 10
+# Rule-specific resources to include in review context.
+resources = []
 # Whether violations should block the pipeline (exit 1) (optional, defaults to true)
 blocking = true
 # Tip for downstream processors (e.g. coding agents) to fix violations (optional)
 tip = """
 Define constants with descriptive names or add explanatory comments.
 """
-# Rule-specific resources to include in review context.
-# Supported formats:
-# - `file://glob` - Include matched files' full text, e.g. `file://**/README.md`
-# - `sh://command` - Include command output, e.g. `sh://git ls-files`
-# - `skill://glob` - Include matched skills, e.g. `skill://~/skills/**/SKILL.md`
-resources = []
 
 # Code review rules
 [[rules]]
@@ -227,12 +215,14 @@ Exemptions - Do NOT report:
 """
 # Glob patterns to match files this rule applies to (optional, defaults to ["**/*"])
 scope = ["**/*"]
-# Glob patterns to exclude files from this rule (optional, defaults to [])
+# Glob patterns to exclude from the matched scope (optional, defaults to [])
 exclude = ["*.lock", "*ignore"]
 # Maximum number of files to review per task (optional, overrides global config).
 # Increase for simple rules that only check changed files (e.g. scan for hardcoded credentials).
 # Decrease for complex rules that scan many additional files (e.g. documentation sync).
 max_files_per_task = 10
+# Rule-specific resources to include in review context.
+resources = []
 # Whether violations should block the pipeline (exit 1) (optional, defaults to true)
 blocking = true
 # Tip for downstream processors (e.g. coding agents) to fix violations (optional)
@@ -240,12 +230,6 @@ tip = """
 Use environment variables or configuration files for credentials.
 Replace real values with placeholders in examples.
 """
-# Rule-specific resources to include in review context.
-# Supported formats:
-# - `file://glob` - Include matched files' full text, e.g. `file://**/README.md`
-# - `sh://command` - Include command output, e.g. `sh://git ls-files`
-# - `skill://glob` - Include matched skills, e.g. `skill://~/skills/**/SKILL.md`
-resources = []
 
 # Code review rules
 [[rules]]
@@ -280,12 +264,14 @@ Exemptions - Do NOT report:
 """
 # Glob patterns to match files this rule applies to (optional, defaults to ["**/*"])
 scope = ["**/*.rs"]
-# Glob patterns to exclude files from this rule (optional, defaults to [])
+# Glob patterns to exclude from the matched scope (optional, defaults to [])
 exclude = []
 # Maximum number of files to review per task (optional, overrides global config).
 # Increase for simple rules that only check changed files (e.g. scan for hardcoded credentials).
 # Decrease for complex rules that scan many additional files (e.g. documentation sync).
 max_files_per_task = 10
+# Rule-specific resources to include in review context.
+resources = []
 # Whether violations should block the pipeline (exit 1) (optional, defaults to true)
 blocking = true
 # Tip for downstream processors (e.g. coding agents) to fix violations (optional)
@@ -294,9 +280,3 @@ Replace string literals with XxxArgs::TOOL_NAME constants.
 Replace manual JSON parsing with serde_json::from_str::<XxxArgs>().
 Import tiny_loop::tool::ToolArgs trait if needed.
 """
-# Rule-specific resources to include in review context.
-# Supported formats:
-# - `file://glob` - Include matched files' full text, e.g. `file://**/README.md`
-# - `sh://command` - Include command output, e.g. `sh://git ls-files`
-# - `skill://glob` - Include matched skills, e.g. `skill://~/skills/**/SKILL.md`
-resources = []
