@@ -69,45 +69,28 @@ fn default_lock_and_ignore_exclude() -> Vec<String> {
 }
 
 impl RuleBody {
-    pub fn no_code_duplication() -> Self {
+    pub fn config_file_comments() -> Self {
         Self {
-            name: "No Code Duplication".into(),
-            description: "Prevent duplicate code across files".into(),
+            name: "Firekeeper Config Comments".into(),
+            description: "Ensure firekeeper.toml has correct documentation comments".into(),
             instruction: r#"
-Check if modified code duplicates existing code in other files.
+Check if firekeeper.toml has missing documentation comments.
 
 Steps:
-1. Read focused files to understand the modified logic
-2. Search for similar code patterns in other files
-3. Report violations if substantial duplication is found
+1. Check if all fields have documentation comments
+2. Report violations if any field is missing a comment
 
 Violation criteria - Report if:
-- Business logic duplicated across files (>30 lines of similar code)
-- Complex algorithms or calculations repeated identically
-- Data transformation logic that's the same in multiple places
-- Functions that could be extracted into shared utilities
-
-Exemptions - Do NOT report:
-- Trivial code (one-liners, common patterns like error handling)
-- Test code and test utilities
-- Similar but contextually different logic (e.g., different validation rules)
-- Common patterns (builder methods, getters/setters)
-- Standard boilerplate (CLI parsing, config loading)
-- Factory methods or templates with intentional configuration duplication
+- Any field lacks a documentation comment
 "#
             .into(),
-            scope: default_scope(),
-            exclude: default_non_code_exclude(),
-            // Low value for complex rule that scans many files
-            max_files_per_task: Some(3),
+            scope: vec!["firekeeper.toml".into()],
+            exclude: vec![],
+            // Only 1 file needs to be reviewed
+            max_files_per_task: Some(1),
             blocking: true,
-            tip: Some(
-                r#"
-Extract common code into shared functions or modules.
-"#
-                .into(),
-            ),
-            resources: vec!["sh://git ls-files".into()],
+            tip: Some("Use `firekeeper config format [--config firekeeper.toml]` to re-render the config file".into()),
+            resources: vec!["file://firekeeper.toml".into()],
         }
     }
 
@@ -116,12 +99,10 @@ Extract common code into shared functions or modules.
             name: "No Magic Numbers".into(),
             description: "Prevent hardcoded numeric literals".into(),
             instruction: r#"
-Only read the focused files. Don't read any other files.
-
-Check for unexplained numeric literals in diff.
+Check for unexplained numeric literals in the provided diff.
 
 Steps:
-1. Read focused files and identify numeric literals
+1. Identify numeric literals in the diff
 2. Check if numbers have explanatory comments or clear context
 3. Report violations for unexplained numbers
 
@@ -162,12 +143,10 @@ Define constants with descriptive names or add explanatory comments.
             name: "No Hardcoded Credentials".into(),
             description: "Prevent credential leaks".into(),
             instruction: r#"
-Only read the focused files. Don't read any other files.
-
-Check for hardcoded credentials in diff.
+Check for hardcoded credentials in the provided diff.
 
 Steps:
-1. Read focused files and scan for credential-like strings
+1. Scan the diff for credential-like strings
 2. Determine if they are real credentials or placeholders
 3. Report violations for any real credentials found
 
@@ -200,6 +179,48 @@ Replace real values with placeholders in examples.
                 .into(),
             ),
             resources: vec![],
+        }
+    }
+
+    pub fn no_code_duplication() -> Self {
+        Self {
+            name: "No Code Duplication".into(),
+            description: "Prevent duplicate code across files".into(),
+            instruction: r#"
+Check if modified code duplicates existing code in other files.
+
+Steps:
+1. Read focused files to understand the modified logic
+2. Search for similar code patterns in other files
+3. Report violations if substantial duplication is found
+
+Violation criteria - Report if:
+- Business logic duplicated across files (>30 lines of similar code)
+- Complex algorithms or calculations repeated identically
+- Data transformation logic that's the same in multiple places
+- Functions that could be extracted into shared utilities
+
+Exemptions - Do NOT report:
+- Trivial code (one-liners, common patterns like error handling)
+- Test code and test utilities
+- Similar but contextually different logic (e.g., different validation rules)
+- Common patterns (builder methods, getters/setters)
+- Standard boilerplate (CLI parsing, config loading)
+- Factory methods or templates with intentional configuration duplication
+"#
+            .into(),
+            scope: default_scope(),
+            exclude: default_non_code_exclude(),
+            // Low value for complex rule that scans many files
+            max_files_per_task: Some(3),
+            blocking: true,
+            tip: Some(
+                r#"
+Extract common code into shared functions or modules.
+"#
+                .into(),
+            ),
+            resources: vec!["sh://git ls-files".into()],
         }
     }
 }

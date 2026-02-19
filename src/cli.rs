@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 
 // Display order for API key option (placed at top of help text)
 const API_KEY_DISPLAY_ORDER: usize = 0;
@@ -40,6 +40,15 @@ pub enum Commands {
     Config(ConfigArgs),
 }
 
+/// Template type for init command
+#[derive(ValueEnum, Clone, Debug)]
+pub enum Template {
+    /// Fast template for git hooks
+    Fast,
+    /// Full template for CI/CD
+    Full,
+}
+
 /// Arguments for the init command
 #[derive(Parser)]
 pub struct InitArgs {
@@ -50,6 +59,10 @@ pub struct InitArgs {
     /// Override existing config file
     #[arg(long)]
     pub r#override: bool,
+
+    /// Template to use
+    #[arg(long, default_value = "fast")]
+    pub template: Template,
 }
 
 /// Arguments for the review command

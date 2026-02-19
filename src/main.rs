@@ -31,11 +31,12 @@ async fn main() {
                 std::process::exit(1);
             }
 
-            std::fs::write(
-                &args.config,
-                config::Config::default().to_scaffold().unwrap(),
-            )
-            .unwrap_or_else(|e| {
+            let template = match args.template {
+                cli::Template::Fast => config::Config::template_fast(),
+                cli::Template::Full => config::Config::template_full(),
+            };
+
+            std::fs::write(&args.config, template.to_scaffold().unwrap()).unwrap_or_else(|e| {
                 error!("Error writing config: {}", e);
                 std::process::exit(1);
             });

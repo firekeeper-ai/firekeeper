@@ -7,12 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `firekeeper init` now supports `--template` option to choose between `fast` (for git hooks) and `full` (for CI/CD) templates, defaulting to `fast`
+
 ### Changed
 
 - **BREAKING**: Updated `tiny-loop` dependency from 0.4 to 0.5 (trace message timestamps now show completion time instead of start time)
 - Replaced `shell-words` with `sheath` for shell command validation
 - `sh` tool now supports complex commands with pipes and redirections
 - `sh` tool uses PowerShell on Windows, sh on Unix/Linux
+- Default config template now uses `fast` template with fewer rules for better git hook performance
+- Removed `file://README.md` from default resources in config template
 
 ### Removed
 

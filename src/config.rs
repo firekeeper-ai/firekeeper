@@ -13,7 +13,6 @@ use crate::rule::body::RuleBody;
 ///
 /// Note for AI agents: Preserve all comments when modifying this configuration
 #[derive(Deserialize, Serialize, Debug, JsonSchema, TomlScaffold)]
-#[serde(default)]
 pub struct Config {
     /// LLM provider configuration
     pub llm: LlmConfig,
@@ -23,15 +22,28 @@ pub struct Config {
     pub rules: Vec<crate::rule::body::RuleBody>,
 }
 
-impl Default for Config {
-    fn default() -> Self {
+impl Config {
+    pub fn template_fast() -> Self {
         Self {
             llm: LlmConfig::default(),
             review: ReviewConfig::default(),
             rules: vec![
-                RuleBody::no_code_duplication(),
+                RuleBody::config_file_comments(),
                 RuleBody::no_magic_numbers(),
                 RuleBody::no_hardcoded_credentials(),
+            ],
+        }
+    }
+
+    pub fn template_full() -> Self {
+        Self {
+            llm: LlmConfig::default(),
+            review: ReviewConfig::default(),
+            rules: vec![
+                RuleBody::config_file_comments(),
+                RuleBody::no_magic_numbers(),
+                RuleBody::no_hardcoded_credentials(),
+                RuleBody::no_code_duplication(),
             ],
         }
     }
@@ -107,7 +119,7 @@ impl Default for ReviewConfig {
         Self {
             max_files_per_task: Self::DEFAULT_MAX_FILES_PER_TASK,
             max_parallel_workers: None,
-            resources: vec!["file://README.md".to_string()],
+            resources: vec![],
             allowed_shell_commands: if cfg!(windows) {
                 vec![
                     "Get-ChildItem".to_string(),
