@@ -66,8 +66,7 @@ impl RuleBody {
         Self {
             name: "Firekeeper Config Comments".into(),
             description: "Ensure firekeeper.toml has correct documentation comments".into(),
-            instruction: r#"
-Check if firekeeper.toml has missing documentation comments.
+            instruction: r#"Check if firekeeper.toml has missing documentation comments.
 
 Steps:
 1. Check if all fields have documentation comments
@@ -82,7 +81,8 @@ Violation criteria - Report if:
             // Only 1 file needs to be reviewed
             max_files_per_task: Some(1),
             blocking: true,
-            tip: Some("Use `firekeeper config format [--config firekeeper.toml]` to re-render the config file".into()),
+            tip: Some(r#"Use `firekeeper config format [--config firekeeper.toml]` to re-render the config file
+"#.into()),
             resources: vec!["file://firekeeper.toml".into()],
         }
     }
@@ -91,8 +91,7 @@ Violation criteria - Report if:
         Self {
             name: "No Magic Numbers".into(),
             description: "Prevent hardcoded numeric literals".into(),
-            instruction: r#"
-Check for unexplained numeric literals in the provided diff.
+            instruction: r#"Check for unexplained numeric literals in the provided diff.
 
 Steps:
 1. Identify numeric literals in the diff
@@ -122,8 +121,7 @@ Exemptions - Do NOT report:
             max_files_per_task: Some(10),
             blocking: true,
             tip: Some(
-                r#"
-Define constants with descriptive names or add explanatory comments.
+                r#"Define constants with descriptive names or add explanatory comments.
 "#
                 .into(),
             ),
@@ -135,8 +133,7 @@ Define constants with descriptive names or add explanatory comments.
         Self {
             name: "No Hardcoded Credentials".into(),
             description: "Prevent credential leaks".into(),
-            instruction: r#"
-Check for hardcoded credentials in the provided diff.
+            instruction: r#"Check for hardcoded credentials in the provided diff.
 
 Steps:
 1. Scan the diff for credential-like strings
@@ -165,8 +162,7 @@ Exemptions - Do NOT report:
             max_files_per_task: Some(10),
             blocking: true,
             tip: Some(
-                r#"
-Use environment variables or configuration files for credentials.
+                r#"Use environment variables or configuration files for credentials.
 Replace real values with placeholders in examples.
 "#
                 .into(),
@@ -179,8 +175,7 @@ Replace real values with placeholders in examples.
         Self {
             name: "No Code Duplication".into(),
             description: "Prevent duplicate code across files".into(),
-            instruction: r#"
-Check if modified code duplicates existing code in other files.
+            instruction: r#"Check if modified code duplicates existing code in other files.
 
 Steps:
 1. Read focused files to understand the modified logic
@@ -208,8 +203,7 @@ Exemptions - Do NOT report:
             max_files_per_task: Some(3),
             blocking: true,
             tip: Some(
-                r#"
-Extract common code into shared functions or modules.
+                r#"Extract common code into shared functions or modules.
 "#
                 .into(),
             ),
