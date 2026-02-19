@@ -11,8 +11,8 @@ model = "google/gemini-3-flash-preview"
 
 # Custom HTTP headers (optional)
 [llm.headers]
-HTTP-Referer = "https://github.com/firekeeper-ai/firekeeper"
 X-Title = "firekeeper.ai"
+HTTP-Referer = "https://github.com/firekeeper-ai/firekeeper"
 
 # Custom request body fields (optional)
 [llm.body]
@@ -23,6 +23,8 @@ reasoning.effort = "medium"
 [review]
 # Default maximum number of files to review per task
 max_files_per_task = 5
+# Worker timeout in seconds (defaults to 300)
+timeout = 300
 # Global resources to include in review context.
 # Supported formats:
 # - `file://glob` - Include matched files' full text, e.g. `file://**/README.md`

@@ -62,6 +62,7 @@ async fn main() {
                 &args.base,
                 config.review.max_files_per_task,
                 config.review.max_parallel_workers,
+                config.review.timeout,
                 &config.llm.base_url,
                 &args.api_key,
                 &config.llm.model,

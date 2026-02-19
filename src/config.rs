@@ -94,6 +94,8 @@ pub struct ReviewConfig {
     pub max_files_per_task: usize,
     /// Maximum number of parallel workers (optional, defaults to unlimited)
     pub max_parallel_workers: Option<usize>,
+    /// Worker timeout in seconds (defaults to 300)
+    pub timeout: u64,
     /// Global resources to include in review context.
     ///
     /// Supported formats:
@@ -119,6 +121,7 @@ impl Default for ReviewConfig {
         Self {
             max_files_per_task: Self::DEFAULT_MAX_FILES_PER_TASK,
             max_parallel_workers: None,
+            timeout: 300,
             resources: vec![],
             allowed_shell_commands: if cfg!(windows) {
                 vec![

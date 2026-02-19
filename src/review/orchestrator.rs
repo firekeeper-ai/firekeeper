@@ -25,6 +25,7 @@ pub async fn orchestrate_and_run(
     diff_base: &str,
     max_files_per_task: usize,
     max_parallel_workers: Option<usize>,
+    timeout_secs: u64,
     base_url: &str,
     api_key: &str,
     model: &str,
@@ -123,6 +124,7 @@ pub async fn orchestrate_and_run(
                 is_root,
                 resources,
                 allowed_cmds,
+                timeout_secs,
             )
         })
         .collect();

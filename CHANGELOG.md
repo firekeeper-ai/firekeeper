@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `firekeeper init` now supports `--template` option to choose between `fast` (for git hooks) and `full` (for CI/CD) templates, defaulting to `fast`
+- Worker timeout configuration (`timeout`) in `ReviewConfig`, defaults to 300 seconds (5 minutes)
 
 ### Changed
 
@@ -19,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `sh` tool uses PowerShell on Windows, sh on Unix/Linux
 - Default config template now uses `fast` template with fewer rules for better git hook performance
 - Removed `file://README.md` from default resources in config template
+- Workers now respect timeout and return partial results with trace on timeout, similar to Ctrl-C behavior
 
 ### Removed
 

@@ -283,6 +283,7 @@ async fn run_agent_with_cancellation(
     mut agent: Agent,
     user_message: String,
     shutdown: Arc<Mutex<bool>>,
+    timeout_secs: u64,
     worker_id: &str,
     rule_name: &str,
 ) -> Result<(bool, Agent), Box<dyn std::error::Error>> {
@@ -303,6 +304,7 @@ async fn run_agent_with_cancellation(
             }
         }
     };
+    let timeout_future = tokio::time::sleep(tokio::time::Duration::from_secs(timeout_secs));
 
     let cancelled = tokio::select! {
         result = chat_future => {
@@ -311,6 +313,10 @@ async fn run_agent_with_cancellation(
         }
         _ = shutdown_check => {
             warn!("[Worker {}] Cancelled due to shutdown", worker_id);
+            true
+        }
+        _ = timeout_future => {
+            warn!("[Worker {}] Timeout after {}s", worker_id, timeout_secs);
             true
         }
     };
@@ -451,6 +457,7 @@ pub async fn worker(
     is_root_base: bool,
     global_resources: Vec<String>,
     allowed_shell_commands: Vec<String>,
+    timeout_secs: u64,
 ) -> Result<WorkerResult, Box<dyn std::error::Error>> {
     let start = std::time::Instant::now();
     info!(
@@ -514,9 +521,16 @@ Workflow:
     );
     trace!("[Worker {}] User message: {}", worker_id, user_message);
 
-    // Run agent loop to review code with cancellation support
-    let (cancelled, agent) =
-        run_agent_with_cancellation(agent, user_message, shutdown, &worker_id, &rule.name).await?;
+    // Run agent loop to review code with cancellation support and timeout
+    let (cancelled, agent) = run_agent_with_cancellation(
+        agent,
+        user_message,
+        shutdown,
+        timeout_secs,
+        &worker_id,
+        &rule.name,
+    )
+    .await?;
 
     // Collect trace data if enabled (even if cancelled)
     let (messages, tools) = collect_trace_data(trace_enabled, &agent);
