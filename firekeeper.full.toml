@@ -1,0 +1,96 @@
+extends = "firekeeper.toml"
+
+# Code review rules
+[[rules]]
+# Human-readable rule name, invisible to LLM
+name = "Documentation Sync"
+# Human-readable description, invisible to LLM (optional)
+description = "Ensure user-facing documentation is updated with CLI changes"
+# Detailed instructions for the LLM on how to check this rule
+instruction = """
+Check if user-facing changes have corresponding documentation updates.
+
+Steps:
+1. Read focused files to identify if changes are user-facing
+2. Check if code comments (function docs, inline comments) are updated to match code changes
+3. If user-facing, check CHANGELOG.md for updates under [Unreleased]
+4. Check if README.md has outdated information that needs correction
+5. Report violations if documentation is missing or outdated
+
+Violation criteria - Report if ANY of these are true:
+- Code behavior changed but comments/doc comments not updated
+- Function signatures changed but doc comments still describe old behavior
+- User-facing changes not documented in CHANGELOG.md under [Unreleased]
+- README.md contains outdated information contradicting the changes
+- Breaking changes not documented in CHANGELOG
+
+Note: Don't require adding new content to README (e.g., new features/commands).
+Only update README if existing content becomes outdated.
+
+Exemptions - Do NOT report if changes are:
+- Internal function implementations (not exposed to CLI)
+- Code refactoring without behavior changes
+- Internal helper functions or utilities
+- Internal tool implementations (src/tool/) for agent system
+- Internal config optimizations (scope patterns, performance tuning)
+"""
+# Glob patterns to match files this rule applies to (optional, defaults to ["**/*"])
+scope = ["**/*.rs"]
+# Glob patterns to exclude from the matched scope (optional, defaults to [])
+exclude = []
+# Maximum number of files to review per task (optional, overrides global config).
+# Increase for simple rules that only check changed files (e.g. scan for hardcoded credentials).
+# Decrease for complex rules that scan many additional files (e.g. documentation sync).
+max_files_per_task = 3
+# Rule-specific resources to include in review context.
+resources = ["file://README.md", "sh://git ls-files"]
+# Whether violations should block the pipeline (exit 1) (optional, defaults to true)
+blocking = true
+# Tip for downstream processors (e.g. coding agents) to fix violations (optional)
+tip = ""
+
+# Code review rules
+[[rules]]
+# Human-readable rule name, invisible to LLM
+name = "No Code Duplication"
+# Human-readable description, invisible to LLM (optional)
+description = "Prevent duplicate code across files"
+# Detailed instructions for the LLM on how to check this rule
+instruction = """
+Check if modified code duplicates existing code in other files.
+
+Steps:
+1. Read focused files to understand the modified logic
+2. Search for similar code patterns in other files
+3. Report violations if substantial duplication is found
+
+Violation criteria - Report if:
+- Business logic duplicated across files (>30 lines of similar code)
+- Complex algorithms or calculations repeated identically
+- Data transformation logic that's the same in multiple places
+- Functions that could be extracted into shared utilities
+
+Exemptions - Do NOT report:
+- Trivial code (one-liners, common patterns like error handling)
+- Test code and test utilities
+- Similar but contextually different logic (e.g., different validation rules)
+- Common patterns (builder methods, getters/setters)
+- Standard boilerplate (CLI parsing, config loading)
+- Factory methods or templates with intentional configuration duplication
+"""
+# Glob patterns to match files this rule applies to (optional, defaults to ["**/*"])
+scope = ["**/*.rs"]
+# Glob patterns to exclude from the matched scope (optional, defaults to [])
+exclude = []
+# Maximum number of files to review per task (optional, overrides global config).
+# Increase for simple rules that only check changed files (e.g. scan for hardcoded credentials).
+# Decrease for complex rules that scan many additional files (e.g. documentation sync).
+max_files_per_task = 3
+# Rule-specific resources to include in review context.
+resources = ["file://README.md", "sh://git ls-files"]
+# Whether violations should block the pipeline (exit 1) (optional, defaults to true)
+blocking = true
+# Tip for downstream processors (e.g. coding agents) to fix violations (optional)
+tip = """
+Extract common code into shared functions or modules.
+"""
