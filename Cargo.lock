@@ -2131,9 +2131,9 @@ dependencies = [
 
 [[package]]
 name = "toml-scaffold"
-version = "0.2.1"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c4f7afff90dc45abce454ab14dbfaac1442ae2572d2c352d1db40a3c679679b9"
+checksum = "c1d90f0bb47e6ab3ce77bb1cf7bc69cbc18f8604ee84491c4e0f1e385b32f842"
 dependencies = [
  "schemars",
  "serde",
@@ -2145,9 +2145,9 @@ dependencies = [
 
 [[package]]
 name = "toml-scaffold-macros"
-version = "0.1.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c8ded45dbc9bda2bdee31c65d90cc5b4af47d33af947dcd081814d25a67df3f"
+checksum = "8238ef5f7afd9a9d31f8cda7d696f4cc63524bbdc098b96e7b1a9875f3edcba4"
 dependencies = [
  "proc-macro2",
  "quote",

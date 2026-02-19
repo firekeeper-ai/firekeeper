@@ -48,6 +48,7 @@ pub struct LlmConfig {
     /// Custom HTTP headers (optional)
     pub headers: HashMap<String, String>,
     /// Custom request body fields (optional)
+    #[format = "*dotted"]
     pub body: Value,
 }
 
