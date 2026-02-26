@@ -1,0 +1,10 @@
+[[repos]]
+repo = "local"
+
+[[repos.hooks]]
+id = "pre-commit"
+name = "Firekeeper pre-commit"
+entry = "cargo run -- review --base HEAD --trace /tmp/firekeeper-trace.md"
+language = "system"
+pass_filenames = false
+always_run = true

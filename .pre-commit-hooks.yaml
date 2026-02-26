@@ -1,0 +1,6 @@
+- id: pre-commit
+  name: Firekeeper pre-commit
+  entry: firekeeper review --base HEAD
+  language: node
+  pass_filenames: false
+  always_run: true

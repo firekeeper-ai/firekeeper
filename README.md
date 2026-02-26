@@ -111,6 +111,27 @@ add a rule to firekeeper.toml: update CHANGELOG.md when Rust files change
 
 </details>
 
+### [Prek](https://prek.j178.dev/) Hook
+
+```toml
+[[repos]]
+repo = "https://github.com/firekeeper-ai/firekeeper"
+rev = "v0.4.0"
+hooks = [
+  { id = "pre-commit" },
+]
+```
+
+### [Pre-commit](https://pre-commit.com/) Hook
+
+```yaml
+repos:
+  - repo: https://github.com/firekeeper-ai/firekeeper
+    rev: v0.4.0
+    hooks:
+      - id: pre-commit
+```
+
 ## FAQ
 
 ### Why use a dedicated AI code reviewer instead of coding agents with MCP/Skills?
