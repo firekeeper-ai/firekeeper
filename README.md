@@ -19,6 +19,8 @@ _Parallel review, custom rules, agent skills, run anywhere_
 
 </span>
 
+> **⚠️ Early Development**: This project is in early development phase. APIs may change frequently.
+
 ## Features
 
 - **_Privacy-first_**: Bring your own LLM API key and model—works with any OpenAI-compatible endpoint
