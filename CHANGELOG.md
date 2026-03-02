@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-03-02
+
 ### Added
 
 - `firekeeper init` now supports `--template` option to choose between `fast` (for git hooks) and `full` (for CI/CD) templates, defaulting to `fast`
@@ -161,7 +163,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multiple output formats (markdown, JSON)
 - Trace logging for debugging
 
-[unreleased]: https://github.com/firekeeper-ai/firekeeper/compare/v0.4.0...HEAD
+[unreleased]: https://github.com/firekeeper-ai/firekeeper/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/firekeeper-ai/firekeeper/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/firekeeper-ai/firekeeper/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/firekeeper-ai/firekeeper/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/firekeeper-ai/firekeeper/compare/v0.2.2...v0.3.0

@@ -118,7 +118,7 @@ add a rule to firekeeper.toml: update CHANGELOG.md when Rust files change
 ```toml
 [[repos]]
 repo = "https://github.com/firekeeper-ai/firekeeper"
-rev = "v0.4.0"
+rev = "v0.5.0"
 hooks = [
   { id = "pre-commit" },
 ]
@@ -129,7 +129,7 @@ hooks = [
 ```yaml
 repos:
   - repo: https://github.com/firekeeper-ai/firekeeper
-    rev: v0.4.0
+    rev: v0.5.0
     hooks:
       - id: pre-commit
 ```
