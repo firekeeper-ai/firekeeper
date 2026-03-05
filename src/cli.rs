@@ -38,6 +38,8 @@ pub enum Commands {
     Render(RenderArgs),
     /// Config file operations
     Config(ConfigArgs),
+    /// Run MCP server for ACP workers (internal use, typically invoked by ACP agents)
+    WorkerMcp(WorkerMcpArgs),
 }
 
 /// Template type for init command
@@ -88,6 +90,11 @@ pub struct ReviewArgs {
     #[arg(long = "config-override")]
     pub config_overrides: Vec<String>,
 
+    /// Agent name to use (defaults to first valid agent: builtin agents are used directly,
+    /// ACP agents are used if their command exists, otherwise the next agent is tried)
+    #[arg(long)]
+    pub agent: Option<String>,
+
     /// LLM API key
     #[arg(long, env = "FIREKEEPER_LLM_API_KEY", display_order = API_KEY_DISPLAY_ORDER)]
     pub api_key: String,
@@ -135,4 +142,15 @@ pub enum ConfigCommands {
     Format,
     /// Validate config file
     Validate,
+}
+
+/// Arguments for the worker-mcp command
+#[derive(Parser, Debug)]
+pub struct WorkerMcpArgs {
+    /// Worker ID for this MCP server
+    #[arg(long, env = "FIREKEEPER_WORKER_ID")]
+    pub worker_id: String,
+    /// Context server URL for tool access
+    #[arg(long, env = "FIREKEEPER_CONTEXT_SERVER")]
+    pub context_server: String,
 }

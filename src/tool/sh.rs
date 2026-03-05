@@ -113,10 +113,7 @@ pub async fn execute_shell_command(command: &str) -> Result<String, ShError> {
     }
 }
 
-pub async fn execute_sh_raw(
-    command: String,
-    allowed_commands: &[String],
-) -> Result<String, ShError> {
+async fn execute_sh_raw(command: String, allowed_commands: &[String]) -> Result<String, ShError> {
     let validator = if cfg!(windows) {
         sheath::Validator::new()
             .shell(sheath::Shell::PowerShell)

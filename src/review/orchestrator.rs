@@ -1,9 +1,9 @@
-use super::{render, worker};
+use super::{context_server, render, worker};
+use crate::config::AgentConfig;
 use crate::rule::body::RuleBody;
 use crate::util;
 use futures::future::join_all;
 use globset::{Glob, GlobSet, GlobSetBuilder};
-use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -26,11 +26,8 @@ pub async fn orchestrate_and_run(
     max_files_per_task: usize,
     max_parallel_workers: Option<usize>,
     timeout_secs: u64,
-    base_url: &str,
+    agent_config: &AgentConfig,
     api_key: &str,
-    model: &str,
-    headers: &HashMap<String, String>,
-    body: &Value,
     dry_run: bool,
     output: Option<&str>,
     trace: Option<&str>,
@@ -92,6 +89,26 @@ pub async fn orchestrate_and_run(
         *shutdown_clone.lock().await = true;
     });
 
+    // Start context server for ACP agents
+    let context_server = if matches!(agent_config, AgentConfig::Acp { .. }) {
+        match context_server::ContextServer::start(allowed_shell_commands.to_vec(), diffs.clone())
+            .await
+        {
+            Ok(server) => {
+                info!("Started context server at {}", server.url());
+                Some(server)
+            }
+            Err(e) => {
+                error!("Failed to start context server: {}", e);
+                std::process::exit(EXIT_FAILURE);
+            }
+        }
+    } else {
+        None
+    };
+
+    let context_server_url = context_server.as_ref().map(|s| s.url());
+
     debug!("Creating worker futures for {} tasks", tasks.len());
     let trace_enabled = trace.is_some();
     let futures: Vec<_> = tasks
@@ -101,23 +118,20 @@ pub async fn orchestrate_and_run(
             let worker_id = i.to_string();
             let all_files = changed_files.clone();
             let commits = commit_messages.clone();
-            let headers = headers.clone();
-            let body = body.clone();
             let shutdown_clone = shutdown.clone();
             let is_root = matches!(base, util::Base::Root);
             let resources = global_resources.to_vec();
             let allowed_cmds = allowed_shell_commands.to_vec();
+            let remote_url = context_server_url.as_deref();
             worker::worker(
                 worker_id,
                 rule,
                 files,
                 all_files,
                 commits,
-                base_url,
+                agent_config,
                 api_key,
-                model,
-                headers,
-                body,
+                remote_url,
                 diffs.clone(),
                 trace_enabled,
                 shutdown_clone,
@@ -137,6 +151,24 @@ pub async fn orchestrate_and_run(
 
     // Execute workers with optional concurrency limit
     let results = execute_workers(futures, max_parallel_workers, shutdown.clone()).await;
+
+    // Collect violations from context server for ACP agents
+    let results = if let Some(server) = context_server {
+        let mut updated_results = Vec::new();
+        for (i, result) in results.into_iter().enumerate() {
+            match result {
+                Ok(mut worker_result) => {
+                    let violations = server.get_violations(&i.to_string()).await;
+                    worker_result.violations = violations;
+                    updated_results.push(Ok(worker_result));
+                }
+                Err(e) => updated_results.push(Err(e)),
+            }
+        }
+        updated_results
+    } else {
+        results
+    };
 
     let (_succeeded, failed, _was_interrupted) =
         log_results(&results, total_tasks, &shutdown).await;

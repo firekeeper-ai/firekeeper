@@ -2,27 +2,12 @@
 # See: https://github.com/firekeeper-ai/firekeeper
 # Note for AI agents: Preserve all comments when modifying this configuration
 
-# LLM provider configuration
-[llm]
-# OpenAI compatible API base URL
-base_url = "https://openrouter.ai/api/v1"
-# LLM model name
-model = "google/gemini-3-flash-preview"
-
-# Custom HTTP headers (optional)
-[llm.headers]
-X-Title = "firekeeper.ai"
-HTTP-Referer = "https://github.com/firekeeper-ai/firekeeper"
-
-# Custom request body fields (optional)
-[llm.body]
-parallel_tool_calls = true
-reasoning.effort = "medium"
-
 # Code review configuration
 [review]
 # Default maximum number of files to review per task
 max_files_per_task = 5
+# Maximum number of parallel workers (optional, defaults to unlimited)
+max_parallel_workers = 3
 # Worker timeout in seconds (defaults to 300)
 timeout = 300
 # Global resources to include in review context.
@@ -35,8 +20,50 @@ resources = []
 # Commands are executed via sh on Unix/Linux, PowerShell on Windows.
 # Add tools like `rg` (ripgrep), `sg` (ast-grep), `fd`, `jq` to enhance search capabilities.
 allowed_shell_commands = ["ls", "cat", "rg", "sg", "fd", "head", "tail", "wc"]
-# Maximum number of parallel workers (optional, defaults to unlimited)
-# max_parallel_workers = ...
+
+# Agent configurations
+[[agents]]
+type = "acp"
+# Agent name
+name = "kiro"
+# Command to execute
+command = "kiro-cli"
+# Command arguments
+args = ["acp"]
+# Agent mode
+mode = "firekeeper"
+
+# Environment variables
+[agents.env]
+
+# Agent configurations
+[[agents]]
+type = "builtin"
+# Agent name
+name = "builtin"
+# Environment variables
+# env = ...
+# Command arguments
+# args = ...
+
+# LLM configuration
+[agents.llm]
+# OpenAI compatible API base URL
+base_url = "https://openrouter.ai/api/v1"
+# LLM model name
+model = "google/gemini-3-flash-preview"
+
+# Custom HTTP headers (optional)
+[agents.llm.headers]
+X-Title = "firekeeper.ai"
+HTTP-Referer = "https://github.com/firekeeper-ai/firekeeper"
+
+# Custom request body fields (optional)
+[agents.llm.body]
+parallel_tool_calls = true
+
+[agents.llm.body.reasoning]
+effort = "medium"
 
 # Code review rules
 [[rules]]
@@ -54,6 +81,7 @@ Steps:
 
 Violation criteria - Report if:
 - Any field lacks a documentation comment
+- Exclude: agents.type, agents.llm.headers and agents.llm.body
 """
 # Glob patterns to match files this rule applies to (optional, defaults to ["**/*"])
 scope = ["firekeeper.toml"]

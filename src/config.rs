@@ -14,18 +14,49 @@ use crate::rule::body::RuleBody;
 /// Note for AI agents: Preserve all comments when modifying this configuration
 #[derive(Deserialize, Serialize, Debug, JsonSchema, TomlScaffold)]
 pub struct Config {
-    /// LLM provider configuration
-    pub llm: LlmConfig,
+    /// Agent configurations
+    pub agents: Vec<AgentConfig>,
     /// Code review configuration
     pub review: ReviewConfig,
     /// Code review rules
     pub rules: Vec<crate::rule::body::RuleBody>,
 }
 
+/// Agent configuration
+#[derive(Deserialize, Serialize, Debug, JsonSchema, TomlScaffold)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum AgentConfig {
+    /// ACP agent
+    Acp {
+        /// Agent name
+        name: String,
+        /// Command to execute
+        command: String,
+        /// Command arguments
+        #[serde(default)]
+        args: Vec<String>,
+        /// Agent mode
+        mode: String,
+        /// Environment variables
+        #[serde(default)]
+        env: HashMap<String, String>,
+    },
+    /// Built-in LLM agent
+    Builtin {
+        /// Agent name
+        name: String,
+        /// LLM configuration
+        llm: LlmConfig,
+    },
+}
+
 impl Config {
     pub fn template_fast() -> Self {
         Self {
-            llm: LlmConfig::default(),
+            agents: vec![AgentConfig::Builtin {
+                name: "builtin".to_string(),
+                llm: LlmConfig::default(),
+            }],
             review: ReviewConfig::default(),
             rules: vec![
                 RuleBody::config_file_comments(),
@@ -37,7 +68,10 @@ impl Config {
 
     pub fn template_full() -> Self {
         Self {
-            llm: LlmConfig::default(),
+            agents: vec![AgentConfig::Builtin {
+                name: "builtin".to_string(),
+                llm: LlmConfig::default(),
+            }],
             review: ReviewConfig::default(),
             rules: vec![
                 RuleBody::config_file_comments(),

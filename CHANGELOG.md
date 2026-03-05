@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- ACP (Agent Client Protocol) agent runtime support for using external agents like Kiro, OpenCode
+- `worker-mcp` command for internal MCP server used by ACP agents
+- `--agent` flag in `review` command to select specific agent from config
+- Context server for ACP agents to access tools (report, sh, diff, fetch)
+
+### Changed
+
+- **BREAKING**: Config file format changed from `llm` to `agents` array
+  - Old: `[llm]` section with base_url, model, headers, body
+  - New: `[[agents]]` array with `type = "builtin"` or `type = "acp"`
+  - Builtin agents have nested `llm` config
+  - ACP agents specify command, args, mode, and env
+- Refactored worker implementation into separate modules (builtin and acp)
+
 ## [0.5.0] - 2026-03-02
 
 ### Added

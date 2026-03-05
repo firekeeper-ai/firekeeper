@@ -1,6 +1,7 @@
 mod cli;
 mod config;
 mod llm;
+mod mcp;
 mod review;
 mod rule;
 mod tool;
@@ -17,12 +18,14 @@ use tracing::{error, info, trace};
 async fn main() {
     let cli = Cli::parse();
 
-    // Initialize tracing subscriber with log level from CLI/env
-    tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::new(&cli.log_level))
-        .without_time()
-        .with_target(false)
-        .init();
+    // Initialize tracing subscriber with log level from CLI/env (skip for worker-mcp)
+    if !matches!(cli.command, Commands::WorkerMcp(_)) {
+        tracing_subscriber::fmt()
+            .with_env_filter(tracing_subscriber::EnvFilter::new(&cli.log_level))
+            .without_time()
+            .with_target(false)
+            .init();
+    }
 
     match &cli.command {
         Commands::Init(args) => {
@@ -54,8 +57,64 @@ async fn main() {
                 std::process::exit(1);
             }
 
+            // Select agent
+            let agent_config = if let Some(agent_name) = &args.agent {
+                config
+                    .agents
+                    .iter()
+                    .find(|a| match a {
+                        config::AgentConfig::Acp { name, .. } => name == agent_name,
+                        config::AgentConfig::Builtin { name, .. } => name == agent_name,
+                    })
+                    .unwrap_or_else(|| {
+                        error!("Agent '{}' not found in config", agent_name);
+                        std::process::exit(1);
+                    })
+            } else {
+                let mut selected_agent = None;
+                for agent in &config.agents {
+                    match agent {
+                        config::AgentConfig::Builtin { name, .. } => {
+                            info!("Using builtin agent '{}'", name);
+                            selected_agent = Some(agent);
+                            break;
+                        }
+                        config::AgentConfig::Acp { name, command, .. } => {
+                            let exists = if cfg!(windows) {
+                                std::process::Command::new("where")
+                                    .arg(command)
+                                    .output()
+                                    .map(|o| o.status.success())
+                                    .unwrap_or(false)
+                            } else {
+                                std::process::Command::new("which")
+                                    .arg(command)
+                                    .output()
+                                    .map(|o| o.status.success())
+                                    .unwrap_or(false)
+                            };
+                            if exists {
+                                info!("Using ACP agent '{}' (command: {})", name, command);
+                                selected_agent = Some(agent);
+                                break;
+                            } else {
+                                info!(
+                                    "Skipping ACP agent '{}': command '{}' not found",
+                                    name, command
+                                );
+                            }
+                        }
+                    }
+                }
+                selected_agent.unwrap_or_else(|| {
+                    error!("No valid agent found in config");
+                    std::process::exit(1);
+                })
+            };
+
             trace!("args: {:#?}", args);
             trace!("config: {:#?}", config);
+            trace!("selected agent: {:#?}", agent_config);
 
             review::orchestrator::orchestrate_and_run(
                 &config.rules,
@@ -63,11 +122,8 @@ async fn main() {
                 config.review.max_files_per_task,
                 config.review.max_parallel_workers,
                 config.review.timeout,
-                &config.llm.base_url,
+                agent_config,
                 &args.api_key,
-                &config.llm.model,
-                &config.llm.headers,
-                &config.llm.body,
                 args.dry_run,
                 args.output.as_deref(),
                 args.trace.as_deref(),
@@ -119,6 +175,12 @@ async fn main() {
                 info!("Rendered to {}", output_path);
             } else {
                 println!("{}", markdown);
+            }
+        }
+        Commands::WorkerMcp(args) => {
+            if let Err(e) = mcp::run_mcp_server(&args).await {
+                error!("MCP server error: {}", e);
+                std::process::exit(1);
             }
         }
         Commands::Config(args) => match &args.command {
