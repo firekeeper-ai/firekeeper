@@ -242,8 +242,8 @@ jobs:
           node-version: 22
       - name: shellcheck
         run: shellcheck cmd/demo-wasm/build.sh
-      - name: build the demo
-        run: cmd/demo-wasm/build.sh
+      - name: build the demo with a fresh module cache
+        run: GOMODCACHE="$RUNNER_TEMP/demo-wasm-modcache" cmd/demo-wasm/build.sh
       - name: run the demo in Node
         run: node scripts/test-demo-wasm.cjs
       - name: landing script syntax

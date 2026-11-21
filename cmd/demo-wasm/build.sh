@@ -30,6 +30,7 @@ if [ "$version" != "$expected_bubbletea" ]; then
 	exit 1
 fi
 
+go mod download github.com/charmbracelet/bubbletea
 module=$(go list -m -f '{{.Dir}}' github.com/charmbracelet/bubbletea)
 cp -R "$module" "$work/bubbletea"
 chmod -R u+w "$work/bubbletea"
