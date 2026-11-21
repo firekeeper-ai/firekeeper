@@ -11,6 +11,8 @@ func TestUploadedWindowsPathSpellings(t *testing.T) {
 	for _, tt := range []struct{ name, path, in, want string }{
 		{"encoded", `C:\Users\Dan`, `%43%3A%5C%55sers%5CD%61n%5Csrc`, `[REDACTED:path]%5Csrc`},
 		{"encoded longer name", `C:\Users\Dan`, `%43%3A%5C%55sers%5CD%61n%6Fld`, `%43%3A%5C%55sers%5CD%61n%6Fld`},
+		{"unc case and separators", `\\server\profiles\Dan`, `//SERVER/profiles/dan/src`, `[REDACTED:path]/src`},
+		{"unc other server", `\\server\profiles\Dan`, `//other/profiles/dan/src`, `//other/profiles/dan/src`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			f := newFixture(t)

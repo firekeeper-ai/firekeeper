@@ -382,10 +382,10 @@ func TestRedactedWindowsPathsInJSON(t *testing.T) {
 	}
 }
 
-// Only Windows drive paths get the many-spellings matcher; everything else,
+// Only Windows drive and UNC paths get the many-spellings matcher; everything else,
 // Unix homes included, is matched exactly as before.
 func TestOtherPathsAreMatchedExactly(t *testing.T) {
-	for _, p := range []string{"", "/Users/me", "/home/Me", "relative/path", `\\server\share`, "C:", "1:\\x", `C:\`} {
+	for _, p := range []string{"", "/Users/me", "/home/Me", "relative/path", `\\server`, `\\.\pipe\name`, `\\?\C:\Users\me`, "C:", "1:\\x", `C:\`} {
 		if w := windowsPathFor(p, false); w != nil {
 			t.Errorf("windowsPathFor(%q) = %v", p, w.re)
 		}
