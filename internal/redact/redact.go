@@ -20,6 +20,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
 	"unicode/utf16"
 	"unicode/utf8"
 
@@ -346,18 +347,27 @@ func isKeyByte(c byte) bool {
 // continuesName reports whether a path that ends just before s[i] runs on
 // into a longer name there ("/Users/meg" for "/Users/me"). Dots that end a
 // sentence ("cd /Users/me." or "C:\Users\me...") do not, unless a name
-// character follows them ("/Users/me.old").
+// component follows them ("/Users/me.old" or "/Users/me./child").
 func continuesName(s string, i int) bool {
-	if i >= len(s) || !isKeyByte(s[i]) {
+	if i >= len(s) {
 		return false
 	}
 	if s[i] != '.' {
-		return true
+		r, _ := utf8.DecodeRuneInString(s[i:])
+		return isKeyByte(s[i]) || unicode.IsLetter(r) || unicode.IsNumber(r) || unicode.IsMark(r) || r == utf8.RuneError
 	}
 	for i < len(s) && s[i] == '.' {
 		i++
 	}
-	return i < len(s) && isKeyByte(s[i])
+	if i == len(s) {
+		return false
+	}
+	switch s[i] {
+	case ' ', '\t', '\n', '\r', '"', '\'', '`', ',', ';', ':', '!', '?', ')', ']', '}', '>':
+		return false
+	default:
+		return true
+	}
 }
 
 func isValueEnd(c byte) bool {
