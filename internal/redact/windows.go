@@ -3,8 +3,10 @@ package redact
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -72,7 +74,7 @@ func compileWindowsPath(p string, tilde bool) *windowsPath {
 		b.WriteString(`~`)
 		rest = p[1:]
 	case !tilde && isWindowsDrivePath(p):
-		d := regexp.QuoteMeta(strings.ToLower(p[:1]))
+		d := componentPattern(p[:1])
 		// C: and c%3A (an encoded colon in a file URI), /c (Git Bash and
 		// MSYS), /mnt/c (WSL), /cygdrive/c (Cygwin), and the administrative
 		// share \\host\c$, also in its long-path form \\?\UNC\host\c$.
@@ -141,11 +143,10 @@ func componentPattern(c string) string {
 	var b strings.Builder
 	for _, r := range c {
 		lit := regexp.QuoteMeta(string(r))
-		if isUnreservedURLRune(r) {
-			b.WriteString(lit)
-			continue
-		}
 		alt := lit + `|` + regexp.QuoteMeta(percentEncode(string(r)))
+		for folded := unicode.SimpleFold(r); folded != r; folded = unicode.SimpleFold(folded) {
+			alt += `|` + regexp.QuoteMeta(percentEncode(string(folded)))
+		}
 		if r == ' ' {
 			alt += `|\+`
 		}
@@ -154,20 +155,12 @@ func componentPattern(c string) string {
 	return b.String()
 }
 
-// isUnreservedURLRune reports whether r is never percent-encoded in a URL.
-func isUnreservedURLRune(r rune) bool {
-	return r < utf8.RuneSelf && (isASCIILetter(byte(r)) || '0' <= r && r <= '9' || strings.ContainsRune("-._~", r))
-}
-
-// percentEncode encodes every byte of s outside the unreserved set as %XX.
+// percentEncode encodes every byte of s as %XX, including unreserved bytes
+// that some producers escape despite not needing to.
 func percentEncode(s string) string {
 	var b strings.Builder
 	for i := 0; i < len(s); i++ {
-		if c := s[i]; c < utf8.RuneSelf && isUnreservedURLRune(rune(c)) {
-			b.WriteByte(c)
-		} else {
-			fmt.Fprintf(&b, "%%%02X", c)
-		}
+		fmt.Fprintf(&b, "%%%02X", s[i])
 	}
 	return b.String()
 }
@@ -243,7 +236,7 @@ func (w *windowsPath) redact(s, replacement string, kind Kind, counts Counts) st
 			break
 		}
 		start, end := pos+loc[0], pos+loc[1]
-		if (start > 0 && isKeyByte(s[start-1])) || continuesName(s, end) {
+		if windowsStartsInName(s, start) || windowsContinuesName(s, end) {
 			pos = start + 1
 			continue
 		}
@@ -260,6 +253,10 @@ func (w *windowsPath) redact(s, replacement string, kind Kind, counts Counts) st
 }
 
 func (w *windowsPath) mayMatch(s string) bool {
+	// Mixed encodings need not contain any complete literal component hint.
+	if strings.Contains(s, "%") {
+		return true
+	}
 	lower := strings.ToLower(s)
 	for _, h := range w.hints {
 		if strings.Contains(lower, h) {
@@ -267,4 +264,61 @@ func (w *windowsPath) mayMatch(s string) bool {
 		}
 	}
 	return false
+}
+
+func percentByteAt(s string, i int) (byte, bool) {
+	if i+2 >= len(s) || s[i] != '%' {
+		return 0, false
+	}
+	c, err := strconv.ParseUint(s[i+1:i+3], 16, 8)
+	return byte(c), err == nil
+}
+
+func windowsStartsInName(s string, i int) bool {
+	if i == 0 {
+		return false
+	}
+	if i >= 3 {
+		if c, ok := percentByteAt(s, i-3); ok {
+			return isKeyByte(c) || c >= utf8.RuneSelf
+		}
+	}
+	r, _ := utf8.DecodeLastRuneInString(s[:i])
+	return isKeyByte(s[i-1]) || continuesName(string(r), 0)
+}
+
+// pathRuneAt decodes at most one percent-encoded UTF-8 rune for a boundary
+// check. The matched text itself is never decoded or re-encoded.
+func pathRuneAt(s string, i int) (rune, int) {
+	var buf [utf8.UTFMax]byte
+	for n := 0; n < len(buf); n++ {
+		c, ok := percentByteAt(s, i+3*n)
+		if !ok {
+			break
+		}
+		buf[n] = c
+		if utf8.FullRune(buf[:n+1]) {
+			r, _ := utf8.DecodeRune(buf[:n+1])
+			return r, 3 * (n + 1)
+		}
+	}
+	return utf8.DecodeRuneInString(s[i:])
+}
+
+func windowsContinuesName(s string, i int) bool {
+	if i >= len(s) {
+		return false
+	}
+	r, n := pathRuneAt(s, i)
+	if r != '.' {
+		return r == '%' || continuesName(string(r), 0)
+	}
+	for r == '.' {
+		i += n
+		if i == len(s) {
+			return false
+		}
+		r, n = pathRuneAt(s, i)
+	}
+	return continuesName("."+string(r), 0)
 }
