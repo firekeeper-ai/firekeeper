@@ -35,8 +35,9 @@ cp -R "$module" "$work/bubbletea"
 chmod -R u+w "$work/bubbletea"
 cp cmd/demo-wasm/bubbletea-patch/tty_js.go cmd/demo-wasm/bubbletea-patch/signals_js.go "$work/bubbletea/"
 
+go_version=$(go list -m -f '{{.GoVersion}}')
 cat > "$work/go.work" <<WORKSPACE
-go 1.26.0
+go $go_version
 
 use $root
 
