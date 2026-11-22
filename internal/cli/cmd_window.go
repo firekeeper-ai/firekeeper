@@ -34,6 +34,11 @@ var windowLimits = func(ctx context.Context, period window.Period) (*claudelimit
 
 var windowNow = time.Now
 
+// windowCodexLimits is a seam for Codex quota tests.
+var windowCodexLimits = func(context.Context, window.Period) (*claudelimits.Window, error) {
+	return nil, nil
+}
+
 // runWindow breaks the current 5-hour or weekly window down by session, so a user near
 // the limit can see what used it. Everything is read locally; the HTML page is
 // a file on this machine, never uploaded.
@@ -52,6 +57,10 @@ func runWindow(args []string, stdout, stderr io.Writer) int {
 	weekly := fs.Bool("week", false, "review the weekly window instead of the 5-hour one")
 	asJSON := fs.Bool("json", false, "print the breakdown as JSON")
 	htmlPath := fs.String("html", "", "write the breakdown as a standalone HTML page to `file` and print its file:// URL")
+	allProviders := fs.Bool("all", false, "combine all providers")
+	since := fs.String("since", "", "review a duration ending now (for example 24h or 7d)")
+	from := fs.String("from", "", "start of the review range (RFC3339)")
+	to := fs.String("to", "", "end of the review range (RFC3339)")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
@@ -66,6 +75,44 @@ func runWindow(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "firekeeper window: use --json or --html, not both")
 		return 2
 	}
+	var rangeStart, rangeEnd time.Time
+	if *since != "" {
+		if *from != "" || *to != "" {
+			fmt.Fprintln(stderr, "firekeeper window: use --since or --from/--to, not both")
+			return 2
+		}
+		d, err := time.ParseDuration(*since)
+		if err != nil {
+			fmt.Fprintf(stderr, "firekeeper window: invalid duration %q\n", *since)
+			return 2
+		}
+		if d <= 0 {
+			fmt.Fprintln(stderr, "firekeeper window: duration must be positive")
+			return 2
+		}
+		rangeStart = windowNow().Add(-d)
+		rangeEnd = windowNow()
+	}
+	if *from != "" {
+		t, err := time.Parse(time.RFC3339, *from)
+		if err != nil {
+			fmt.Fprintf(stderr, "firekeeper window: invalid --from %q\n", *from)
+			return 2
+		}
+		rangeStart = t
+	}
+	if *to != "" {
+		t, err := time.Parse(time.RFC3339, *to)
+		if err != nil {
+			fmt.Fprintf(stderr, "firekeeper window: invalid --to %q\n", *to)
+			return 2
+		}
+		rangeEnd = t
+	}
+	if !rangeStart.IsZero() && !rangeEnd.IsZero() && rangeStart.After(rangeEnd) {
+		fmt.Fprintln(stderr, "firekeeper window: --from must be before --to")
+		return 2
+	}
 	period := window.PeriodFiveHour
 	timeout := time.Minute
 	if *weekly {
@@ -74,7 +121,7 @@ func runWindow(args []string, stdout, stderr io.Writer) int {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	opts := window.Options{Provider: prov, Period: period}
+	opts := window.Options{Provider: prov, Period: period, Start: rangeStart, End: rangeEnd}
 	if prov == transcript.ProviderClaude {
 		// A failed limits request only costs the exact reset time.
 		if w, err := windowLimits(ctx, period); err == nil && w != nil {
@@ -83,21 +130,50 @@ func runWindow(args []string, stdout, stderr io.Writer) int {
 			opts.UsedPercent = &used
 		}
 	}
-	report, err := window.Build(ctx, windowNow(), opts)
-	if err != nil {
-		fmt.Fprintf(stderr, "firekeeper window: %v\n", err)
-		return 1
+	if prov == transcript.ProviderCodex {
+		if w, err := windowCodexLimits(ctx, period); err == nil && w != nil {
+			opts.ResetsAt = w.ResetsAt
+			used := w.UsedPercent
+			opts.UsedPercent = &used
+		}
+	}
+	providers := []transcript.Provider{prov}
+	if *allProviders {
+		providers = transcript.Providers()
+	}
+	reports := make([]window.Report, 0, len(providers))
+	for _, p := range providers {
+		opts.Provider = p
+		report, err := window.Build(ctx, windowNow(), opts)
+		if err == nil {
+			reports = append(reports, report)
+		} else if *allProviders && errors.Is(err, window.ErrNoReader) {
+			continue
+		} else if *allProviders {
+			continue
+		} else {
+			fmt.Fprintf(stderr, "firekeeper window: %v\n", err)
+			return 1
+		}
 	}
 
 	switch {
 	case *asJSON:
 		enc := json.NewEncoder(stdout)
 		enc.SetIndent("", "  ")
-		if err := enc.Encode(report); err != nil {
-			fmt.Fprintf(stderr, "firekeeper window: write JSON: %v\n", err)
-			return 1
+		if *allProviders {
+			if err := enc.Encode(reports); err != nil {
+				fmt.Fprintf(stderr, "firekeeper window: write JSON: %v\n", err)
+				return 1
+			}
+		} else if len(reports) == 1 {
+			if err := enc.Encode(reports[0]); err != nil {
+				fmt.Fprintf(stderr, "firekeeper window: write JSON: %v\n", err)
+				return 1
+			}
 		}
-	case *htmlPath != "":
+	case *htmlPath != "" && len(reports) == 1:
+		report := reports[0]
 		abs, err := filepath.Abs(*htmlPath)
 		if err != nil {
 			fmt.Fprintf(stderr, "firekeeper window: %v\n", err)
@@ -117,8 +193,23 @@ func runWindow(args []string, stdout, stderr io.Writer) int {
 			return 1
 		}
 		fmt.Fprintln(stdout, (&url.URL{Scheme: "file", Path: filepath.ToSlash(abs)}).String())
+	case *htmlPath != "":
+		fmt.Fprintln(stderr, "firekeeper window: --all does not support --html")
+		return 2
 	default:
-		window.WriteText(stdout, report)
+		if len(reports) == 0 {
+			fmt.Fprintln(stderr, "firekeeper window: no transcript readers available")
+			return 1
+		}
+		for i, report := range reports {
+			if *allProviders {
+				if i > 0 {
+					fmt.Fprintln(stdout)
+				}
+				fmt.Fprintf(stdout, "[%s]\n", report.Provider)
+			}
+			window.WriteText(stdout, report)
+		}
 	}
 	return 0
 }

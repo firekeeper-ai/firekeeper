@@ -161,6 +161,9 @@ type Options struct {
 	// now. UsedPercent is passed through to the report.
 	ResetsAt    time.Time
 	UsedPercent *float64
+	// Start and End override the provider/reset-derived bounds.
+	Start time.Time
+	End   time.Time
 }
 
 // Bounds returns the window for now and an optional reset time.
@@ -183,6 +186,19 @@ func Build(ctx context.Context, now time.Time, opts Options) (Report, error) {
 		opts.Period = PeriodFiveHour
 	}
 	start, end, basis := Bounds(opts.Period, now, opts.ResetsAt)
+	if !opts.Start.IsZero() || !opts.End.IsZero() {
+		if opts.Start.IsZero() {
+			start = end.Add(-opts.Period.Length())
+		} else {
+			start = opts.Start
+		}
+		if opts.End.IsZero() {
+			end = now
+		} else {
+			end = opts.End
+		}
+		basis = BasisRolling
+	}
 	report := newReport(now, opts.Provider, opts.Period, basis, start, end)
 	report.UsedPercent = opts.UsedPercent
 
