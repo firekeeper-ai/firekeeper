@@ -31,6 +31,32 @@ func TestCredentialsNeverPrint(t *testing.T) {
 	}
 }
 
+func TestClientNeverPrintsCredentials(t *testing.T) {
+	c := NewClient(Credentials{token: testToken, OrgUUID: testOrg})
+	values := []any{
+		c, *c,
+		struct{ Client Client }{*c},
+		struct{ client Client }{*c},
+		struct{ client *Client }{c},
+		[]Client{*c},
+		map[string]Client{"client": *c},
+	}
+	for _, value := range values {
+		for _, format := range []string{"%v", "%+v", "%#v", "%s"} {
+			if strings.Contains(fmt.Sprintf(format, value), testToken) {
+				t.Fatalf("format %s leaked credentials from %T", format, value)
+			}
+		}
+	}
+}
+
+func TestZeroClientDoesNotRequestWithoutCredentials(t *testing.T) {
+	c := &Client{BaseURL: "http://127.0.0.1:1"}
+	if _, err := c.Sessions(context.Background()); err == nil || !strings.Contains(err.Error(), "no credentials") {
+		t.Fatalf("zero client error = %v", err)
+	}
+}
+
 func TestSessionsPagesAndDropsUnsafeIDs(t *testing.T) {
 	f, c := newFakeCloud(t)
 	f.pageSize = 2
@@ -91,8 +117,9 @@ func TestStatusErrorCarriesNoBodyOrToken(t *testing.T) {
 }
 
 func TestClientRejectsWrongCredentialsClearly(t *testing.T) {
-	_, c := newFakeCloud(t)
-	c.creds.token = "other"
+	_, valid := newFakeCloud(t)
+	c := NewClient(Credentials{token: "other", OrgUUID: testOrg})
+	c.BaseURL = valid.BaseURL
 	_, err := c.Sessions(context.Background())
 	var status *StatusError
 	if !errors.As(err, &status) {
