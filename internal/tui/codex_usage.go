@@ -17,7 +17,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/firekeeper-ai/firekeeper/internal/claudelimits"
 	"github.com/firekeeper-ai/firekeeper/internal/sqlitejson"
+	"github.com/firekeeper-ai/firekeeper/internal/window"
 	"github.com/firekeeper-ai/firekeeper/pkg/event"
 )
 
@@ -905,4 +907,40 @@ func formatTokenCount(value int64) string {
 	default:
 		return fmt.Sprintf("%d", value)
 	}
+}
+
+// CodexWindowLimit returns the Codex quota window for period from a
+// short-lived app-server request, the same one the Usage tab makes. main
+// installs it as the window command's Codex source.
+func CodexWindowLimit(_ context.Context, period window.Period) (*claudelimits.Window, error) {
+	snapshot, err := fetchCodexUsage()
+	if err != nil {
+		return nil, err
+	}
+	return codexWindowLimit(snapshot, period), nil
+}
+
+// codexWindowLimit picks the window whose length matches period, checking
+// rate limits in a stable order, or nil when Codex reported none.
+func codexWindowLimit(snapshot codexUsageSnapshot, period window.Period) *claudelimits.Window {
+	minutes := int64(period.Length() / time.Minute)
+	keys := make([]string, 0, len(snapshot.RateLimits))
+	for key := range snapshot.RateLimits {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		limit := snapshot.RateLimits[key]
+		for _, w := range []*codexQuotaWindow{limit.Primary, limit.Secondary} {
+			if w == nil || w.WindowDurationMin != minutes {
+				continue
+			}
+			out := &claudelimits.Window{UsedPercent: w.UsedPercent}
+			if w.ResetsAt > 0 {
+				out.ResetsAt = time.Unix(w.ResetsAt, 0)
+			}
+			return out
+		}
+	}
+	return nil
 }

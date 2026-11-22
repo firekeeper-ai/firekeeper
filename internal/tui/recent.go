@@ -403,9 +403,7 @@ func enrichRecentReport(ctx context.Context, row *RecentSessionReport, s recentS
 			if event.Role == transcript.RoleAssistant {
 				turns++
 			}
-			tokens.Input += event.Tokens.Input
-			tokens.Output += event.Tokens.Output
-			tokens.Cache += event.Tokens.Cache
+			tokens.Add(event.Tokens)
 			if event.Model != nil && *event.Model != "" {
 				model = *event.Model
 			}
@@ -414,7 +412,6 @@ func enrichRecentReport(ctx context.Context, row *RecentSessionReport, s recentS
 	if ctx.Err() != nil {
 		return
 	}
-	tokens.Total = tokens.Input + tokens.Output + tokens.Cache
 	row.Model, row.Turns, row.Tokens = model, &turns, &tokens
 }
 

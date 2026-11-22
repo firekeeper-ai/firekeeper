@@ -3,6 +3,7 @@ package window
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -245,5 +246,50 @@ func TestBuildWeekDaily(t *testing.T) {
 	WriteText(&buf, report)
 	if !strings.Contains(buf.String(), "weekly window") {
 		t.Fatalf("text: %s", buf.String())
+	}
+}
+
+// Cache reads and writes are billed very differently, so the report keeps
+// them apart wherever the transcript did, alongside the combined cache.
+func TestBuildKeepsCacheSplit(t *testing.T) {
+	at := now.Add(-time.Hour)
+	model := "m1"
+	split := transcript.Event{TS: &at, Role: transcript.RoleAssistant, Model: &model,
+		Tokens: transcript.Tokens{Input: 1, Output: 2, Cache: 110, CacheRead: 100, CacheWrite: 10}}
+	unsplit := ev(at, transcript.RoleAssistant, "m1", 0, 0, 5) // provider reports one cache figure only
+	*shared = fakeSource{
+		metas:  []session.Meta{{ID: "s", CWD: "/nonexistent/app"}},
+		events: map[string][]transcript.Event{"s": {split, unsplit}},
+	}
+	report, err := Build(context.Background(), now, Options{Provider: transcript.ProviderClaude})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := Tokens{Input: 1, Output: 2, Cache: 115, CacheRead: 100, CacheWrite: 10, Total: 118}
+	for name, got := range map[string]Tokens{
+		"total": report.Total, "session": report.Sessions[0].Tokens,
+		"model": report.ByModel[0].Tokens, "project": report.ByProject[0].Tokens,
+	} {
+		if got != want {
+			t.Errorf("%s tokens = %+v; want %+v", name, got, want)
+		}
+	}
+}
+
+func TestTokensJSONOmitsUnknownSplit(t *testing.T) {
+	var unsplit Tokens
+	unsplit.Add(transcript.Tokens{Input: 1, Cache: 5})
+	data, err := json.Marshal(unsplit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "cache_read") || strings.Contains(string(data), "cache_write") {
+		t.Fatalf("unsplit tokens claim a split: %s", data)
+	}
+	var split Tokens
+	split.Add(transcript.Tokens{Cache: 3, CacheRead: 2, CacheWrite: 1})
+	data, _ = json.Marshal(split)
+	if !strings.Contains(string(data), `"cache_read":2`) || !strings.Contains(string(data), `"cache_write":1`) {
+		t.Fatalf("split tokens lost the split: %s", data)
 	}
 }

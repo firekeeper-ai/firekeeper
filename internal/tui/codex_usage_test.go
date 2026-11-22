@@ -14,6 +14,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/firekeeper-ai/firekeeper/internal/testenv"
+	"github.com/firekeeper-ai/firekeeper/internal/window"
 	"github.com/firekeeper-ai/firekeeper/pkg/event"
 )
 
@@ -545,6 +546,34 @@ func TestUsagePagesFitEveryTerminalSize(t *testing.T) {
 					}
 				}
 			}
+		}
+	}
+}
+
+// codexWindowLimit picks the quota window matching the requested period by
+// its length, from any rate limit, and reports nothing when none matches.
+func TestCodexWindowLimit(t *testing.T) {
+	snapshot := codexUsageSnapshot{RateLimits: map[string]codexRateLimit{
+		"codex": {
+			Primary:   &codexQuotaWindow{UsedPercent: 14, WindowDurationMin: 300, ResetsAt: 1795000000},
+			Secondary: &codexQuotaWindow{UsedPercent: 17, WindowDurationMin: 10080, ResetsAt: 1795500000},
+		},
+	}}
+	five := codexWindowLimit(snapshot, window.PeriodFiveHour)
+	if five == nil || five.UsedPercent != 14 || !five.ResetsAt.Equal(time.Unix(1795000000, 0)) {
+		t.Fatalf("5-hour = %+v", five)
+	}
+	week := codexWindowLimit(snapshot, window.PeriodWeek)
+	if week == nil || week.UsedPercent != 17 || !week.ResetsAt.Equal(time.Unix(1795500000, 0)) {
+		t.Fatalf("week = %+v", week)
+	}
+	for name, snap := range map[string]codexUsageSnapshot{
+		"empty":       {},
+		"no match":    {RateLimits: map[string]codexRateLimit{"codex": {Primary: &codexQuotaWindow{UsedPercent: 1, WindowDurationMin: 60}}}},
+		"nil windows": {RateLimits: map[string]codexRateLimit{"codex": {}}},
+	} {
+		if got := codexWindowLimit(snap, window.PeriodFiveHour); got != nil {
+			t.Errorf("%s: got %+v, want nil", name, got)
 		}
 	}
 }

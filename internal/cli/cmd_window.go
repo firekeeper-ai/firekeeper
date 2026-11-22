@@ -34,9 +34,41 @@ var windowLimits = func(ctx context.Context, period window.Period) (*claudelimit
 
 var windowNow = time.Now
 
-// windowCodexLimits is a seam for Codex quota tests.
+// windowBuild is a seam so tests can check the options each provider gets.
+var windowBuild = window.Build
+
+// windowCodexLimits returns the Codex 5-hour or weekly quota. It reports
+// nothing until main installs the dashboard's Codex source with
+// SetCodexLimits, since this package does not import the dashboard.
 var windowCodexLimits = func(context.Context, window.Period) (*claudelimits.Window, error) {
 	return nil, nil
+}
+
+// SetCodexLimits installs the source window uses for the Codex quota.
+func SetCodexLimits(source func(context.Context, window.Period) (*claudelimits.Window, error)) {
+	windowCodexLimits = source
+}
+
+// providerWindowLimits returns provider's own quota window for period, or
+// nil when it has no limits source or the request failed.
+func providerWindowLimits(ctx context.Context, provider transcript.Provider, period window.Period) *claudelimits.Window {
+	var source func(context.Context, window.Period) (*claudelimits.Window, error)
+	switch provider {
+	case transcript.ProviderClaude:
+		source = windowLimits
+	case transcript.ProviderCodex:
+		source = windowCodexLimits
+	case transcript.ProviderCopilot, transcript.ProviderKimi, transcript.ProviderOpenCode,
+		transcript.ProviderGemini, transcript.ProviderCursor:
+		return nil // no 5-hour or weekly quota source
+	default:
+		return nil
+	}
+	w, err := source(ctx, period)
+	if err != nil {
+		return nil
+	}
+	return w
 }
 
 // runWindow breaks the current 5-hour or weekly window down by session, so a user near
@@ -121,30 +153,20 @@ func runWindow(args []string, stdout, stderr io.Writer) int {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	opts := window.Options{Provider: prov, Period: period, Start: rangeStart, End: rangeEnd}
-	if prov == transcript.ProviderClaude {
-		// A failed limits request only costs the exact reset time.
-		if w, err := windowLimits(ctx, period); err == nil && w != nil {
-			opts.ResetsAt = w.ResetsAt
-			used := w.UsedPercent
-			opts.UsedPercent = &used
-		}
-	}
-	if prov == transcript.ProviderCodex {
-		if w, err := windowCodexLimits(ctx, period); err == nil && w != nil {
-			opts.ResetsAt = w.ResetsAt
-			used := w.UsedPercent
-			opts.UsedPercent = &used
-		}
-	}
 	providers := []transcript.Provider{prov}
 	if *allProviders {
 		providers = transcript.Providers()
 	}
 	reports := make([]window.Report, 0, len(providers))
 	for _, p := range providers {
-		opts.Provider = p
-		report, err := window.Build(ctx, windowNow(), opts)
+		opts := window.Options{Provider: p, Period: period, Start: rangeStart, End: rangeEnd}
+		// A failed limits request only costs the exact reset time.
+		if w := providerWindowLimits(ctx, p, period); w != nil {
+			opts.ResetsAt = w.ResetsAt
+			used := w.UsedPercent
+			opts.UsedPercent = &used
+		}
+		report, err := windowBuild(ctx, windowNow(), opts)
 		if err == nil {
 			reports = append(reports, report)
 		} else if *allProviders && errors.Is(err, window.ErrNoReader) {

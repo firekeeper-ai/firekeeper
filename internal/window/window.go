@@ -86,18 +86,25 @@ const (
 	BasisRolling Basis = "rolling"
 )
 
-// Tokens are summed token counts. Total is Input+Output+Cache.
+// Tokens are summed token counts. Total is Input+Output+Cache. CacheRead
+// and CacheWrite are the parts of Cache the transcripts split out; they are
+// left out of JSON when no event reported them.
 type Tokens struct {
-	Input  int64 `json:"input"`
-	Output int64 `json:"output"`
-	Cache  int64 `json:"cache"`
-	Total  int64 `json:"total"`
+	Input      int64 `json:"input"`
+	Output     int64 `json:"output"`
+	Cache      int64 `json:"cache"`
+	CacheRead  int64 `json:"cache_read,omitempty"`
+	CacheWrite int64 `json:"cache_write,omitempty"`
+	Total      int64 `json:"total"`
 }
 
-func (t *Tokens) add(e transcript.Tokens) {
+// Add sums one event's tokens into t.
+func (t *Tokens) Add(e transcript.Tokens) {
 	t.Input += e.Input
 	t.Output += e.Output
 	t.Cache += e.Cache
+	t.CacheRead += e.CacheRead
+	t.CacheWrite += e.CacheWrite
 	t.Total += e.Input + e.Output + e.Cache
 }
 
@@ -309,12 +316,12 @@ func (a *accumulator) session(meta session.Meta, events []transcript.Event) {
 			row.ToolCalls++
 		case transcript.RoleUser, transcript.RoleToolResult, transcript.RoleSystem, transcript.RoleMeta:
 		}
-		row.Tokens.add(e.Tokens)
-		a.report.Total.add(e.Tokens)
+		row.Tokens.Add(e.Tokens)
+		a.report.Total.Add(e.Tokens)
 		buckets := a.report.buckets()
 		if i := int(ts.Sub(a.report.Start) / a.report.Period.bucket()); i >= 0 && i < len(buckets) {
-			buckets[i].Tokens.add(e.Tokens)
-			activity[i].Tokens.add(e.Tokens)
+			buckets[i].Tokens.Add(e.Tokens)
+			activity[i].Tokens.Add(e.Tokens)
 		}
 		if e.Tokens.Input+e.Tokens.Output+e.Tokens.Cache > 0 {
 			model := "unknown"
@@ -363,7 +370,7 @@ func add(m map[string]*Tokens, key string, t transcript.Tokens) {
 	if m[key] == nil {
 		m[key] = &Tokens{}
 	}
-	m[key].add(t)
+	m[key].Add(t)
 }
 
 func groups(m map[string]*Tokens) []Group {

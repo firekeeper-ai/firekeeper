@@ -223,3 +223,18 @@ func TestFindRecentSessionsFilters(t *testing.T) {
 		})
 	}
 }
+
+// recent keeps the cache read/write split the transcript reports, like
+// window, rather than only the combined cache figure.
+func TestRecentEnrichmentKeepsCacheSplit(t *testing.T) {
+	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
+	path := filepath.Join("..", "transcript", "claude", "testdata", "0199c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d.jsonl")
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	s := newRecentSession(transcript.ProviderClaude, session.Meta{ID: "0199c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d", RolloutPath: path, StartedAt: &start})
+	row := buildRecentReport(start, []recentSession{s}).Sessions[0]
+	enrichRecentReport(context.Background(), &row, s)
+	if row.Tokens == nil || row.Tokens.CacheRead == 0 || row.Tokens.CacheWrite == 0 ||
+		row.Tokens.CacheRead+row.Tokens.CacheWrite != row.Tokens.Cache {
+		t.Fatalf("recent tokens lost the cache split: %+v", row.Tokens)
+	}
+}

@@ -168,7 +168,11 @@ You do **not** need `login`, `serve`, or `daemon install` to use this dashboard.
   totals are not billed-cost estimates.
   `firekeeper window` breaks the window down by session, model and hour (`--json`,
   or `--html FILE` for a standalone page; `--provider` picks the harness).
-  Add `--week` for the weekly window, broken down by day.
+  Add `--week` for the weekly window, broken down by day. Claude and Codex
+  windows end at the provider's own reset time and carry its `used_percent`;
+  other providers, and `--all` entries without a quota source, use a rolling
+  window. Token totals add `cache_read` and `cache_write` when the transcript
+  splits the cache.
   `firekeeper recent [--json] [--limit N] [--since DUR] [--provider P] [--project NAME]`
   lists recent sessions locally, newest first. It defaults to 10 sessions from
   the last 30 days; durations use Go syntax (such as `24h` or `168h`), and
