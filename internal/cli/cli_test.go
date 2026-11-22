@@ -30,7 +30,8 @@ func TestRunSubcommandDispatch(t *testing.T) {
 		{args: nil, handled: false},
 		{args: []string{"--unknown"}, handled: false},
 		{args: []string{"--unknown", "snapshot"}, handled: false},
-		{args: []string{"unknown"}, handled: false},
+		{args: []string{"unknown"}, handled: true, code: 2, wantStderr: `firekeeper: unknown command "unknown"`},
+		{args: []string{"stast", "--json"}, handled: true, code: 2, wantStderr: `unknown command "stast"`},
 		{args: []string{"export"}, handled: true, code: 2, wantStderr: "firekeeper export: --session is required"},
 		{args: []string{"turns"}, handled: true, code: 2, wantStderr: "--json is required"},
 		{args: []string{"stats"}, handled: true, code: 2, wantStderr: "--json is required"},
@@ -104,6 +105,53 @@ func TestUsageListsSubcommands(t *testing.T) {
 	for _, want := range []string{"snapshot", "export", "turns", "stats", "report", "backfill", "serve", "daemon", "otel-listen", "otel-reconcile", "telemetry"} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("usage missing %q:\n%s", want, out.String())
+		}
+	}
+}
+
+// Help lists each command's flags with their descriptions and defaults, not
+// only the one-line summary, so a script or agent can discover them.
+func TestSubcommandHelpListsFlags(t *testing.T) {
+	for _, test := range []struct {
+		command string
+		want    []string
+	}{
+		{"stats", []string{"print local transcript insights", "-since", "(default \"7d\")", "-project"}},
+		{"window", []string{"-provider", "-week", "-from", "-to"}},
+		{"export", []string{"-session", "-no-text"}},
+		{"turns", []string{"-provider", "-json"}},
+		{"report", []string{"-dry-run", "-since"}},
+		{"backfill", []string{"-limit", "-yes"}},
+	} {
+		for _, help := range []string{"-h", "--help"} {
+			var stdout, stderr bytes.Buffer
+			code, handled := RunSubcommand([]string{test.command, help}, &stdout, &stderr)
+			if !handled || code != 0 {
+				t.Fatalf("%s %s: code=%d handled=%v stderr=%q", test.command, help, code, handled, stderr.String())
+			}
+			for _, want := range test.want {
+				if !strings.Contains(stdout.String(), want) {
+					t.Errorf("%s %s: help missing %q:\n%s", test.command, help, want, stdout.String())
+				}
+			}
+			if strings.Contains(stdout.String(), "Usage of firekeeper") {
+				t.Errorf("%s %s: help repeats the flag package header:\n%s", test.command, help, stdout.String())
+			}
+		}
+	}
+}
+
+// Commands without a flag set still answer help with their summary and
+// never print an error for it.
+func TestSubcommandHelpWithoutFlags(t *testing.T) {
+	for _, command := range []string{"telemetry", "claude-limits"} {
+		var stdout, stderr bytes.Buffer
+		code, handled := RunSubcommand([]string{command, "-h"}, &stdout, &stderr)
+		if !handled || code != 0 || stderr.Len() != 0 {
+			t.Fatalf("%s -h: code=%d handled=%v stderr=%q", command, code, handled, stderr.String())
+		}
+		if !strings.Contains(stdout.String(), "Usage: firekeeper "+command) || strings.Contains(stdout.String(), "unknown command") {
+			t.Fatalf("%s -h: stdout=%q", command, stdout.String())
 		}
 	}
 }
