@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"strings"
 )
 
 // subcommand is an opt-in reporting entry point. Running firekeeper without
@@ -80,6 +81,9 @@ func RunSubcommand(args []string, stdout, stderr io.Writer) (int, bool) {
 					return cmd.run(cmdArgs, stdout, stderr), true
 				}
 				fmt.Fprintf(stdout, "Usage: firekeeper %s [flags]\n\n%s\n", cmd.name, cmd.summary)
+				if flags := commandFlags(cmd); flags != "" {
+					fmt.Fprintf(stdout, "\nFlags:\n%s", flags)
+				}
 				return 0, true
 			}
 			if hasFlag(cmdArgs, "--schema") {
@@ -107,7 +111,31 @@ func RunSubcommand(args []string, stdout, stderr io.Writer) (int, bool) {
 			return code, true
 		}
 	}
+	// The dashboard takes flags only, so a bare word is a mistyped command,
+	// not a reason to start the TUI.
+	if !strings.HasPrefix(args[0], "-") {
+		fmt.Fprintf(stderr, "firekeeper: unknown command %q (run firekeeper -h for the list)\n", args[0])
+		return 2, true
+	}
 	return 0, false
+}
+
+// helpHeader is the first line the flag package prints for -h.
+const helpHeader = "Usage of firekeeper "
+
+// commandFlags returns the flag list a command prints for -h, without the
+// flag package's header, or "" when the command has no flag set. serve is
+// skipped because it hands its arguments to another binary.
+func commandFlags(cmd subcommand) string {
+	if cmd.name == "serve" {
+		return ""
+	}
+	var out bytes.Buffer
+	if cmd.run([]string{"-h"}, &out, &out) != 0 || !strings.HasPrefix(out.String(), helpHeader) {
+		return ""
+	}
+	_, flags, _ := strings.Cut(out.String(), "\n")
+	return flags
 }
 
 func isMachineOutput(command string, args []string) bool {
