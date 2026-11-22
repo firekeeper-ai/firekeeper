@@ -24,8 +24,10 @@ const (
 
 	// eventsPageSize is the most events one request returns.
 	eventsPageSize = 1000
-	// maxPages bounds a paged walk so a misbehaving server cannot loop it.
-	maxPages = 10000
+	// maxPages and maxPagedBytes bound an entire paged walk.
+	maxPages      = 1000
+	maxPagedBytes = 128 << 20
+	maxCursorSize = 1024
 	// maxResponseBytes bounds one response body.
 	maxResponseBytes = 128 << 20
 	requestTimeout   = 90 * time.Second
@@ -210,25 +212,13 @@ type page[T any] struct {
 // that is not safe as a file name are dropped.
 func (c *Client) Sessions(ctx context.Context) ([]SessionInfo, error) {
 	var out []SessionInfo
-	after := ""
-	for range maxPages {
-		q := url.Values{}
-		if after != "" {
-			q.Set("after_id", after)
+	err := walkPages(ctx, c, "/sessions", url.Values{}, maxPages, maxPagedBytes, func(item listItem) {
+		if info, ok := item.info(); ok {
+			out = append(out, info)
 		}
-		var p page[listItem]
-		if err := c.get(ctx, "/sessions", q, &p); err != nil {
-			return nil, err
-		}
-		for _, item := range p.Data {
-			if info, ok := item.info(); ok {
-				out = append(out, info)
-			}
-		}
-		if !p.HasMore || p.LastID == "" || p.LastID == after {
-			break
-		}
-		after = p.LastID
+	})
+	if err != nil {
+		return nil, err
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		if !out[i].UpdatedAt.Equal(out[j].UpdatedAt) {
@@ -353,38 +343,71 @@ func (c *Client) Events(ctx context.Context, sessionID string) ([]Event, error) 
 		return nil, errors.New("claudecloud: invalid session id")
 	}
 	var out []Event
-	after := ""
-	for range maxPages {
-		q := url.Values{"limit": {fmt.Sprint(eventsPageSize)}}
-		if after != "" {
-			q.Set("after_id", after)
+	err := walkPages(ctx, c, "/sessions/"+sessionID+"/events", url.Values{"limit": {fmt.Sprint(eventsPageSize)}}, maxPages, maxPagedBytes, func(raw json.RawMessage) {
+		var head struct {
+			Type      string `json:"type"`
+			UUID      string `json:"uuid"`
+			CreatedAt string `json:"created_at"`
 		}
-		var p page[json.RawMessage]
-		if err := c.get(ctx, "/sessions/"+sessionID+"/events", q, &p); err != nil {
-			return nil, err
+		if json.Unmarshal(raw, &head) != nil {
+			return
 		}
-		for _, raw := range p.Data {
-			var head struct {
-				Type      string `json:"type"`
-				UUID      string `json:"uuid"`
-				CreatedAt string `json:"created_at"`
-			}
-			if json.Unmarshal(raw, &head) != nil {
-				continue
-			}
-			out = append(out, Event{Type: head.Type, UUID: head.UUID, CreatedAt: head.CreatedAt, Raw: raw})
-		}
-		if !p.HasMore || p.LastID == "" || p.LastID == after {
-			return out, nil
-		}
-		after = p.LastID
+		out = append(out, Event{Type: head.Type, UUID: head.UUID, CreatedAt: head.CreatedAt, Raw: raw})
+	})
+	if err != nil {
+		return nil, err
 	}
-	return nil, errors.New("claudecloud: too many event pages")
+	return out, nil
 }
 
-func (c *Client) get(ctx context.Context, path string, q url.Values, into any) error {
+func walkPages[T any](ctx context.Context, c *Client, path string, q url.Values, pageLimit int, byteLimit int64, accept func(T)) error {
+	seen := make(map[string]struct{})
+	remaining := byteLimit
+	for i := 0; i < pageLimit; i++ {
+		var p page[T]
+		n, err := c.get(ctx, path, q, &p, remaining)
+		if err != nil {
+			return err
+		}
+		remaining -= n
+		more, err := nextCursor(p.LastID, p.HasMore, seen)
+		if err != nil {
+			return err
+		}
+		for _, item := range p.Data {
+			accept(item)
+		}
+		if !more {
+			return nil
+		}
+		if i+1 == pageLimit {
+			return errors.New("claudecloud: too many API pages")
+		}
+		if remaining == 0 {
+			return errors.New("claudecloud: paged response too large")
+		}
+		q.Set("after_id", p.LastID)
+	}
+	return errors.New("claudecloud: too many API pages")
+}
+
+func nextCursor(lastID string, hasMore bool, seen map[string]struct{}) (bool, error) {
+	if !hasMore {
+		return false, nil
+	}
+	if lastID == "" || len(lastID) > maxCursorSize {
+		return false, errors.New("claudecloud: invalid pagination cursor; the internal API may have changed")
+	}
+	if _, ok := seen[lastID]; ok {
+		return false, errors.New("claudecloud: repeated pagination cursor; the internal API may have changed")
+	}
+	seen[lastID] = struct{}{}
+	return true, nil
+}
+
+func (c *Client) get(ctx context.Context, path string, q url.Values, into any, remaining int64) (int64, error) {
 	if c.auth == nil {
-		return errors.New("claudecloud: client has no credentials")
+		return 0, errors.New("claudecloud: client has no credentials")
 	}
 	u := c.base() + path
 	if len(q) > 0 {
@@ -392,7 +415,7 @@ func (c *Client) get(ctx context.Context, path string, q url.Values, into any) e
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
-		return errors.New("claudecloud: build request")
+		return 0, errors.New("claudecloud: build request")
 	}
 	token, organization := c.auth()
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -403,29 +426,33 @@ func (c *Client) get(ctx context.Context, path string, q url.Values, into any) e
 	resp, err := c.http().Do(req)
 	if err != nil {
 		if ctx.Err() != nil {
-			return ctx.Err()
+			return 0, ctx.Err()
 		}
 		// The URL error text can include the request URL; keep the cause only.
 		var uerr *url.Error
 		if errors.As(err, &uerr) {
 			err = uerr.Err
 		}
-		return &transportError{err: err}
+		return 0, &transportError{err: err}
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<16))
-		return &StatusError{Status: resp.StatusCode, RetryAfter: parseRetryAfter(resp.Header.Get("Retry-After"), time.Now())}
+		return 0, &StatusError{Status: resp.StatusCode, RetryAfter: parseRetryAfter(resp.Header.Get("Retry-After"), time.Now())}
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
+	limit := min(int64(maxResponseBytes), remaining)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
 	if err != nil {
-		return errors.New("claudecloud: read response")
+		return 0, errors.New("claudecloud: read response")
 	}
-	if len(body) > maxResponseBytes {
-		return errors.New("claudecloud: response too large")
+	if int64(len(body)) > limit {
+		if remaining < maxResponseBytes {
+			return 0, errors.New("claudecloud: paged response too large")
+		}
+		return 0, errors.New("claudecloud: response too large")
 	}
 	if err := json.Unmarshal(body, into); err != nil {
-		return errors.New("claudecloud: unexpected response format; the internal API may have changed")
+		return 0, errors.New("claudecloud: unexpected response format; the internal API may have changed")
 	}
-	return nil
+	return int64(len(body)), nil
 }

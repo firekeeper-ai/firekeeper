@@ -827,7 +827,9 @@ How it works, and what you should know first:
 - **It uses an undocumented API.** That is the internal API behind the web
   app. It can change or stop working without notice; when it does, backfill
   stops with an error rather than guessing. Check that Anthropic's terms allow
-  this use of your account.
+  this use of your account. A session list or one session's events are limited
+  to 1,000 pages and 128 MiB of responses; exceeding either limit is reported
+  as an error rather than importing a partial result.
 - **Your login stays local.** The token is held in memory for the run and sent
   only to `api.anthropic.com`, with redirects refused. It is never logged,
   saved, or uploaded.
