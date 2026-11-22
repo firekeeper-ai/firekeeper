@@ -763,6 +763,12 @@ func (r *run) redactOptions() redact.Options {
 // own files (.git/config and markers) are read, never the transcript. Cloud
 // directories do not refer to this machine, so local exclusions do not apply.
 func (r *run) skipReason(meta session.Meta) string {
+	return SkipReason(meta, r.cfg.Exclude)
+}
+
+// SkipReason returns why a local transcript session must not be read.
+// It is shared by upload and local export paths.
+func SkipReason(meta session.Meta, exclude []string) string {
 	if meta.Origin == string(contract.OriginCloud) {
 		return ""
 	}
@@ -772,7 +778,7 @@ func (r *run) skipReason(meta session.Meta) string {
 	if ignored(meta.CWD) {
 		return ".firekeeper-ignore"
 	}
-	if len(r.cfg.Exclude) == 0 {
+	if len(exclude) == 0 {
 		return ""
 	}
 	root, gitDir := findRepo(meta.CWD)
@@ -780,7 +786,7 @@ func (r *run) skipReason(meta session.Meta) string {
 	if gitDir != "" {
 		remotes = remoteURLs(gitDir)
 	}
-	if pattern, ok := (config.Config{Exclude: r.cfg.Exclude}).Excluded([]string{meta.CWD, root}, remotes); ok {
+	if pattern, ok := (config.Config{Exclude: exclude}).Excluded([]string{meta.CWD, root}, remotes); ok {
 		return "excluded by config: " + pattern
 	}
 	return ""

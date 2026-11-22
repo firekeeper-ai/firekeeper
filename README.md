@@ -155,6 +155,10 @@ You do **not** need `login`, `serve`, or `daemon install` to use this dashboard.
   sessions for scripts, and `firekeeper usage --json` prints quota windows with
   reset times (Claude, Codex, Copilot AI credits) and Kimi's local totals; Gemini,
   Cursor and OpenCode report no usage source. Near a 5-hour limit,
+  `firekeeper export --session ID [--provider P] [--format jsonl] [--no-text] [--since DUR]`
+  writes one normalized transcript event per line locally. It never uploads
+  anything. `--no-text` omits `text` and `raw` for a structural view containing
+  roles, tool calls, models, token counts, and event order.
   `firekeeper window` breaks the window down by session, model and hour (`--json`,
   or `--html FILE` for a standalone page; `--provider` picks the harness).
   Add `--week` for the weekly window, broken down by day. Transcript exports and server
