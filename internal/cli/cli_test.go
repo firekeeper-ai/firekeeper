@@ -8,10 +8,13 @@ import (
 	"flag"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/firekeeper-ai/firekeeper/internal/config"
 	"github.com/firekeeper-ai/firekeeper/internal/reporter"
 	"github.com/firekeeper-ai/firekeeper/internal/session"
+	"github.com/firekeeper-ai/firekeeper/internal/transcript"
+	"github.com/firekeeper-ai/firekeeper/internal/transcript/reader"
 	"github.com/firekeeper-ai/firekeeper/internal/version"
 )
 
@@ -27,7 +30,7 @@ func TestRunSubcommandDispatch(t *testing.T) {
 		{args: []string{"--unknown"}, handled: false},
 		{args: []string{"--unknown", "snapshot"}, handled: false},
 		{args: []string{"unknown"}, handled: false},
-		{args: []string{"export"}, handled: true, code: 2, wantStderr: "firekeeper export: not implemented"},
+		{args: []string{"export"}, handled: true, code: 2, wantStderr: "firekeeper export: --session is required"},
 		{args: []string{"report", "--bogus"}, handled: true, code: 2},
 		{args: []string{"serve"}, handled: true, code: 2, wantStderr: "firekeeper-server"},
 		{args: []string{"serve", "--listen", "127.0.0.1:0"}, handled: true, code: 2, wantStderr: "separate commercial binary"},
@@ -107,6 +110,130 @@ func stubDiscover(t *testing.T, metas []session.Meta, err error) {
 	previous := discoverSessions
 	discoverSessions = func(context.Context, session.Options) ([]session.Meta, error) { return metas, err }
 	t.Cleanup(func() { discoverSessions = previous })
+}
+
+type exportStubEnumerator struct {
+	meta session.Meta
+}
+
+func (e exportStubEnumerator) Enumerate(context.Context, reader.EnumerateOptions) ([]session.Meta, error) {
+	return []session.Meta{e.meta}, nil
+}
+
+type exportStubSource struct {
+	events []transcript.Event
+}
+
+func (s exportStubSource) Locate(session.Meta) ([]string, error) {
+	return []string{"synthetic.jsonl"}, nil
+}
+
+func (s exportStubSource) Read(string, int64) ([]transcript.Event, int64, error) {
+	return s.events, int64(len(s.events)), nil
+}
+
+func stubExport(t *testing.T, provider transcript.Provider, meta session.Meta, events []transcript.Event) {
+	t.Helper()
+	previousEnumerate := exportEnumerate
+	previousSource := exportSource
+	previousMachineID := exportMachineID
+	previousSkipReason := exportSkipReason
+	previousHome := configHome
+	exportEnumerate = func(got transcript.Provider) (reader.Enumerator, bool) {
+		if got != provider {
+			return nil, false
+		}
+		return exportStubEnumerator{meta: meta}, true
+	}
+	exportSource = func(got transcript.Provider) (reader.Source, bool) {
+		if got != provider {
+			return nil, false
+		}
+		return exportStubSource{events: events}, true
+	}
+	exportMachineID = func(string) (string, error) {
+		return "0199c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d", nil
+	}
+	exportSkipReason = func(session.Meta, []string) string { return "" }
+	configHome = func() (string, error) { return t.TempDir(), nil }
+	t.Cleanup(func() {
+		exportEnumerate = previousEnumerate
+		exportSource = previousSource
+		exportMachineID = previousMachineID
+		exportSkipReason = previousSkipReason
+		configHome = previousHome
+	})
+}
+
+func TestExportNoTextEveryProvider(t *testing.T) {
+	for _, provider := range transcript.Providers() {
+		t.Run(string(provider), func(t *testing.T) {
+			raw := json.RawMessage(`{"synthetic":true}`)
+			text := "private prompt"
+			tool := "shell"
+			model := "test-model"
+			ts := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+			meta := session.Meta{ID: "session-1", Provider: provider, CWD: t.TempDir()}
+			event := transcript.Event{
+				Provider: provider,
+				Seq:      7,
+				TS:       &ts,
+				Role:     transcript.RoleAssistant,
+				Text:     text,
+				ToolName: &tool,
+				Model:    &model,
+				Tokens:   transcript.Tokens{Input: 11, Output: 13, Cache: 17},
+				Raw:      raw,
+			}
+			stubExport(t, provider, meta, []transcript.Event{event})
+
+			var stdout, stderr bytes.Buffer
+			code := runExport([]string{"--session", meta.ID, "--provider", string(provider), "--no-text"}, &stdout, &stderr)
+			if code != 0 {
+				t.Fatalf("code = %d, stderr = %q", code, stderr.String())
+			}
+			var got map[string]any
+			if err := json.Unmarshal(bytes.TrimSpace(stdout.Bytes()), &got); err != nil {
+				t.Fatalf("decode JSONL: %v", err)
+			}
+			if got["seq"] != float64(7) || got["role"] != "assistant" || got["provider"] != string(provider) {
+				t.Fatalf("structure = %v", got)
+			}
+			if _, ok := got["text"]; ok {
+				t.Fatal("no-text output contains text")
+			}
+			if _, ok := got["raw"]; ok {
+				t.Fatal("no-text output contains raw")
+			}
+		})
+	}
+}
+
+func TestExportMissingAndIgnored(t *testing.T) {
+	t.Run("missing", func(t *testing.T) {
+		stubExport(t, transcript.ProviderCodex, session.Meta{ID: "other", Provider: transcript.ProviderCodex}, nil)
+		var stdout, stderr bytes.Buffer
+		code := runExport([]string{"--session", "missing", "--provider", "codex"}, &stdout, &stderr)
+		if code != 1 || !strings.Contains(stderr.String(), `session "missing" not found`) {
+			t.Fatalf("code = %d stderr = %q", code, stderr.String())
+		}
+	})
+
+	t.Run("ignored", func(t *testing.T) {
+		meta := session.Meta{ID: "ignored", Provider: transcript.ProviderClaude, CWD: "/private/repo"}
+		stubExport(t, transcript.ProviderClaude, meta, nil)
+		exportSkipReason = func(got session.Meta, _ []string) string {
+			if got.ID == meta.ID {
+				return ".firekeeper-ignore"
+			}
+			return ""
+		}
+		var stdout, stderr bytes.Buffer
+		code := runExport([]string{"--session", meta.ID, "--provider", "claude", "--no-text"}, &stdout, &stderr)
+		if code != 1 || !strings.Contains(stderr.String(), "excluded: .firekeeper-ignore") {
+			t.Fatalf("code = %d stderr = %q", code, stderr.String())
+		}
+	})
 }
 
 func TestVersionCommand(t *testing.T) {
