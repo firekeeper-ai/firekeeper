@@ -107,15 +107,22 @@ func runStats(args []string, stdout, stderr io.Writer) int {
 		})
 		providerResults[i] = result
 	})
+	// With several providers, one that cannot be listed is skipped and named
+	// in the notes; a provider asked for by name still fails the command.
+	var notes []string
 	for _, result := range providerResults {
-		if result.err != nil {
-			if ctx.Err() != nil {
-				fmt.Fprintln(stderr, "firekeeper stats: interrupted")
-			} else {
-				fmt.Fprintf(stderr, "firekeeper stats: enumerate %s: %v\n", result.provider, result.err)
-			}
+		if result.err == nil {
+			continue
+		}
+		if ctx.Err() != nil {
+			fmt.Fprintln(stderr, "firekeeper stats: interrupted")
 			return 1
 		}
+		fmt.Fprintf(stderr, "firekeeper stats: enumerate %s: %v\n", result.provider, result.err)
+		if len(providers) == 1 {
+			return 1
+		}
+		notes = append(notes, fmt.Sprintf("%s sessions could not be listed and are not counted", result.provider))
 	}
 
 	type sessionJob struct {
@@ -160,21 +167,33 @@ func runStats(args []string, stdout, stderr io.Writer) int {
 		}
 	})
 	data := make([]stats.Session, 0, len(jobs))
+	unreadable := map[transcript.Provider]int{}
 	for i, result := range readResults {
 		if result.err != nil {
 			if ctx.Err() != nil {
 				fmt.Fprintln(stderr, "firekeeper stats: interrupted")
-			} else {
-				fmt.Fprintf(stderr, "firekeeper stats: read session %q: %v\n", jobs[i].meta.ID, result.err)
+				return 1
 			}
-			return 1
+			fmt.Fprintf(stderr, "firekeeper stats: skipped session %q: %v\n", jobs[i].meta.ID, result.err)
+			unreadable[jobs[i].provider]++
+			continue
 		}
 		data = append(data, stats.Session{
 			ID: jobs[i].meta.ID, Provider: jobs[i].provider, Project: jobs[i].project, Events: result.events,
 		})
 	}
 
+	for _, provider := range providers {
+		if n := unreadable[provider]; n > 0 {
+			noun, verb := "sessions", "are"
+			if n == 1 {
+				noun, verb = "session", "is"
+			}
+			notes = append(notes, fmt.Sprintf("%d %s %s could not be read and %s not counted", n, provider, noun, verb))
+		}
+	}
 	report := stats.Build(data, since)
+	report.Notes = append(report.Notes, notes...)
 	enc := json.NewEncoder(stdout)
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(report); err != nil {

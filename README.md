@@ -164,8 +164,9 @@ You do **not** need `login`, `serve`, or `daemon install` to use this dashboard.
   context size, tool calls and errors per tool, and model, without including
   prompt text.
   `fk stats [--since 7d] [--provider P|--all] [--project NAME] --json`
-  summarizes local context growth, tool errors, reply timing, activity rhythm,
-  and token totals. It emits no prompt text and never uploads anything; token
+  summarizes local context growth (peak context size), tool errors per tool,
+  reply timing, activity rhythm, and token totals; providers or sessions it
+  cannot read are skipped and listed in `notes`. It emits no prompt text and never uploads anything; token
   totals are not billed-cost estimates.
   `firekeeper window` breaks the window down by session, model and hour (`--json`,
   or `--html FILE` for a standalone page; `--provider` picks the harness).

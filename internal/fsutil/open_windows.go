@@ -4,8 +4,7 @@ package fsutil
 
 import (
 	"os"
-
-	"golang.org/x/sys/windows"
+	"syscall"
 )
 
 // Open opens name for reading and lets other processes rename, replace, or
@@ -13,12 +12,12 @@ import (
 // log or state file would make the writer's rotation or atomic replace fail
 // with a sharing violation.
 func Open(name string) (*os.File, error) {
-	path, err := windows.UTF16PtrFromString(name)
+	path, err := syscall.UTF16PtrFromString(name)
 	if err != nil {
 		return nil, &os.PathError{Op: "open", Path: name, Err: err}
 	}
-	const share = windows.FILE_SHARE_READ | windows.FILE_SHARE_WRITE | windows.FILE_SHARE_DELETE
-	handle, err := windows.CreateFile(path, windows.GENERIC_READ, share, nil, windows.OPEN_EXISTING, windows.FILE_ATTRIBUTE_NORMAL, 0)
+	const share = syscall.FILE_SHARE_READ | syscall.FILE_SHARE_WRITE | syscall.FILE_SHARE_DELETE
+	handle, err := syscall.CreateFile(path, syscall.GENERIC_READ, share, nil, syscall.OPEN_EXISTING, syscall.FILE_ATTRIBUTE_NORMAL, 0)
 	if err != nil {
 		return nil, &os.PathError{Op: "open", Path: name, Err: err}
 	}

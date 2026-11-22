@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/firekeeper-ai/firekeeper/internal/fsutil"
 	"github.com/firekeeper-ai/firekeeper/internal/serverinstall"
 	"github.com/firekeeper-ai/firekeeper/internal/update"
 )
@@ -198,7 +199,7 @@ func updateInPlace(ctx context.Context, src serverinstall.Source, path, real, cu
 		return path
 	}
 	if until, covered := licenseCoverage(ctx, installed); !covered {
-		if err := os.Rename(backup, installed); err != nil {
+		if err := fsutil.RenameReplacing(backup, installed); err != nil {
 			fmt.Fprintf(stderr, "firekeeper serve: the new server is not covered by your license and the old one could not be restored: %v\n", err)
 			return installed
 		}
