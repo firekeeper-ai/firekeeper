@@ -204,6 +204,69 @@ func TestCredentialsOnMacOS(t *testing.T) {
 	})
 }
 
+func TestCredentialsKeychainTimeout(t *testing.T) {
+	h := newCredHome(t, loginJSON("file-token", time.Time{}), orgConfig, 0o600)
+	opts := CredentialOptions{
+		GOOS:   "darwin",
+		Getenv: func(string) string { return "" },
+		Keychain: func(ctx context.Context) ([]byte, error) {
+			<-ctx.Done()
+			return nil, ctx.Err()
+		},
+	}
+	start := time.Now()
+	_, err := loadCredentialsWithTimeout(context.Background(), h.home, opts, 30*time.Millisecond)
+	if !errors.Is(err, ErrKeychainTimeout) {
+		t.Fatalf("err = %v, want keychain timeout instead of file fallback", err)
+	}
+	if time.Since(start) > 2*time.Second {
+		t.Fatal("keychain timeout did not bound the lookup")
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err = loadCredentialsWithTimeout(ctx, h.home, opts, time.Second)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want caller cancellation", err)
+	}
+}
+
+func TestKeychainCommandHelper(t *testing.T) {
+	switch os.Getenv("FIREKEEPER_TEST_KEYCHAIN_HELPER") {
+	case "output":
+		fmt.Print("synthetic-keychain-output")
+		os.Exit(0)
+	case "block":
+		time.Sleep(10 * time.Second)
+		os.Exit(0)
+	}
+}
+
+func TestKeychainCommandCancellation(t *testing.T) {
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	args := []string{"-test.run=^TestKeychainCommandHelper$"}
+
+	t.Setenv("FIREKEEPER_TEST_KEYCHAIN_HELPER", "output")
+	out, err := runKeychainCommand(context.Background(), exe, args...)
+	if err != nil || string(out) != "synthetic-keychain-output" {
+		t.Fatalf("keychain helper failed: %v", err)
+	}
+
+	t.Setenv("FIREKEEPER_TEST_KEYCHAIN_HELPER", "block")
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	if _, err := runKeychainCommand(ctx, exe, args...); err == nil || !errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		t.Fatalf("err = %v, context error = %v", err, ctx.Err())
+	}
+	if time.Since(start) > 2*time.Second {
+		t.Fatal("cancelled keychain process did not stop promptly")
+	}
+}
+
 func TestCredentialsTokenCannotBeSerialized(t *testing.T) {
 	creds := Credentials{token: testToken, OrgUUID: testOrg}
 	data, err := json.Marshal(creds)

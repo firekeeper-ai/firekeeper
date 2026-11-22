@@ -203,6 +203,30 @@ func TestPollerBacksOffAndWarns(t *testing.T) {
 	}
 }
 
+func TestPollerReportsKeychainTimeout(t *testing.T) {
+	h := newPollHarness(t, nil)
+	h.creds = func(ctx context.Context) (Credentials, error) {
+		return loadCredentialsWithTimeout(ctx, h.home, CredentialOptions{
+			GOOS:   "darwin",
+			Getenv: func(string) string { return "" },
+			Keychain: func(ctx context.Context) ([]byte, error) {
+				<-ctx.Done()
+				return nil, ctx.Err()
+			},
+		}, 30*time.Millisecond)
+	}
+	res := h.p.Poll(context.Background())
+	if !errors.Is(res.Err, ErrKeychainTimeout) || res.Next.Sub(h.now) != DefaultPollInterval {
+		t.Fatalf("pass = %+v", res)
+	}
+	if s := h.status(); s.Warning != ErrKeychainTimeout.Error() {
+		t.Fatalf("warning = %q", s.Warning)
+	}
+	if h.cloud.sessionCalls != 0 {
+		t.Fatal("cloud API was called after the keychain timed out")
+	}
+}
+
 func TestPollerSurfacesAPIRefusalAndShapeChange(t *testing.T) {
 	for name, tc := range map[string]struct {
 		status int
