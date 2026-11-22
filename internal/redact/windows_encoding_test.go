@@ -43,6 +43,28 @@ func TestWindowsMixedPercentEncoding(t *testing.T) {
 	}
 }
 
+// File URIs from Node's url.pathToFileURL and .NET's Uri.AbsoluteUri encode
+// spaces and non-ASCII bytes but leave ', ( and ) literal. Such mixed
+// spellings once skipped the mayMatch prefilter and kept the user's name.
+func TestWindowsMixedEncodingFileURIs(t *testing.T) {
+	for _, test := range []struct{ home, in string }{
+		{`C:\Users\Dan O'Neil`, `file:///c%3A/Users/Dan%20O'Neil/x`},
+		{`C:\Users\Dan (Work)`, `file:///c:/Users/Dan%20(Work)/x`},
+		{`C:\Users\Dan O'Neil`, `file:///c%3A/Users/Dan+O%27Neil/x`},
+		{`C:\Users\Dan O'Neil`, `file:///c%3A/Users/Dan%20O%27Neil/x`},
+		{`C:\Users\José Díaz`, "file:///c%3A/Users/José%20Díaz/x"},
+		{`C:\Users\José Díaz`, `file:///c%3A/Users/Jos%C3%A9%20D%C3%ADaz/x`},
+	} {
+		t.Run(test.in, func(t *testing.T) {
+			assertPathRedaction(t, test.in, "file:///~/x", Options{HomeDir: test.home}, Counts{KindHomeDir: 1})
+		})
+	}
+	// A different user with the same encodings is left alone.
+	for _, in := range []string{`file:///c%3A/Users/Dan%20O'Neill/x`, `file:///c:/Users/Dan%20(Home)/x`} {
+		assertPathRedaction(t, in, in, Options{HomeDir: `C:\Users\Dan O'Neil`}, Counts{})
+	}
+}
+
 func TestWindowsEncodedConfiguredPaths(t *testing.T) {
 	opts := Options{HomeDir: `C:\Users\Dan`, Paths: []string{`C:\Users\Dan\private`}}
 	in := percentEncode(opts.Paths[0]) + "%2Ffile ~/%70rivate/file"
