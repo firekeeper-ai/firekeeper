@@ -390,16 +390,39 @@ func installWindows(ctx context.Context, tag, exe string, out, errOut io.Writer)
 	if err := os.WriteFile(path, []byte(script), 0o600); err != nil {
 		return fmt.Errorf("write install script: %w", err)
 	}
-	shell, err := exec.LookPath("powershell")
+	shell, err := windowsShell(systemDirectory(), fileExists, exec.LookPath)
 	if err != nil {
-		if shell, err = exec.LookPath("pwsh"); err != nil {
-			return errors.New("PowerShell not found")
-		}
+		return err
 	}
+	fmt.Fprintf(out, "Running the installer with %s\n", shell)
 	cmd := exec.CommandContext(ctx, shell, windowsInstallArgs(path, tag, filepath.Dir(exe))...)
 	cmd.Env = windowsInstallEnv(os.Environ())
 	cmd.Stdout, cmd.Stderr = out, errOut
 	return cmd.Run()
+}
+
+// windowsShell picks the PowerShell that runs the installer: Windows
+// PowerShell at its fixed place under systemDir, so a powershell.exe, .bat or
+// .cmd planted earlier on PATH is never run. Only when that file is missing
+// does it search PATH for pwsh. systemDir comes from GetSystemDirectory, not
+// from the SystemRoot variable, which the environment can change.
+func windowsShell(systemDir string, exists func(string) bool, lookPath func(string) (string, error)) (string, error) {
+	if systemDir != "" {
+		shell := filepath.Join(systemDir, "WindowsPowerShell", "v1.0", "powershell.exe")
+		if exists(shell) {
+			return shell, nil
+		}
+	}
+	shell, err := lookPath("pwsh")
+	if err != nil || shell == "" {
+		return "", errors.New("PowerShell not found: neither Windows PowerShell in the system directory nor pwsh on PATH")
+	}
+	return shell, nil
+}
+
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.Mode().IsRegular()
 }
 
 // windowsInstallEnv is the environment for the installer: parent without
