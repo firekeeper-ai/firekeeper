@@ -10,7 +10,9 @@ dashboard, and are not covered by Firekeeper's license.
 
 The built font is committed at `internal/iconfont/FirekeeperIcons.ttf` and
 embedded in the `firekeeper` binary; `firekeeper install-font` installs it on
-request. `npm run build` here rebuilds it.
+request. Rebuild and verify it from this directory with
+`npm ci --ignore-scripts && npm run build`. The lockfile pins package
+integrities, and the build works without running dependency install scripts.
 
 Codepoints (private use area, U+E9A0 to U+E9A6) are listed in `build.mjs` and
 must match `toolFontIcons` in `internal/tui/icons.go`.
