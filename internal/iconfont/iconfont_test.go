@@ -30,15 +30,22 @@ func TestUserDir(t *testing.T) {
 		{"darwin", "/h", "", filepath.Join("/h", "Library", "Fonts"), nil},
 		{"linux", "/h", "", filepath.Join("/h", ".local", "share", "fonts"), nil},
 		{"linux", "/h", "/x", filepath.Join("/x", "fonts"), nil},
-		{"windows", "/h", "", "", ErrUnsupported},
+		{"linux", "/h", "rel/data", filepath.Join("/h", ".local", "share", "fonts"), nil},
+		{"linux", "/h", "~/data", filepath.Join("/h", ".local", "share", "fonts"), nil},
+		{"linux", "/h", `C:\data`, filepath.Join("/h", ".local", "share", "fonts"), nil},
+		{"windows", `C:\Users\me`, "", "", ErrUnsupported},
 	} {
 		got, err := UserDir(test.goos, test.home, test.xdg)
 		if got != test.want || !errors.Is(err, test.err) {
 			t.Errorf("UserDir(%q,%q,%q) = %q, %v; want %q, %v", test.goos, test.home, test.xdg, got, err, test.want, test.err)
 		}
 	}
-	if _, err := UserDir("darwin", "", ""); err == nil {
-		t.Error("empty home accepted")
+	for _, home := range []string{"", "rel-home", "~", "~/h", `C:\Users\me`} {
+		for _, goos := range []string{"darwin", "linux"} {
+			if got, err := UserDir(goos, home, "/x"); err == nil {
+				t.Errorf("UserDir(%q, %q) = %q, want an error", goos, home, got)
+			}
+		}
 	}
 }
 
@@ -79,4 +86,20 @@ func TestInstallLifecycle(t *testing.T) {
 	if removed, err := Remove(dir); err != nil || removed {
 		t.Fatalf("second Remove = %v, %v", removed, err)
 	}
+}
+
+func FuzzUserDirAndGhosttyPathAreAbsolute(f *testing.F) {
+	f.Add("/h", "", "")
+	f.Add("rel", "~/x", "rel/cfg")
+	f.Add("/h", "/x", "/c")
+	f.Fuzz(func(t *testing.T, home, xdgData, xdgConfig string) {
+		for _, goos := range []string{"darwin", "linux"} {
+			if dir, err := UserDir(goos, home, xdgData); err == nil && !isAbs(goos, filepath.ToSlash(dir)) {
+				t.Fatalf("UserDir(%q, %q, %q) = %q, not absolute", goos, home, xdgData, dir)
+			}
+			if path := GhosttyConfigPath(goos, home, xdgConfig, func(string) bool { return true }); path != "" && !isAbs(goos, filepath.ToSlash(path)) {
+				t.Fatalf("GhosttyConfigPath(%q, %q, %q) = %q, not absolute", goos, home, xdgConfig, path)
+			}
+		}
+	})
 }

@@ -209,7 +209,8 @@ firekeeper install-font          # firekeeper install-font --remove to undo
 ```
 
 That copies `FirekeeperIcons.ttf` into your user font folder (`~/Library/Fonts`
-on macOS, `~/.local/share/fonts` on Linux). If you use Ghostty, it also adds one
+on macOS, `~/.local/share/fonts` on Linux, or `$XDG_DATA_HOME/fonts` when that
+is an absolute path; a relative one is ignored). If you use Ghostty, it also adds one
 line to your Ghostty config that points only the logo codepoints at the font
 (`font-codepoint-map = U+E9A0-U+E9A6=FirekeeperIcons`), so your own font stays
 the main one; reload Ghostty (`Cmd+Shift+,`) and the logos appear. Pass
