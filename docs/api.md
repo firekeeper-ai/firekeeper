@@ -214,6 +214,9 @@ transaction.
   (the commit checked out when the session started; optional) keep their
   first value. `last_activity_at` only moves forward. An empty `state` keeps the
   stored state, or `UNKNOWN` for a new session.
+- Local uploads may include `repo`, the lowercase Git remote identity (for example
+  `github.com/acme/dashboard`). An omitted or empty identity preserves an existing
+  value. A metadata-only ingest can fill this field on an existing session.
 - Origin (optional): `origin` says where the session ran, `local` on the
   reporting machine or `cloud` on a hosted service (for example Claude Code on
   the web). An empty string, JSON `null`, or a missing `origin` keeps the

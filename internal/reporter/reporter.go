@@ -519,6 +519,7 @@ type ingestMeta struct {
 	Origin         string     `json:"origin,omitempty"`
 	CWD            string     `json:"cwd"`
 	Project        string     `json:"project"`
+	Repo           string     `json:"repo,omitempty"`
 	Branch         string     `json:"branch"`
 	Commit         string     `json:"commit,omitempty"`
 	Model          string     `json:"model"`
@@ -627,6 +628,7 @@ func (r *run) addGitFiles(ctx context.Context, meta session.Meta, sm *ingestMeta
 		return
 	}
 	sm.gitFilesDone = true
+	sm.Repo = repositoryRemote(ctx, meta.CWD, session.FirstNonEmpty(meta.Branch, sm.Branch))
 	if sm.commitRaw == "" {
 		return
 	}

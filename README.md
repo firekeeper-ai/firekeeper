@@ -15,7 +15,8 @@ No Firekeeper account, server, or agent wrappers required.** Launch your
 agents as usual, then open `firekeeper` beside them. The terminal dashboard
 reads local session data without uploading it;
 [usage lookups and update checks](https://firekeeper.ai/docs/usage/#network)
-can contact the network.
+can contact the network. Opt-in reporting identifies a local repository by its
+Git remote when available, even if the checkout folder has a different name.
 
 Two tiers:
 
