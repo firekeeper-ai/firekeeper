@@ -10,16 +10,16 @@ Sizes below are the **export** size: 2× the largest CSS width the slot renders 
 - [x] `processes-live`: shipped from the same take, full window (2112×1216, ~8.9 s).
 - [x] `switch-terminal`: shipped (1600×924, ~14.7 s). Full Ghostty window, no crop; longer than the 5–8 s target but loops cleanly.
 - [x] `web-dashboard`: shipped (1600×1040, ~13.0 s). Full screen capture (Safari window on the desktop), no crop.
-- [x] `usage-tab` recorded and wired (1600×906). Remaining: `og-image`. Optional fuller `hero-demo` reshoot. (`chat-follow` and `backfill-dry-run` removed from the page; Conversation uses `switch-terminal` alone, Reporting uses `web-dashboard` alone.)
+- [ ] `usage-tab` withdrawn from the public page and README because the shipped take exposed account-specific project, session, and plan details. Re-record only with demo data or explicit approval to publish every visible value. Remaining: `og-image`. Optional fuller `hero-demo` reshoot. (`chat-follow` and `backfill-dry-run` removed from the page; Conversation uses `switch-terminal` alone, Reporting uses `web-dashboard` alone.)
 
 Shipped clips keep the full recorded window; each media slot's `--ar` matches the encoded size and the video uses `object-fit: contain`, so nothing inside the window is cropped. Only black desktop padding outside the window is trimmed.
 
 ## Before you record (applies to every shot)
 
 **Machine and data**
-- [ ] Use a throwaway macOS user or a clean `$HOME`, so paths read `/Users/demo/…` and not `/Users/danbradbury/…`. The README uses `docs/firekeeper-tui.gif` / `firekeeper-usage.gif` / `firekeeper-dashboard.gif` from the current landing takes. `docs/firekeeper-tui.jpg` remains for the docs site shot; reshoot if personal paths show.
+- [ ] Use a throwaway macOS user or a clean `$HOME`, so paths read `/Users/demo/…` and not a personal home path. `docs/firekeeper-tui.jpg` remains for the docs site shot; reshoot if personal paths show.
 - [ ] Demo projects only: e.g. `~/code/aurora-api`, `~/code/aurora-web`, `~/code/notes`, with harmless branch names (`main`, `feat/billing`, `fix/pager`). Nothing client-related, and no real repo names you'd mind seeing.
-- [ ] Real agents running real but boring prompts ("add a health check endpoint", "write tests for the pager"), so states, models and tokens are genuine. Never fake the UI.
+- [ ] Real agents running real but boring prompts ("add a health check endpoint", "write tests for the pager"), so states, models and tokens are genuine. Never fake the UI. Use demo projects and an account whose plan and limits are explicitly approved for publication.
 - [ ] Before each take, check for API keys, tokens, emails, hostnames, Slack/Linear URLs in prompts or replies. `firekeeper config show` masks the token, but still keep it off screen.
 - [ ] Hide the macOS menu bar clock or set it to something neutral; turn on Do Not Disturb; hide the dock or move it off screen.
 
@@ -93,7 +93,7 @@ Shipped clips keep the full recorded window; each media slot's `--ar` matches th
 - **Aspect / size:** 16:9, **2112×1188**.
 - **Length:** 8–12 s.
 - **Target size:** ≤ 2 MB WebM.
-- **Watch for:** plan names and limits are your real account data. Decide whether you're OK showing them, or use an account you don't mind showing.
+- **Watch for:** plan names, limits, project names, session titles, and identifiers are private account data. Use a demo account whose visible data is approved for publication; remove the take if anything unapproved appears.
 
 ### 6. `backfill-dry-run` (removed from page — Reporting uses `web-dashboard` full-width)
 - **Where:** "Stay local. Add a web dashboard…" section, left card.
