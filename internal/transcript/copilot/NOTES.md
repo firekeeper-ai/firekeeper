@@ -70,12 +70,16 @@ not give per call is main-agent token usage; see "Tokens" below.
 - `session.shutdown` carries per-run totals in `modelMetrics`. Checked locally:
   they equal the sums of `assistant_usage_events` for the session exactly.
 
-Events carry `input = prompt_tokens - cached_tokens`, `cache = cached_tokens`,
-and `output = completion_tokens` for calls, and `input = inputTokens -
-cacheReadTokens`, `cache = cacheReadTokens`, `output = outputTokens` for
-shutdowns, matching the Codex source where input excludes cache reads and
-includes cache writes. Summing event tokens over a session therefore gives the
-main-agent totals plus the auxiliary calls, with no double counting.
+Events carry `input = prompt_tokens - cached_tokens`, `cache = cache_read =
+cached_tokens`, and `output = completion_tokens` for calls. Shutdowns carry
+`input = inputTokens - cacheReadTokens - cacheWriteTokens`, `cache_read =
+cacheReadTokens`, `cache_write = cacheWriteTokens`, `cache = cache_read +
+cache_write`, and `output = outputTokens` (locally, `inputTokens` includes both
+cache figures), matching the Claude source. A shutdown names its model when
+`modelMetrics` has usage for exactly one; with several, one event cannot
+attribute the totals, so it has no model. Summing event tokens over a session
+therefore gives the main-agent totals plus the auxiliary calls, with no double
+counting.
 
 Reading `session-store.db` for per-call tokens was rejected: it would mix a
 SQLite row cursor into a JSONL source and break the line-index `seq`.
