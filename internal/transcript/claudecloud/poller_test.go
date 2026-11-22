@@ -87,6 +87,27 @@ func (h *pollHarness) status() Status {
 	return s
 }
 
+func TestPollerCloudDoesNotResolveLocalCWD(t *testing.T) {
+	cwd := cloudLocalRepo(t, true)
+	h := newPollHarness(t, func(cfg *PollerConfig) {
+		cfg.Reporter.Exclude = []string{cwd}
+	})
+	item := cloudSession(sid, "2026-10-01T11:00:00Z")
+	item["session_context"].(map[string]any)["cwd"] = cwd
+	item["external_metadata"] = map[string]any{}
+	item["session_context"].(map[string]any)["outcomes"] = []map[string]any{}
+	h.cloud.sessions = []map[string]any{item}
+	h.cloud.events[sid] = conversation(sid)
+	result := h.p.Poll(context.Background())
+	if result.Err != nil || result.Events != 5 {
+		t.Fatalf("poll = %+v", result)
+	}
+	stored, ok := h.api.Session(testMachine, sid)
+	if !ok || stored.CWD != cwd || stored.Project != "nested" || stored.Branch != "" || stored.Commit != "" || stored.FilesSource == "git" {
+		t.Fatalf("stored cloud session has local metadata: %+v", stored)
+	}
+}
+
 func TestPollerImportsIncrementallyWithoutDuplicates(t *testing.T) {
 	h := newPollHarness(t, nil)
 	h.cloud.sessions = []map[string]any{cloudSession(sid, "2026-10-01T11:00:00Z")}

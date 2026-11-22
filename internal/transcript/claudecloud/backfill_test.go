@@ -2,6 +2,7 @@ package claudecloud
 
 import (
 	"context"
+	"fmt"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -16,6 +17,93 @@ import (
 )
 
 const testMachine = "0199ffff-0000-7000-8000-000000000001"
+
+// cloudLocalRepo plants local metadata under a path that a cloud API might
+// report. The synthetic reflog predates the cloud session.
+func cloudLocalRepo(t *testing.T, marker bool) string {
+	t.Helper()
+	root := filepath.Join(t.TempDir(), "local-repo")
+	cwd := filepath.Join(root, "nested")
+	for _, dir := range []string{cwd, filepath.Join(root, ".git", "logs")} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	hash := "1111111111111111111111111111111111111111"
+	log := fmt.Sprintf("%040d %s Test <test@example.invalid> 1700000000 +0000\tcommit: initial\n", 0, hash)
+	for path, content := range map[string]string{
+		filepath.Join(root, ".git", "HEAD"):         "ref: refs/heads/local-branch\n",
+		filepath.Join(root, ".git", "logs", "HEAD"): log,
+	} {
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if marker {
+		if err := os.WriteFile(filepath.Join(root, ".firekeeper-ignore"), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return cwd
+}
+
+func TestBackfillCloudDoesNotResolveLocalCWD(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		marker  bool
+		exclude bool
+	}{
+		{name: "local git"},
+		{name: "local ignore marker", marker: true},
+		{name: "local exclusion", exclude: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cwd := cloudLocalRepo(t, tc.marker)
+			f, c := newFakeCloud(t)
+			item := cloudSession(sid, "2026-10-01T11:00:00Z")
+			item["session_context"].(map[string]any)["cwd"] = cwd
+			item["external_metadata"] = map[string]any{}
+			item["session_context"].(map[string]any)["outcomes"] = []map[string]any{}
+			f.sessions = []map[string]any{item}
+			f.events[sid] = conversation(sid)
+
+			home := t.TempDir()
+			machineDir := filepath.Join(home, ".firekeeper")
+			if err := os.MkdirAll(machineDir, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(machineDir, "machine-id"), []byte(testMachine+"\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			dir := filepath.Join(machineDir, "cloud", "claude")
+			syncOnce(t, c, dir, time.Time{})
+			api := fakeapi.New()
+			dashboard := httptest.NewServer(api.Handler())
+			defer dashboard.Close()
+			src := &Source{Dir: dir}
+			only := func(p transcript.Provider) bool { return p == transcript.ProviderClaude }
+			cfg := reporter.BackfillConfig{
+				Config: reporter.Config{
+					Server: dashboard.URL, Providers: []transcript.Provider{transcript.ProviderClaude}, Home: home,
+					Sources: func(p transcript.Provider) (reader.Source, bool) { return src, only(p) },
+				},
+				Enumerators: func(p transcript.Provider) (reader.Enumerator, bool) { return src, only(p) },
+				Sleep:       func(context.Context, time.Duration) error { return nil },
+			}
+			if tc.exclude {
+				cfg.Exclude = []string{cwd}
+			}
+			result, err := reporter.Backfill(context.Background(), cfg)
+			if err != nil || result.Failed() || len(result.Sessions) != 1 || result.Sessions[0].Events != 5 {
+				t.Fatalf("backfill: %v, %+v", err, result)
+			}
+			stored, ok := api.Session(testMachine, sid)
+			if !ok || stored.CWD != cwd || stored.Project != "nested" || stored.Branch != "" || stored.Commit != "" || stored.FilesSource == "git" {
+				t.Fatalf("stored cloud session has local metadata: %+v", stored)
+			}
+		})
+	}
+}
 
 // TestBackfillUploadsCloudSessions runs the cached cloud sessions through the
 // real reporter: they upload under their cloud ids as provider claude, and a

@@ -12,7 +12,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/firekeeper-ai/firekeeper/internal/session"
 	"github.com/firekeeper-ai/firekeeper/internal/testenv"
+	"github.com/firekeeper-ai/firekeeper/pkg/contract"
 )
 
 // gitT0 is the synthetic repository's base time, in unix seconds.
@@ -28,6 +30,38 @@ func isolateGit(t *testing.T) {
 	t.Setenv("GIT_AUTHOR_EMAIL", "test@example.invalid")
 	t.Setenv("GIT_COMMITTER_NAME", "Test User")
 	t.Setenv("GIT_COMMITTER_EMAIL", "test@example.invalid")
+}
+
+func TestCloudSessionDoesNotUseLocalGit(t *testing.T) {
+	root, start := sessionRepo(t)
+	meta := session.Meta{CWD: root, StartedAt: unixTime(gitT0 + 10), LastActivityAt: unixTime(gitT0 + 40)}
+	r := &run{}
+
+	local := r.sessionMeta(meta, &SessionResult{})
+	if local.Branch != "main" || local.Commit != start {
+		t.Fatalf("local branch and commit = %q, %q", local.Branch, local.Commit)
+	}
+	r.addGitFiles(context.Background(), meta, &local, &SessionResult{})
+	if local.FilesSource != filesFromGit || len(local.Files) == 0 {
+		t.Fatal("local Git files were not included")
+	}
+
+	meta.Origin = string(contract.OriginCloud)
+	cloud := r.sessionMeta(meta, &SessionResult{})
+	if cloud.Branch != "" || cloud.Commit != "" {
+		t.Fatalf("cloud session used local Git metadata: %q, %q", cloud.Branch, cloud.Commit)
+	}
+	// Even a supplied commit must not trigger Git for a cloud session.
+	cloud.commitRaw = start
+	r.addGitFiles(context.Background(), meta, &cloud, &SessionResult{})
+	if cloud.FilesSource != "" || len(cloud.Files) != 0 {
+		t.Fatal("cloud session used local Git files")
+	}
+	meta.Branch = "cloud-branch"
+	cloud = r.sessionMeta(meta, &SessionResult{})
+	if cloud.Branch != "cloud-branch" || cloud.Commit != "" {
+		t.Fatalf("cloud branch and commit = %q, %q", cloud.Branch, cloud.Commit)
+	}
 }
 
 // gitAt runs git in dir with author and committer dates, and so the HEAD

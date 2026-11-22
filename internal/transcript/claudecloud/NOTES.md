@@ -108,10 +108,8 @@ and the session costs one request per pass until it works or leaves the
 list. The
 last outcome is in `~/.firekeeper/claude-cloud-status.json` (no secrets) for
 the TUI.
-- `session_context.cwd` is an empty string on every session seen (29 of 29),
-  and the reporter excludes sessions without a working directory. The
-  importer therefore gives each session the virtual directory
-  `/claude-cloud/<owner>/<repo>` (project = repo name). A real `cwd`, if the
-  API ever sends one, wins.
-- Exclusion by directory or remote cannot match cloud paths.
+- `session_context.cwd` is an empty string on every session seen (29 of 29).
+  The importer uses `/claude-cloud/<owner>/<repo>` in its absence. An API cwd
+  is displayed if provided, but neither path is resolved on this machine.
+- Local exclusions and Git metadata do not apply to cloud sessions.
 - Sub-agent messages are kept as meta events, not as a separate transcript.
