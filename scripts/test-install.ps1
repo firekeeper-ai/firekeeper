@@ -263,7 +263,7 @@ try {
     foreach ($suffix in @(';bin', ';.', ';..\y', '%TEST%', '"')) {
         $dir = (Join-Path $work 'unsafe') + $suffix
         $r = Run-Installer @{ FIREKEEPER_RELEASES_URL = $base; FIREKEEPER_INSTALL_DIR = $dir; FIREKEEPER_NO_MODIFY_PATH = '' } @('-Version', 'v1.2.3')
-        Check (($r.Code -ne 0) -and ($r.Output -match 'must not contain') -and -not (Test-Path -LiteralPath $dir)) "unsafe FIREKEEPER_INSTALL_DIR rejected: $suffix"
+        Check (($r.Code -ne 0) -and ($r.Output -match 'must not contain') -and -not [System.IO.Directory]::Exists($dir)) "unsafe FIREKEEPER_INSTALL_DIR rejected: $suffix"
     }
     $dir = (Join-Path $work 'unsafe-arg') + ';bin'
     $r = Run-Installer @{ FIREKEEPER_RELEASES_URL = $base; FIREKEEPER_INSTALL_DIR = ''; FIREKEEPER_NO_MODIFY_PATH = '1' } @('-Version', 'v1.2.3', '-InstallDir', $dir)
