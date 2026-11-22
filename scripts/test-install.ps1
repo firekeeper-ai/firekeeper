@@ -221,8 +221,8 @@ try {
         @{ Name = 'zero-width space after hash'; Lines = @("$strictHash$([char]0x200B)  $strictName"); Want = 'invalid hash' },
         @{ Name = 'zero-width joiner inside hash'; Lines = @("$($strictHash.Substring(0, 32))$([char]0x200D)$($strictHash.Substring(32))  $strictName"); Want = 'invalid hash' },
         @{ Name = 'short hash'; Lines = @("$($strictHash.Substring(1))  $strictName"); Want = 'invalid hash' },
-        @{ Name = 'non-hex hash'; Lines = @(('g' * 64) + "  $strictName"); Want = 'invalid hash' },
-        @{ Name = 'bad then good duplicate'; Lines = @(('0' * 64) + "  $strictName", "$strictHash  $strictName"); Want = 'more than one entry' },
+        @{ Name = 'non-hex hash'; Lines = @((('g' * 64) + "  $strictName")); Want = 'invalid hash' },
+        @{ Name = 'bad then good duplicate'; Lines = @((('0' * 64) + "  $strictName"), "$strictHash  $strictName"); Want = 'more than one entry' },
         @{ Name = 'identical duplicate'; Lines = @("$strictHash  $strictName", "$strictHash  $strictName"); Want = 'more than one entry' },
         @{ Name = 'zero-width character in name'; Lines = @("$strictHash  $strictName$([char]0x200B)"); Want = 'no entry' }
     )
