@@ -22,13 +22,21 @@ const (
 
 // GhosttyConfigPath returns the Ghostty config file to edit. Ghostty reads
 // both $XDG_CONFIG_HOME/ghostty/config and, on macOS, the Application Support
-// one; an existing file wins, otherwise the XDG path is used.
+// one; an existing file wins, otherwise the XDG path is used. A relative or
+// unexpanded $XDG_CONFIG_HOME is ignored and a relative home is unusable, as
+// in UserDir; with neither usable it returns "".
 func GhosttyConfigPath(goos, home, xdgConfig string, exists func(string) bool) string {
-	if xdgConfig == "" {
+	if !isAbs(goos, home) {
+		home = ""
+	}
+	if !isAbs(goos, xdgConfig) {
+		if home == "" {
+			return ""
+		}
 		xdgConfig = filepath.Join(home, ".config")
 	}
 	xdg := filepath.Join(xdgConfig, "ghostty", "config")
-	if goos == "darwin" {
+	if goos == "darwin" && home != "" {
 		support := filepath.Join(home, "Library", "Application Support", "com.mitchellh.ghostty", "config")
 		if !exists(xdg) && exists(support) {
 			return support

@@ -31,10 +31,29 @@ func TestGhosttyConfigPath(t *testing.T) {
 		{"only support exists", "darwin", "", support, has(support)},
 		{"linux ignores support", "linux", "", xdg, has(support)},
 		{"XDG_CONFIG_HOME", "linux", "/c", filepath.Join("/c", "ghostty", "config"), has()},
+		{"relative XDG_CONFIG_HOME ignored", "linux", "rel/cfg", xdg, has()},
+		{"unexpanded XDG_CONFIG_HOME ignored", "darwin", "~/cfg", xdg, has()},
 	} {
 		if got := GhosttyConfigPath(test.goos, "/h", test.xdgConfig, test.exists); got != test.want {
 			t.Errorf("%s: %q, want %q", test.name, got, test.want)
 		}
+	}
+	all := func(string) bool { return true }
+	for _, home := range []string{"", "rel-home", "~"} {
+		if got := GhosttyConfigPath("linux", home, "/c", all); got != filepath.Join("/c", "ghostty", "config") {
+			t.Errorf("home %q with absolute XDG_CONFIG_HOME: %q", home, got)
+		}
+		for _, xdgConfig := range []string{"", "rel/cfg", "~/cfg"} {
+			for _, goos := range []string{"darwin", "linux"} {
+				if got := GhosttyConfigPath(goos, home, xdgConfig, all); got != "" {
+					t.Errorf("GhosttyConfigPath(%q, %q, %q) = %q, want none", goos, home, xdgConfig, got)
+				}
+			}
+		}
+	}
+	winHome := `C:\Users\me`
+	if got := GhosttyConfigPath("windows", winHome, "", all); got != filepath.Join(winHome, ".config", "ghostty", "config") {
+		t.Errorf("windows home: %q", got)
 	}
 }
 
