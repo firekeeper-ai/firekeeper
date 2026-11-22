@@ -227,6 +227,24 @@ func TestPollerReportsKeychainTimeout(t *testing.T) {
 	}
 }
 
+func TestPollerBacksOffOnPaginationCycle(t *testing.T) {
+	var calls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		_, _ = w.Write([]byte(`{"data":[],"has_more":true,"last_id":"same"}`))
+	}))
+	defer srv.Close()
+	h := newPollHarness(t, func(c *PollerConfig) { c.BaseURL = srv.URL })
+	res := h.p.Poll(context.Background())
+	if res.Err == nil || !strings.Contains(res.Err.Error(), "repeated pagination cursor") ||
+		res.Next.Sub(h.now) != DefaultPollInterval || calls != 2 {
+		t.Fatalf("pass = %+v, requests = %d", res, calls)
+	}
+	if s := h.status(); !strings.Contains(s.Warning, "repeated pagination cursor") {
+		t.Fatalf("warning = %q", s.Warning)
+	}
+}
+
 func TestPollerSurfacesAPIRefusalAndShapeChange(t *testing.T) {
 	for name, tc := range map[string]struct {
 		status int
