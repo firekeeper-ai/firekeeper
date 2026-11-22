@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/firekeeper-ai/firekeeper/internal/claudelimits"
+	"github.com/firekeeper-ai/firekeeper/internal/transcript"
 	"github.com/firekeeper-ai/firekeeper/internal/window"
 )
 
@@ -181,5 +182,102 @@ func TestWindowCodexUsesQuotaReset(t *testing.T) {
 	}
 	if got.Basis != "provider_reset" || got.UsedPercent == nil || *got.UsedPercent != 73 {
 		t.Fatalf("got %+v", got)
+	}
+}
+
+// --all gives every provider its own quota: Claude's limits never appear on
+// Codex or Copilot, and a provider without a limits source has none.
+func TestWindowAllPassesEachProviderItsOwnLimits(t *testing.T) {
+	stubWindow(t)
+	claudeReset := time.Date(2026, 11, 22, 2, 30, 0, 0, time.UTC)
+	codexReset := time.Date(2026, 11, 22, 4, 0, 0, 0, time.UTC)
+	windowLimits = func(context.Context, window.Period) (*claudelimits.Window, error) {
+		return &claudelimits.Window{UsedPercent: 3, ResetsAt: claudeReset}, nil
+	}
+	windowCodexLimits = func(context.Context, window.Period) (*claudelimits.Window, error) {
+		return &claudelimits.Window{UsedPercent: 14, ResetsAt: codexReset}, nil
+	}
+	got := map[transcript.Provider]window.Options{}
+	prevBuild := windowBuild
+	windowBuild = func(_ context.Context, _ time.Time, opts window.Options) (window.Report, error) {
+		got[opts.Provider] = opts
+		return window.Report{Provider: opts.Provider, UsedPercent: opts.UsedPercent}, nil
+	}
+	t.Cleanup(func() { windowBuild = prevBuild })
+
+	var out, errb bytes.Buffer
+	if code := runWindow([]string{"--all", "--json"}, &out, &errb); code != 0 {
+		t.Fatalf("code %d: %s", code, errb.String())
+	}
+	for provider, want := range map[transcript.Provider]struct {
+		used  float64
+		reset time.Time
+	}{
+		transcript.ProviderClaude: {3, claudeReset},
+		transcript.ProviderCodex:  {14, codexReset},
+	} {
+		opts := got[provider]
+		if opts.UsedPercent == nil || *opts.UsedPercent != want.used || !opts.ResetsAt.Equal(want.reset) {
+			t.Errorf("%s: used=%v reset=%v; want %v %v", provider, opts.UsedPercent, opts.ResetsAt, want.used, want.reset)
+		}
+	}
+	for _, provider := range []transcript.Provider{transcript.ProviderCopilot, transcript.ProviderKimi, transcript.ProviderGemini} {
+		opts, ok := got[provider]
+		if !ok {
+			t.Fatalf("%s was not built", provider)
+		}
+		if opts.UsedPercent != nil || !opts.ResetsAt.IsZero() {
+			t.Errorf("%s inherited another provider's limits: used=%v reset=%v", provider, *opts.UsedPercent, opts.ResetsAt)
+		}
+	}
+}
+
+// A failed or missing limits source leaves the window rolling instead of
+// failing the command.
+func TestWindowCodexLimitsFailureFallsBackToRolling(t *testing.T) {
+	stubWindow(t)
+	windowCodexLimits = func(context.Context, window.Period) (*claudelimits.Window, error) {
+		return nil, context.DeadlineExceeded
+	}
+	var got window.Options
+	prevBuild := windowBuild
+	windowBuild = func(_ context.Context, _ time.Time, opts window.Options) (window.Report, error) {
+		got = opts
+		return window.Report{Provider: opts.Provider}, nil
+	}
+	t.Cleanup(func() { windowBuild = prevBuild })
+	var out, errb bytes.Buffer
+	if code := runWindow([]string{"--provider", "codex", "--json"}, &out, &errb); code != 0 {
+		t.Fatalf("code %d: %s", code, errb.String())
+	}
+	if got.UsedPercent != nil || !got.ResetsAt.IsZero() {
+		t.Fatalf("failed limits produced used=%v reset=%v", got.UsedPercent, got.ResetsAt)
+	}
+}
+
+// SetCodexLimits installs the Codex quota source window uses; without it the
+// Codex window never had a provider figure.
+func TestSetCodexLimitsFeedsCodexWindow(t *testing.T) {
+	stubWindow(t)
+	reset := time.Date(2026, 11, 22, 4, 0, 0, 0, time.UTC)
+	SetCodexLimits(func(_ context.Context, period window.Period) (*claudelimits.Window, error) {
+		if period != window.PeriodWeek {
+			return nil, nil
+		}
+		return &claudelimits.Window{UsedPercent: 17, ResetsAt: reset}, nil
+	})
+	var got window.Options
+	prevBuild := windowBuild
+	windowBuild = func(_ context.Context, _ time.Time, opts window.Options) (window.Report, error) {
+		got = opts
+		return window.Report{Provider: opts.Provider}, nil
+	}
+	t.Cleanup(func() { windowBuild = prevBuild })
+	var out, errb bytes.Buffer
+	if code := runWindow([]string{"--provider", "codex", "--week", "--json"}, &out, &errb); code != 0 {
+		t.Fatalf("code %d: %s", code, errb.String())
+	}
+	if got.UsedPercent == nil || *got.UsedPercent != 17 || !got.ResetsAt.Equal(reset) {
+		t.Fatalf("codex week opts: used=%v reset=%v", got.UsedPercent, got.ResetsAt)
 	}
 }

@@ -20,6 +20,7 @@ import (
 )
 
 func main() {
+	cli.SetCodexLimits(tui.CodexWindowLimit)
 	cli.Register("usage", "print provider quota windows and reset times (--json)", tui.RunUsage)
 	cli.Register("recent", "list recent sessions (--json or --ndjson, --limit, --since, --provider, --project)", tui.RunRecent)
 	if code, ok := cli.RunSubcommand(os.Args[1:], os.Stdout, os.Stderr); ok {
