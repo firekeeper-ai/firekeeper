@@ -35,9 +35,9 @@ import (
 // Credentials authenticate API requests as the signed-in Claude Code user.
 // The token is a secret: String, GoString and %v print only a placeholder.
 type Credentials struct {
-	// token is unexported so encoding/json, %+v reflection, and other
-	// packages cannot copy or serialize it; only this package's Client
-	// sends it, and only to the API host.
+	// token is unexported so encoding/json and other packages cannot copy
+	// or serialize it; only this package's Client sends it, and only to
+	// the API host.
 	token   string
 	OrgUUID string
 	// Expires is when the access token stops working, or zero when the

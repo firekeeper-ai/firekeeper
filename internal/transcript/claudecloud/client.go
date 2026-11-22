@@ -119,13 +119,17 @@ type Client struct {
 	// HTTP replaces the default client in tests.
 	HTTP *http.Client
 
-	creds Credentials
+	// A closure keeps credentials out of fmt's reflection on nested clients.
+	auth func() (token, organization string)
 }
+
+func (Client) String() string   { return "claudecloud.Client{redacted}" }
+func (Client) GoString() string { return "claudecloud.Client{redacted}" }
 
 // NewClient returns a client for creds. It never follows redirects, so the
 // token cannot be sent anywhere but the API host.
 func NewClient(creds Credentials) *Client {
-	return &Client{creds: creds}
+	return &Client{auth: func() (string, string) { return creds.token, creds.OrgUUID }}
 }
 
 func (c *Client) http() *http.Client {
@@ -379,6 +383,9 @@ func (c *Client) Events(ctx context.Context, sessionID string) ([]Event, error) 
 }
 
 func (c *Client) get(ctx context.Context, path string, q url.Values, into any) error {
+	if c.auth == nil {
+		return errors.New("claudecloud: client has no credentials")
+	}
 	u := c.base() + path
 	if len(q) > 0 {
 		u += "?" + q.Encode()
@@ -387,10 +394,11 @@ func (c *Client) get(ctx context.Context, path string, q url.Values, into any) e
 	if err != nil {
 		return errors.New("claudecloud: build request")
 	}
-	req.Header.Set("Authorization", "Bearer "+c.creds.token)
+	token, organization := c.auth()
+	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("anthropic-version", anthropicVersion)
 	req.Header.Set("anthropic-beta", betaHeader)
-	req.Header.Set("x-organization-uuid", c.creds.OrgUUID)
+	req.Header.Set("x-organization-uuid", organization)
 	req.Header.Set("Accept", "application/json")
 	resp, err := c.http().Do(req)
 	if err != nil {
