@@ -849,9 +849,11 @@ How it works, and what you should know first:
   session id, its title, model, and branch. The API does not report a
   working directory, so the project is the session's GitHub repository and
   the directory is the virtual path `/claude-cloud/<owner>/<repo>` (just
-  `/claude-cloud` for a session with no repository). `--since`, `--after`, and `--limit` work as above;
-  `.firekeeper-ignore` and `exclude` match local paths, so they do not apply
-  to cloud sessions.
+  `/claude-cloud` for a session with no repository). If the API provides a
+  directory, it is shown instead; neither form is looked up on this machine.
+  `--since`, `--after`, and `--limit` work as above; `.firekeeper-ignore`
+  and `exclude` match local paths, so they do not apply to cloud sessions,
+  and local Git metadata is not attached.
 
 #### Keeping cloud sessions in sync from the daemon
 

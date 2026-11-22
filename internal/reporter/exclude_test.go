@@ -12,6 +12,7 @@ import (
 	"github.com/firekeeper-ai/firekeeper/internal/session"
 	"github.com/firekeeper-ai/firekeeper/internal/transcript"
 	"github.com/firekeeper-ai/firekeeper/internal/transcript/reader"
+	"github.com/firekeeper-ai/firekeeper/pkg/contract"
 )
 
 // trapSource fails any attempt to find or read a transcript. Its transcript
@@ -19,6 +20,39 @@ import (
 type trapSource struct {
 	path  string
 	calls int
+}
+
+func TestCloudSessionIgnoresLocalExclusions(t *testing.T) {
+	f := newFixture(t)
+	writeGitConfig(t, f.repo, "[remote \"origin\"]\n\turl = https://github.com/acme/demo\n")
+	r := &run{cfg: Config{Exclude: []string{f.repo, "github.com/acme"}}}
+	local := f.meta
+	cloud := local
+	cloud.Origin = string(contract.OriginCloud)
+
+	if got := r.skipReason(local); got == "" {
+		t.Fatal("local session was not excluded by its directory or remote")
+	}
+	if got := r.skipReason(cloud); got != "" {
+		t.Fatalf("cloud session excluded by local directory or remote: %q", got)
+	}
+	if err := os.WriteFile(filepath.Join(f.repo, ".firekeeper-ignore"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.skipReason(local); got != ".firekeeper-ignore" {
+		t.Fatalf("local ignore marker: %q", got)
+	}
+	if got := r.skipReason(cloud); got != "" {
+		t.Fatalf("cloud session excluded by local ignore marker: %q", got)
+	}
+	cloud.CWD = ""
+	if got := r.skipReason(cloud); got != "" {
+		t.Fatalf("cloud session without cwd was excluded: %q", got)
+	}
+	local.CWD = ""
+	if got := r.skipReason(local); got != "working directory unknown" {
+		t.Fatalf("local session without cwd: %q", got)
+	}
 }
 
 var errTrapped = errors.New("transcript was opened")

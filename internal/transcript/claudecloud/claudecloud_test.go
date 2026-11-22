@@ -506,6 +506,21 @@ func TestCwdFor(t *testing.T) {
 	}
 }
 
+func TestCloudProjectDoesNotUseLocalRepository(t *testing.T) {
+	root := t.TempDir()
+	cwd := filepath.Join(root, "subdirectory")
+	if err := os.MkdirAll(filepath.Join(root, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(cwd, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	meta := metaFor(t.TempDir(), SessionInfo{CWD: cwd, Repo: "octo/demo"})
+	if meta.Project != "subdirectory" || meta.CWD != cwd {
+		t.Fatalf("cloud project %q cwd %q", meta.Project, meta.CWD)
+	}
+}
+
 func TestOldCacheSchemaIsDownloadedAgain(t *testing.T) {
 	f, c := newFakeCloud(t)
 	f.sessions = []map[string]any{cloudSession(sid, "2026-10-01T11:00:00Z")}

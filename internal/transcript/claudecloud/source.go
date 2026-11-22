@@ -11,6 +11,7 @@ import (
 	"github.com/firekeeper-ai/firekeeper/internal/transcript"
 	"github.com/firekeeper-ai/firekeeper/internal/transcript/claude"
 	"github.com/firekeeper-ai/firekeeper/internal/transcript/reader"
+	"github.com/firekeeper-ai/firekeeper/pkg/contract"
 )
 
 // Source reads the cache Sync writes. It implements reader.Source and
@@ -23,7 +24,7 @@ type Source struct {
 }
 
 // Origin is the ingest `origin` of every session this package imports.
-const Origin = "cloud"
+const Origin = string(contract.OriginCloud)
 
 var (
 	_ reader.Source     = (*Source)(nil)
@@ -96,11 +97,8 @@ func (s *Source) Enumerate(ctx context.Context, opts reader.EnumerateOptions) ([
 	return metas, nil
 }
 
-// cloudRoot is the virtual working directory of a cloud session. The cloud
-// container's real directory is not reported, and the reporter excludes
-// sessions without one. The path is absolute so no search for a Git root or
-// ignore file can climb into the directory firekeeper runs from, and it names
-// the repository so the project shows as the repository.
+// cloudRoot names the virtual working directory used when the cloud API
+// reports none. Neither this path nor a reported cloud cwd is local.
 const cloudRoot = "/claude-cloud"
 
 // cwdFor returns the working directory shown for a cloud session: the
@@ -124,7 +122,7 @@ func metaFor(dir string, info SessionInfo) session.Meta {
 		Origin:      Origin,
 		State:       session.SessionStateEnded,
 		CWD:         cwd,
-		Project:     reader.ProjectName(cwd),
+		Project:     filepath.Base(filepath.Clean(cwd)),
 		Model:       info.Model,
 		Title:       info.Title,
 		Branch:      info.Branch,

@@ -26,6 +26,7 @@ import (
 	"github.com/firekeeper-ai/firekeeper/internal/session"
 	"github.com/firekeeper-ai/firekeeper/internal/transcript"
 	"github.com/firekeeper-ai/firekeeper/internal/transcript/reader"
+	"github.com/firekeeper-ai/firekeeper/pkg/contract"
 
 	// Register the transcript sources the reporter can read.
 	_ "github.com/firekeeper-ai/firekeeper/internal/transcript/claude"
@@ -574,9 +575,9 @@ type errorResponse struct {
 }
 
 // sessionMeta builds the redacted metadata sent with every batch. Free-text
-// fields can carry paths and pasted secrets, so they are redacted too. The
-// commit, and the branch when the provider reported none, come from the
-// repository as it was when the session started; see gitAtStart.
+// fields can carry paths and pasted secrets, so they are redacted too.
+// For local sessions the commit, and the branch when the provider reported
+// none, come from the repository as it was when the session started.
 func (r *run) sessionMeta(meta session.Meta, result *SessionResult) ingestMeta {
 	opts := r.redactOptions()
 	clean := func(s string) string {
@@ -584,7 +585,10 @@ func (r *run) sessionMeta(meta session.Meta, result *SessionResult) ingestMeta {
 		result.Redactions += counts.Total()
 		return out
 	}
-	branch, commit := gitAtStart(meta.CWD, meta.StartedAt)
+	var branch, commit string
+	if meta.Origin != string(contract.OriginCloud) {
+		branch, commit = gitAtStart(meta.CWD, meta.StartedAt)
+	}
 	sm := ingestMeta{
 		SessionID:      meta.ID,
 		Provider:       meta.Provider,
@@ -619,7 +623,7 @@ func (r *run) sessionMeta(meta session.Meta, result *SessionResult) ingestMeta {
 // server keeps the one it builds from tool calls. Paths are redacted like
 // the cwd, so the server can make them relative to it.
 func (r *run) addGitFiles(ctx context.Context, meta session.Meta, sm *ingestMeta, result *SessionResult) {
-	if sm.gitFilesDone {
+	if sm.gitFilesDone || meta.Origin == string(contract.OriginCloud) {
 		return
 	}
 	sm.gitFilesDone = true
@@ -756,8 +760,12 @@ func (r *run) redactOptions() redact.Options {
 // cannot be checked without it), when its cwd or Git root matches
 // Config.Exclude, when its repository has a remote matching
 // Config.Exclude, or when .firekeeper-ignore marks it. Only the repository's
-// own files (.git/config and markers) are read, never the transcript.
+// own files (.git/config and markers) are read, never the transcript. Cloud
+// directories do not refer to this machine, so local exclusions do not apply.
 func (r *run) skipReason(meta session.Meta) string {
+	if meta.Origin == string(contract.OriginCloud) {
+		return ""
+	}
 	if meta.CWD == "" {
 		return "working directory unknown"
 	}
