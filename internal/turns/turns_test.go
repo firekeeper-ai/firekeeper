@@ -104,7 +104,103 @@ func FuzzParseNeverSerializesTranscriptText(f *testing.F) {
 		if strings.Contains(string(encoded), "PROMPT_SECRET") {
 			t.Fatal("serialized turn metrics contain prompt text")
 		}
+		for _, turn := range got {
+			sum := 0
+			for _, n := range turn.ToolErrorsByTool {
+				sum += n
+			}
+			if sum != turn.ToolErrors || turn.PeakContextTokens < 0 {
+				t.Fatalf("errors %d, by tool %v, peak %d", turn.ToolErrors, turn.ToolErrorsByTool, turn.PeakContextTokens)
+			}
+		}
 	})
 }
 
 func stringPointer(value string) *string { return &value }
+
+// PeakContextTokens is the largest single event's prompt (input plus cache),
+// the context size the model saw. ContextTokens instead sums every call, so
+// a turn of many tool calls over a small context reported far more than any
+// context window holds.
+func TestPeakContextTokens(t *testing.T) {
+	call := func(input, read, write, cache int64) transcript.Event {
+		return transcript.Event{Role: transcript.RoleAssistant, Tokens: transcript.Tokens{Input: input, Cache: cache, CacheRead: read, CacheWrite: write}}
+	}
+	events := []transcript.Event{
+		{Role: transcript.RoleUser, Text: "first"},
+		call(100, 20_000, 0, 20_000),
+		call(50, 20_100, 300, 20_400),
+		call(10, 20_400, 0, 20_400),
+		{Role: transcript.RoleUser, Text: "second"},
+		// A provider that reports only the combined cache figure.
+		{Role: transcript.RoleMeta, Tokens: transcript.Tokens{Input: 5, Cache: 30_000}},
+		{Role: transcript.RoleUser, Text: "third, no usage"},
+	}
+	got := Parse(events)
+	if len(got) != 3 {
+		t.Fatalf("got %d turns", len(got))
+	}
+	for i, want := range []int64{20_450, 30_005, 0} {
+		if got[i].PeakContextTokens != want {
+			t.Errorf("turn %d peak = %d; want %d", i, got[i].PeakContextTokens, want)
+		}
+	}
+	if got[0].ContextTokens <= got[0].PeakContextTokens {
+		t.Errorf("running sum %d should exceed the peak %d for a multi-call turn", got[0].ContextTokens, got[0].PeakContextTokens)
+	}
+	data, err := json.Marshal(got[0])
+	if err != nil || !strings.Contains(string(data), `"peak_context_tokens":20450`) {
+		t.Fatalf("JSON = %s, %v", data, err)
+	}
+}
+
+// Tool errors are counted per tool, so a high error rate can be traced to
+// the tool that failed. A result without a name counts as "unknown".
+func TestToolErrorsByTool(t *testing.T) {
+	bash, edit := "Bash", "Edit"
+	failed := json.RawMessage(`{"is_error":true}`)
+	ok := json.RawMessage(`{"is_error":false}`)
+	events := []transcript.Event{
+		{Role: transcript.RoleUser},
+		{Role: transcript.RoleToolCall, ToolName: &bash},
+		{Role: transcript.RoleToolResult, ToolName: &bash, Raw: failed},
+		{Role: transcript.RoleToolCall, ToolName: &bash},
+		{Role: transcript.RoleToolResult, ToolName: &bash, Raw: failed},
+		{Role: transcript.RoleToolCall, ToolName: &edit},
+		{Role: transcript.RoleToolResult, ToolName: &edit, Raw: ok},
+		{Role: transcript.RoleToolResult, Raw: failed},
+		{Role: transcript.RoleToolResult, ToolName: &edit, Raw: json.RawMessage(`not json`)},
+	}
+	got := Parse(events)
+	if len(got) != 1 {
+		t.Fatalf("got %d turns", len(got))
+	}
+	turn := got[0]
+	if turn.ToolErrors != 3 || turn.ToolErrorsByTool["Bash"] != 2 || turn.ToolErrorsByTool["unknown"] != 1 {
+		t.Fatalf("errors=%d by tool=%v", turn.ToolErrors, turn.ToolErrorsByTool)
+	}
+	if _, listed := turn.ToolErrorsByTool["Edit"]; listed {
+		t.Fatalf("a tool without errors is listed: %v", turn.ToolErrorsByTool)
+	}
+	clean := Parse([]transcript.Event{{Role: transcript.RoleUser}, {Role: transcript.RoleToolResult, ToolName: &edit, Raw: ok}})
+	if data, _ := json.Marshal(clean[0]); strings.Contains(string(data), "tool_errors_by_tool") {
+		t.Fatalf("turn without errors lists them: %s", data)
+	}
+}
+
+func TestCacheTokensPrefersTheLargerFigure(t *testing.T) {
+	for _, test := range []struct {
+		tokens transcript.Tokens
+		want   int64
+	}{
+		{transcript.Tokens{Cache: 10, CacheRead: 6, CacheWrite: 4}, 10},
+		{transcript.Tokens{Cache: 10}, 10},
+		{transcript.Tokens{CacheRead: 6, CacheWrite: 4}, 10},
+		{transcript.Tokens{Cache: -3, CacheRead: -1}, 0},
+		{transcript.Tokens{}, 0},
+	} {
+		if got := CacheTokens(test.tokens); got != test.want {
+			t.Errorf("CacheTokens(%+v) = %d; want %d", test.tokens, got, test.want)
+		}
+	}
+}

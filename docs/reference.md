@@ -334,8 +334,12 @@ account-wide quota.
 transcript and prints one JSON object per user turn. Each object includes
 start/end times and duration when available, prompt character count (never
 prompt text), token totals and running context tokens, tool-call counts and
-tool names, detected tool errors or interruptions, and the model. Context
-tokens are the running sum of input, cache-read, and cache-write tokens.
+tool names, detected tool errors (also per tool, in `tool_errors_by_tool`) or
+interruptions, and the model. `context_tokens` is the running sum of input,
+cache-read, and cache-write tokens over every model call, a measure of prompt
+volume rather than context size. `peak_context_tokens` is the largest single
+call's input plus cache in the turn, the context size the model saw; Copilot
+logs main-agent usage only as run totals, so its peak is that total.
 Unknown or malformed transcript records remain in the stream as metadata and
 do not start or split turns. Provider transcripts can be incomplete, so these
 best-effort counts may be underreported. Nothing is uploaded.

@@ -22,23 +22,29 @@ type Tokens struct {
 // Turn contains metrics for one user prompt. Prompt text is deliberately not
 // retained or serialized.
 type Turn struct {
-	Index           int            `json:"index"`
-	StartedAt       *time.Time     `json:"started_at"`
-	EndedAt         *time.Time     `json:"ended_at"`
-	DurationSeconds *float64       `json:"duration_seconds"`
-	PromptChars     int            `json:"prompt_chars"`
-	Tokens          Tokens         `json:"tokens"`
-	ContextTokens   int64          `json:"context_tokens"`
-	ToolCalls       int            `json:"tool_calls"`
-	ToolErrors      int            `json:"tool_errors"`
-	Tools           map[string]int `json:"tools"`
-	Interrupted     bool           `json:"interrupted"`
-	Model           string         `json:"model"`
+	Index           int        `json:"index"`
+	StartedAt       *time.Time `json:"started_at"`
+	EndedAt         *time.Time `json:"ended_at"`
+	DurationSeconds *float64   `json:"duration_seconds"`
+	PromptChars     int        `json:"prompt_chars"`
+	Tokens          Tokens     `json:"tokens"`
+	ContextTokens   int64      `json:"context_tokens"`
+	// PeakContextTokens is the largest prompt (input plus cache) of one event
+	// in the turn: the context size the model saw. Providers that log only
+	// run totals, such as Copilot's main agent, report that total instead.
+	PeakContextTokens int64          `json:"peak_context_tokens"`
+	ToolCalls         int            `json:"tool_calls"`
+	ToolErrors        int            `json:"tool_errors"`
+	ToolErrorsByTool  map[string]int `json:"tool_errors_by_tool,omitempty"`
+	Tools             map[string]int `json:"tools"`
+	Interrupted       bool           `json:"interrupted"`
+	Model             string         `json:"model"`
 }
 
 // Parse groups events by user prompts and computes metrics without returning
 // any event text. ContextTokens is the running sum of input and cached tokens
-// through the end of each turn.
+// over every call through the end of each turn, so it measures cumulative
+// prompt volume, not context size; PeakContextTokens is the context size.
 func Parse(events []transcript.Event) []Turn {
 	var out []Turn
 	var current *Turn
@@ -69,20 +75,23 @@ func Parse(events []transcript.Event) []Turn {
 		current.Tokens.Output += nonnegative(event.Tokens.Output)
 		current.Tokens.CacheRead += nonnegative(event.Tokens.CacheRead)
 		current.Tokens.CacheWrite += nonnegative(event.Tokens.CacheWrite)
+		if prompt := nonnegative(event.Tokens.Input) + CacheTokens(event.Tokens); prompt > current.PeakContextTokens {
+			current.PeakContextTokens = prompt
+		}
 		if event.Model != nil && *event.Model != "" {
 			current.Model = *event.Model
 		}
 		if event.Role == transcript.RoleToolCall {
 			current.ToolCalls++
-			name := "unknown"
-			if event.ToolName != nil && *event.ToolName != "" {
-				name = *event.ToolName
-			}
-			current.Tools[name]++
+			current.Tools[toolName(event)]++
 		}
 		if event.Role == transcript.RoleToolResult {
 			if toolError(event.Raw) {
 				current.ToolErrors++
+				if current.ToolErrorsByTool == nil {
+					current.ToolErrorsByTool = map[string]int{}
+				}
+				current.ToolErrorsByTool[toolName(event)]++
 			}
 		}
 		if interrupted(event) {
@@ -96,6 +105,20 @@ func Parse(events []transcript.Event) []Turn {
 		out = append(out, *current)
 	}
 	return out
+}
+
+// CacheTokens is an event's cache total: the combined figure or the sum of
+// its read and write split, whichever is larger, since providers fill either.
+func CacheTokens(tokens transcript.Tokens) int64 {
+	return max(nonnegative(tokens.Cache), nonnegative(tokens.CacheRead)+nonnegative(tokens.CacheWrite))
+}
+
+// toolName is the event's tool, or "unknown" when the provider gave none.
+func toolName(event transcript.Event) string {
+	if event.ToolName != nil && *event.ToolName != "" {
+		return *event.ToolName
+	}
+	return "unknown"
 }
 
 func finish(turn *Turn) {
