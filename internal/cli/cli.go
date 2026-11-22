@@ -21,6 +21,7 @@ var subcommands = []subcommand{
 	{"snapshot", "print currently discovered sessions (--json)", runSnapshot},
 	{"export", "export local session events as JSONL (--session, --no-text)", runExport},
 	{"turns", "print per-turn transcript metrics without prompt text (SESSION_ID, --provider, --json)", runTurns},
+	{"stats", "print local transcript insights without prompt text (--since, --provider or --all, --project, --json)", runStats},
 	{"report", "upload session metadata and redacted transcripts once", runReport},
 	{"backfill", "upload sessions already on this machine once (--all, --provider, or --claude-cloud)", runBackfill},
 	{"serve", "run the dashboard server (separate firekeeper-server binary)", runServe},

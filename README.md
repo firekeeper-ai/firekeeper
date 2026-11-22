@@ -162,6 +162,10 @@ You do **not** need `login`, `serve`, or `daemon install` to use this dashboard.
   `firekeeper turns SESSION_ID [--provider P] --json` reports per-user-turn
   timing, prompt character counts, tokens, running context tokens, tool calls
   and errors, and model, without including prompt text.
+  `fk stats [--since 7d] [--provider P|--all] [--project NAME] --json`
+  summarizes local context growth, tool errors, reply timing, activity rhythm,
+  and token totals. It emits no prompt text and never uploads anything; token
+  totals are not billed-cost estimates.
   `firekeeper window` breaks the window down by session, model and hour (`--json`,
   or `--html FILE` for a standalone page; `--provider` picks the harness).
   Add `--week` for the weekly window, broken down by day.
