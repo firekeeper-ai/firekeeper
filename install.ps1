@@ -171,6 +171,24 @@ function Get-Sha256([string]$Path) {
     return ([System.BitConverter]::ToString($bytes) -replace '-', '').ToLowerInvariant()
 }
 
+# Get-ExpectedSha256 returns the lowercase SHA-256 that checksums.txt Lines
+# give for Archive. Names and hashes compare ordinally: PowerShell's -eq and
+# -ne use a culture comparison, which ignores characters such as U+0000 and
+# U+200B. The entry must appear exactly once with a 64-digit hex hash.
+function Get-ExpectedSha256([string[]]$Lines, [string]$Archive) {
+    $found = @()
+    foreach ($line in $Lines) {
+        $fields = $line.Trim() -split '\s+'
+        if ($fields.Count -lt 2) { continue }
+        if (-not [string]::Equals($fields[1].TrimStart('*'), $Archive, [System.StringComparison]::OrdinalIgnoreCase)) { continue }
+        if ($fields[0] -cnotmatch '\A[0-9A-Fa-f]{64}\z') { Fail "checksums.txt has an invalid hash for $Archive; nothing was installed" }
+        $found += $fields[0].ToLowerInvariant()
+    }
+    if ($found.Count -eq 0) { Fail "checksums.txt has no entry for $Archive" }
+    if ($found.Count -gt 1) { Fail "checksums.txt has more than one entry for $Archive; nothing was installed" }
+    return $found[0]
+}
+
 # Expand-Zip extracts the zip at Path into Destination, which must not exist
 # yet. ZipFile refuses entries that would land outside Destination.
 function Expand-Zip([string]$Path, [string]$Destination) {
@@ -294,14 +312,9 @@ function Install-Firekeeper {
         try { Save-Url "$releasesUrl/download/$tag/checksums.txt" $sums }
         catch { Fail "could not download checksums.txt for $tag" }
 
-        $want = $null
-        foreach ($line in [System.IO.File]::ReadAllLines($sums)) {
-            $fields = $line.Trim() -split '\s+'
-            if ($fields.Count -ge 2 -and $fields[1].TrimStart('*') -eq $archive) { $want = $fields[0].ToLowerInvariant() }
-        }
-        if (-not $want) { Fail "checksums.txt has no entry for $archive" }
+        $want = Get-ExpectedSha256 ([System.IO.File]::ReadAllLines($sums)) $archive
         $got = Get-Sha256 $zip
-        if ($got -ne $want) {
+        if (-not [string]::Equals($got, $want, [System.StringComparison]::Ordinal)) {
             Fail "checksum mismatch for $archive (expected $want, got $got); nothing was installed"
         }
 

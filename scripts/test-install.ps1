@@ -208,6 +208,35 @@ try {
     $r = Run-Installer @{ FIREKEEPER_RELEASES_URL = (ToFileUrl $noentry); FIREKEEPER_INSTALL_DIR = (Join-Path $work 'bin4'); FIREKEEPER_NO_MODIFY_PATH = '1' } @('-Version', 'v1.2.3')
     Check (($r.Code -ne 0) -and ($r.Output -match 'no entry')) 'missing checksum entry aborts'
 
+    # 5b. checksums.txt must give the asset one 64-digit hex hash, compared
+    # ordinally: a culture compare would accept the real hash followed by a
+    # zero-width character or NUL, and the last of two lines used to win.
+    $strict = Join-Path $work 'strict'
+    $strictZip = New-Release $strict 'v1.2.3' 'firekeeper 1.2.3'
+    $strictName = Split-Path -Leaf $strictZip
+    $strictHash = Get-Sha256 $strictZip
+    $strictSums = Join-Path $strict 'download/v1.2.3/checksums.txt'
+    $cases = @(
+        @{ Name = 'NUL after hash'; Lines = @("$strictHash$([char]0)  $strictName"); Want = 'invalid hash' },
+        @{ Name = 'zero-width space after hash'; Lines = @("$strictHash$([char]0x200B)  $strictName"); Want = 'invalid hash' },
+        @{ Name = 'zero-width joiner inside hash'; Lines = @("$($strictHash.Substring(0, 32))$([char]0x200D)$($strictHash.Substring(32))  $strictName"); Want = 'invalid hash' },
+        @{ Name = 'short hash'; Lines = @("$($strictHash.Substring(1))  $strictName"); Want = 'invalid hash' },
+        @{ Name = 'non-hex hash'; Lines = @((('g' * 64) + "  $strictName")); Want = 'invalid hash' },
+        @{ Name = 'bad then good duplicate'; Lines = @((('0' * 64) + "  $strictName"), "$strictHash  $strictName"); Want = 'more than one entry' },
+        @{ Name = 'identical duplicate'; Lines = @("$strictHash  $strictName", "$strictHash  $strictName"); Want = 'more than one entry' },
+        @{ Name = 'zero-width character in name'; Lines = @("$strictHash  $strictName$([char]0x200B)"); Want = 'no entry' }
+    )
+    foreach ($case in $cases) {
+        [System.IO.File]::WriteAllLines($strictSums, [string[]]$case.Lines)
+        $dir = Join-Path $work ('strict-' + [guid]::NewGuid().ToString('N'))
+        $r = Run-Installer @{ FIREKEEPER_RELEASES_URL = (ToFileUrl $strict); FIREKEEPER_INSTALL_DIR = $dir; FIREKEEPER_NO_MODIFY_PATH = '1' } @('-Version', 'v1.2.3')
+        Check (($r.Code -ne 0) -and ($r.Output -match $case.Want) -and -not (Test-Path (Join-Path $dir 'firekeeper.exe'))) "checksums.txt rejected: $($case.Name)"
+    }
+    [System.IO.File]::WriteAllLines($strictSums, [string[]]@("$($strictHash.ToUpperInvariant()) *$($strictName.ToUpperInvariant())"))
+    $dir = Join-Path $work 'strict-upper'
+    $r = Run-Installer @{ FIREKEEPER_RELEASES_URL = (ToFileUrl $strict); FIREKEEPER_INSTALL_DIR = $dir; FIREKEEPER_NO_MODIFY_PATH = '1' } @('-Version', 'v1.2.3')
+    Check (($r.Code -eq 0) -and (Test-Path (Join-Path $dir 'firekeeper.exe'))) "uppercase hash, binary marker and name accepted ($($r.Output.Trim()))"
+
     # 6. A missing release fails clearly.
     $r = Run-Installer @{ FIREKEEPER_RELEASES_URL = $base; FIREKEEPER_INSTALL_DIR = (Join-Path $work 'bin5'); FIREKEEPER_NO_MODIFY_PATH = '1' } @('-Version', 'v9.9.9')
     Check (($r.Code -ne 0) -and ($r.Output -match 'could not download')) 'missing release fails clearly'
