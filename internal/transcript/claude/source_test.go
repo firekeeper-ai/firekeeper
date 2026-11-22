@@ -43,19 +43,19 @@ func TestReadTranscript(t *testing.T) {
 		2: {role: transcript.RoleUser, text: "List the files."},
 		3: {role: transcript.RoleMeta},
 		// The three blocks of msg_1 repeat its usage; only the first counts.
-		4:  {role: transcript.RoleMeta, text: "Planning.", model: model, tokens: transcript.Tokens{Input: 3, Output: 40, Cache: 1200}},
+		4:  {role: transcript.RoleMeta, text: "Planning.", model: model, tokens: transcript.Tokens{Input: 3, Output: 40, Cache: 1200, CacheRead: 1000, CacheWrite: 200}},
 		5:  {role: transcript.RoleAssistant, text: "Listing files.", model: model},
 		6:  {role: transcript.RoleToolCall, text: `{"command":"ls"}`, tool: "Bash", model: model},
 		7:  {role: transcript.RoleToolResult, text: "README.md", tool: "Bash"},
-		8:  {role: transcript.RoleToolCall, text: `{"question":"Continue?"}`, tool: "AskUserQuestion", model: model, tokens: transcript.Tokens{Input: 5, Output: 20, Cache: 1200}},
+		8:  {role: transcript.RoleToolCall, text: `{"question":"Continue?"}`, tool: "AskUserQuestion", model: model, tokens: transcript.Tokens{Input: 5, Output: 20, Cache: 1200, CacheRead: 1200}},
 		9:  {role: transcript.RoleToolResult, text: "yes", tool: "AskUserQuestion"},
-		10: {role: transcript.RoleAssistant, text: "There is one file: README.md.", model: model, tokens: transcript.Tokens{Input: 2, Output: 10, Cache: 1300}},
+		10: {role: transcript.RoleAssistant, text: "There is one file: README.md.", model: model, tokens: transcript.Tokens{Input: 2, Output: 10, Cache: 1300, CacheRead: 1300}},
 		11: {role: transcript.RoleSystem},
 		12: {role: transcript.RoleSystem, text: "<local-command-stdout>ok</local-command-stdout>"},
 		13: {role: transcript.RoleAssistant, text: "API Error: overloaded"},
 		// Sidechain records stay meta but keep their content.
 		14: {role: transcript.RoleMeta, text: "Search for TODOs."},
-		15: {role: transcript.RoleMeta, text: `{"pattern":"TODO"}`, tool: "Grep", model: model, tokens: transcript.Tokens{Input: 1, Output: 2, Cache: 3}},
+		15: {role: transcript.RoleMeta, text: `{"pattern":"TODO"}`, tool: "Grep", model: model, tokens: transcript.Tokens{Input: 1, Output: 2, Cache: 3, CacheRead: 3}},
 		16: {role: transcript.RoleMeta},
 		17: {role: transcript.RoleMeta},
 	}

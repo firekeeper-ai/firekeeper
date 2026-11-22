@@ -242,7 +242,13 @@ func schemaDrift(path string, typ reflect.Type, node map[string]any) []string {
 		}
 	}
 	sort.Strings(required)
-	if !reflect.DeepEqual(required, fields) {
+	if path == "event.tokens" {
+		requiredBase := []string{"input", "output", "cache"}
+		sort.Strings(requiredBase)
+		if !reflect.DeepEqual(required, requiredBase) {
+			fail("required %v, want required fields %v", required, requiredBase)
+		}
+	} else if !reflect.DeepEqual(required, fields) {
 		fail("required %v, want every field %v", required, fields)
 	}
 	return problems

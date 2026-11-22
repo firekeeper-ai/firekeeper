@@ -70,9 +70,33 @@ func (r Role) Valid() bool {
 
 // Tokens holds per-event token counts. Unknown counts are zero.
 type Tokens struct {
-	Input  int64 `json:"input"`
-	Output int64 `json:"output"`
-	Cache  int64 `json:"cache"`
+	Input      int64 `json:"input"`
+	Output     int64 `json:"output"`
+	Cache      int64 `json:"cache"`
+	CacheRead  int64 `json:"cache_read"`
+	CacheWrite int64 `json:"cache_write"`
+}
+
+// MarshalJSON keeps cache split fields absent unless a provider reported a
+// positive split for that side. Cache remains their backward-compatible sum.
+func (t Tokens) MarshalJSON() ([]byte, error) {
+	type base struct {
+		Input  int64 `json:"input"`
+		Output int64 `json:"output"`
+		Cache  int64 `json:"cache"`
+	}
+	v := struct {
+		base
+		CacheRead  *int64 `json:"cache_read,omitempty"`
+		CacheWrite *int64 `json:"cache_write,omitempty"`
+	}{base: base{Input: t.Input, Output: t.Output, Cache: t.Cache}}
+	if t.CacheRead > 0 {
+		v.CacheRead = &t.CacheRead
+	}
+	if t.CacheWrite > 0 {
+		v.CacheWrite = &t.CacheWrite
+	}
+	return json.Marshal(v)
 }
 
 // Event is one normalized transcript record. The idempotency key is
@@ -111,7 +135,8 @@ func (e Event) Validate() error {
 	if e.Seq < 0 {
 		return fmt.Errorf("event: negative seq %d", e.Seq)
 	}
-	if e.Tokens.Input < 0 || e.Tokens.Output < 0 || e.Tokens.Cache < 0 {
+	if e.Tokens.Input < 0 || e.Tokens.Output < 0 || e.Tokens.Cache < 0 ||
+		e.Tokens.CacheRead < 0 || e.Tokens.CacheWrite < 0 {
 		return fmt.Errorf("event: negative token count")
 	}
 	if len(e.Raw) > 0 && !json.Valid(e.Raw) {
