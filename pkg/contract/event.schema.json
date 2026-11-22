@@ -64,7 +64,9 @@
       "properties": {
         "input": { "type": "integer", "minimum": 0 },
         "output": { "type": "integer", "minimum": 0 },
-        "cache": { "type": "integer", "minimum": 0 }
+        "cache": { "type": "integer", "minimum": 0 },
+        "cache_read": { "type": "integer", "minimum": 0 },
+        "cache_write": { "type": "integer", "minimum": 0 }
       }
     },
     "raw": {

@@ -192,9 +192,10 @@ type payload struct {
 }
 
 type usage struct {
-	Input  int64 `json:"input_tokens"`
-	Cached int64 `json:"cached_input_tokens"`
-	Output int64 `json:"output_tokens"`
+	Input      int64 `json:"input_tokens"`
+	Cached     int64 `json:"cached_input_tokens"`
+	CacheWrite int64 `json:"cache_write_input_tokens"`
+	Output     int64 `json:"output_tokens"`
 }
 
 type textPart struct {
@@ -363,10 +364,14 @@ func truncate(text string) string {
 // includes cached tokens, so input here is the uncached remainder and the
 // three counts add up to the reported total.
 func tokens(u usage) transcript.Tokens {
+	cached := max(u.Cached, 0)
+	cacheWrite := max(u.CacheWrite, 0)
 	return transcript.Tokens{
-		Input:  max(u.Input-u.Cached, 0),
-		Output: u.Output,
-		Cache:  u.Cached,
+		Input:      max(u.Input-cached, 0),
+		Output:     u.Output,
+		Cache:      cached + cacheWrite,
+		CacheRead:  cached,
+		CacheWrite: cacheWrite,
 	}
 }
 

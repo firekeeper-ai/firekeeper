@@ -51,7 +51,7 @@ func TestReadEvents(t *testing.T) {
 		10: {role: transcript.RoleAssistant, model: "gpt-test"},
 		// The failed call never started; its name comes from toolRequests.
 		11: {role: transcript.RoleToolResult, text: "file not found", tool: "view", model: "gpt-test"},
-		12: {role: transcript.RoleMeta, model: "gpt-mini-test", tokens: transcript.Tokens{Input: 150, Output: 14, Cache: 20}},
+		12: {role: transcript.RoleMeta, model: "gpt-mini-test", tokens: transcript.Tokens{Input: 150, Output: 14, Cache: 20, CacheRead: 20}},
 		13: {role: transcript.RoleAssistant, text: "There is one file: README.md.", model: "gpt-test"},
 		14: {role: transcript.RoleMeta},
 		15: {role: transcript.RoleMeta, tokens: transcript.Tokens{Input: 300, Output: 65, Cache: 1200}},

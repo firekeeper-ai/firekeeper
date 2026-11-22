@@ -50,12 +50,12 @@ func TestReadRollout(t *testing.T) {
 		10: {role: transcript.RoleMeta},
 		11: {role: transcript.RoleMeta},
 		12: {role: transcript.RoleToolResult, text: "exit 0\nREADME.md", tool: "exec"},
-		13: {role: transcript.RoleMeta, model: "gpt-test", tokens: transcript.Tokens{Input: 200, Output: 40, Cache: 1000}},
+		13: {role: transcript.RoleMeta, model: "gpt-test", tokens: transcript.Tokens{Input: 200, Output: 40, Cache: 1000, CacheRead: 1000}},
 		14: {role: transcript.RoleToolCall, text: `{"question":"Continue?"}`, tool: "request_user_input_async"},
 		15: {role: transcript.RoleToolResult, text: "yes", tool: "request_user_input_async"},
 		16: {role: transcript.RoleMeta},
 		17: {role: transcript.RoleAssistant, text: "There is one file: README.md.", model: "gpt-test"},
-		18: {role: transcript.RoleMeta, model: "gpt-test", tokens: transcript.Tokens{Input: 300, Output: 25, Cache: 1200}},
+		18: {role: transcript.RoleMeta, model: "gpt-test", tokens: transcript.Tokens{Input: 300, Output: 25, Cache: 1200, CacheRead: 1200}},
 		19: {role: transcript.RoleMeta},
 	}
 	checkEvents(t, events, expected, fixtureID)

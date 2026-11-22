@@ -66,15 +66,15 @@ func TestRead(t *testing.T) {
 		{seq: 5, role: transcript.RoleToolCall, tool: "edit", model: model,
 			text: `{"path":"parser.go","oldString":"a","newString":"b"}` + "\nEdited parser.go\n" +
 				`{"patchText":"*** Begin Patch\n*** Add File: parser_test.go\n+package parser\n*** End Patch"}` + "\nerror: denied",
-			tokens: transcript.Tokens{Input: 10, Output: 9, Cache: 500}},
+			tokens: transcript.Tokens{Input: 10, Output: 9, Cache: 500, CacheRead: 400, CacheWrite: 100}},
 		// A reply with a tool call reads as the reply.
 		{seq: 6, role: transcript.RoleAssistant, text: "Fixed the parser.", tool: "read", model: model,
-			tokens: transcript.Tokens{Input: 20, Output: 9, Cache: 500}},
+			tokens: transcript.Tokens{Input: 20, Output: 9, Cache: 500, CacheRead: 500}},
 		{seq: 7, role: transcript.RoleToolResult, text: "$ go test ./...\nok", tool: "shell"},
 		{seq: 9, role: transcript.RoleMeta},
 		{seq: 10, role: transcript.RoleUser, text: "Now add tests."},
 		{seq: 11, role: transcript.RoleSystem, text: "Parser fixed; tests next.", model: model,
-			tokens: transcript.Tokens{Input: 1, Output: 2, Cache: 3}},
+			tokens: transcript.Tokens{Input: 1, Output: 2, Cache: 3, CacheRead: 3}},
 	}
 
 	// Message 12 is still being written, so the read stops before it, and

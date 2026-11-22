@@ -417,12 +417,13 @@ func truncate(text string) string {
 func callTokens(u usage) transcript.Tokens {
 	var cached int64
 	if u.Details != nil {
-		cached = u.Details.Cached
+		cached = max(u.Details.Cached, 0)
 	}
 	return transcript.Tokens{
-		Input:  max(u.Prompt-cached, 0),
-		Output: u.Completion,
-		Cache:  cached,
+		Input:     max(u.Prompt-cached, 0),
+		Output:    u.Completion,
+		Cache:     cached,
+		CacheRead: cached,
 	}
 }
 

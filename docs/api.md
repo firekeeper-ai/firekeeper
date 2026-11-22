@@ -147,7 +147,13 @@ One normalized transcript record. The JSON shape is pinned by
   "text": "string",
   "tool_name": "string or null",
   "model": "string or null",
-  "tokens": { "input": 0, "output": 0, "cache": 0 },
+  "tokens": {
+    "input": 0,
+    "output": 0,
+    "cache": 0,
+    "cache_read": 0,
+    "cache_write": 0
+  },
   "raw": {}
 }
 ```

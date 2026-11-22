@@ -567,10 +567,14 @@ func tokens(u *tokenUsage) transcript.Tokens {
 		return transcript.Tokens{}
 	}
 	n := func(v float64) int64 { return max(int64(v), 0) }
+	cacheRead := n(u.Cache.Read)
+	cacheWrite := n(u.Cache.Write)
 	return transcript.Tokens{
-		Input:  n(u.Input),
-		Output: n(u.Output) + n(u.Reasoning),
-		Cache:  n(u.Cache.Read) + n(u.Cache.Write),
+		Input:      n(u.Input),
+		Output:     n(u.Output) + n(u.Reasoning),
+		Cache:      cacheRead + cacheWrite,
+		CacheRead:  cacheRead,
+		CacheWrite: cacheWrite,
 	}
 }
 
