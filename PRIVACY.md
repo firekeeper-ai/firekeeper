@@ -87,7 +87,10 @@ None sends session data, and none goes to me:
   and privacy policy. Those files are read, never written, and the token is
   never refreshed. The token stays in memory and is never stored, logged, or
   uploaded. The sessions are cached unredacted in `~/.firekeeper/cloud/claude/`
-  (mode `0600`) and then uploaded as in section 1.4.
+  and then uploaded as in section 1.4. The cache remains until you delete
+  that folder. On Unix the cache directory is mode `0700` and its files are
+  mode `0600`. On Windows the cache inherits its parent directory's ACL;
+  Firekeeper does not set a separate owner-only ACL.
 - **Copilot plan details**: if a GitHub token is available, Firekeeper sends
   it to GitHub's API (or `GITHUB_API_URL`) to read your Copilot plan. This is
   governed by GitHub's privacy statement. The token is not stored or logged.
