@@ -20,7 +20,7 @@ something called fk already exists.
 
 Environment:
   FIREKEEPER_VERSION       release to install, such as v0.1.0 (default: latest)
-  FIREKEEPER_INSTALL_DIR   install directory (an absolute path)
+  FIREKEEPER_INSTALL_DIR   install directory (absolute, without ;, % or ")
   FIREKEEPER_NO_MODIFY_PATH  set to any value to leave PATH alone
   FIREKEEPER_NO_FK         set to any value to skip the fk short name
   FIREKEEPER_RELEASES_URL  release location (used by the tests): https://,
@@ -30,7 +30,7 @@ Environment:
 Release to install, such as v0.1.0. Defaults to the latest release.
 
 .PARAMETER InstallDir
-Directory for firekeeper.exe, as an absolute path.
+Directory for firekeeper.exe, as an absolute path without ;, % or ".
 
 .PARAMETER NoPathUpdate
 Do not add the install directory to the user's PATH.
@@ -281,6 +281,9 @@ function Install-Firekeeper {
     }
     if (-not (Test-AbsolutePath $InstallDir)) {
         Fail "install directory must be an absolute path, such as C:\Tools\firekeeper (got $InstallDir); a relative one on PATH resolves against each program's current directory"
+    }
+    if ($InstallDir.IndexOfAny([char[]]';%"') -ge 0) {
+        Fail 'install directory must not contain semicolons, percent signs, or quotes; these can alter the user PATH'
     }
 
     try {

@@ -258,6 +258,17 @@ try {
     $r = Run-Installer @{ FIREKEEPER_RELEASES_URL = $base; FIREKEEPER_INSTALL_DIR = ''; FIREKEEPER_NO_MODIFY_PATH = '1' } @('-Version', 'v1.2.3', '-InstallDir', $rel)
     Check (($r.Code -ne 0) -and ($r.Output -match 'must be an absolute path') -and -not (Test-Path -LiteralPath $rel)) 'relative -InstallDir rejected'
 
+    # An absolute directory must not introduce another PATH entry or an
+    # environment-variable expansion when written to the user registry.
+    foreach ($suffix in @(';bin', ';.', ';..\y', '%TEST%', '"')) {
+        $dir = (Join-Path $work 'unsafe') + $suffix
+        $r = Run-Installer @{ FIREKEEPER_RELEASES_URL = $base; FIREKEEPER_INSTALL_DIR = $dir; FIREKEEPER_NO_MODIFY_PATH = '' } @('-Version', 'v1.2.3')
+        Check (($r.Code -ne 0) -and ($r.Output -match 'must not contain') -and -not (Test-Path -LiteralPath $dir)) "unsafe FIREKEEPER_INSTALL_DIR rejected: $suffix"
+    }
+    $dir = (Join-Path $work 'unsafe-arg') + ';bin'
+    $r = Run-Installer @{ FIREKEEPER_RELEASES_URL = $base; FIREKEEPER_INSTALL_DIR = ''; FIREKEEPER_NO_MODIFY_PATH = '1' } @('-Version', 'v1.2.3', '-InstallDir', $dir)
+    Check (($r.Code -ne 0) -and ($r.Output -match 'must not contain') -and -not (Test-Path -LiteralPath $dir)) 'unsafe -InstallDir rejected'
+
     # 7b. A releases URL that is not https (or file://, or http:// to this
     # machine) is refused before any download (SEC-26-4, #30).
     foreach ($url in @('http://example.invalid/releases', 'HTTP://github.com/firekeeper-ai/firekeeper/releases', 'ftp://example.invalid/releases', 'releases', '//example.invalid/releases', 'file://example.invalid/share/releases')) {
