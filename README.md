@@ -160,8 +160,9 @@ You do **not** need `login`, `serve`, or `daemon install` to use this dashboard.
   anything. `--no-text` omits `text` and `raw` for a structural view containing
   roles, tool calls, models, token counts, and event order.
   `firekeeper turns SESSION_ID [--provider P] --json` reports per-user-turn
-  timing, prompt character counts, tokens, running context tokens, tool calls
-  and errors, and model, without including prompt text.
+  timing, prompt character counts, tokens, running context tokens, peak
+  context size, tool calls and errors per tool, and model, without including
+  prompt text.
   `fk stats [--since 7d] [--provider P|--all] [--project NAME] --json`
   summarizes local context growth, tool errors, reply timing, activity rhythm,
   and token totals. It emits no prompt text and never uploads anything; token
