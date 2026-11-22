@@ -213,9 +213,10 @@ type usage struct {
 
 // metricUsage is one model's per-run totals in session.shutdown.
 type metricUsage struct {
-	Input     int64 `json:"inputTokens"`
-	Output    int64 `json:"outputTokens"`
-	CacheRead int64 `json:"cacheReadTokens"`
+	Input      int64 `json:"inputTokens"`
+	Output     int64 `json:"outputTokens"`
+	CacheRead  int64 `json:"cacheReadTokens"`
+	CacheWrite int64 `json:"cacheWriteTokens"`
 }
 
 // parser carries the state later records depend on: the current model and
@@ -349,6 +350,7 @@ func (p *parser) parse(line []byte) transcript.Event {
 		}
 	case "session.shutdown":
 		event.Tokens = runTokens(body)
+		event.Model = optional(runModel(body))
 	}
 	return event
 }
@@ -428,18 +430,38 @@ func callTokens(u usage) transcript.Tokens {
 }
 
 // runTokens sums session.shutdown modelMetrics. inputTokens includes cache
-// reads, so input is the remainder, matching callTokens.
+// reads and writes, so input is the uncached remainder and cache is their
+// sum, split into CacheRead and CacheWrite.
 func runTokens(body data) transcript.Tokens {
 	var tokens transcript.Tokens
 	for _, metric := range body.ModelMetrics {
 		if metric.Usage == nil {
 			continue
 		}
-		tokens.Input += max(metric.Usage.Input-metric.Usage.CacheRead, 0)
+		read, write := max(metric.Usage.CacheRead, 0), max(metric.Usage.CacheWrite, 0)
+		tokens.Input += max(metric.Usage.Input-read-write, 0)
 		tokens.Output += metric.Usage.Output
-		tokens.Cache += metric.Usage.CacheRead
+		tokens.Cache += read + write
+		tokens.CacheRead += read
+		tokens.CacheWrite += write
 	}
 	return tokens
+}
+
+// runModel names the model of a run that used exactly one; one event cannot
+// attribute totals to several, so those stay unnamed.
+func runModel(body data) string {
+	model := ""
+	for name, metric := range body.ModelMetrics {
+		if metric.Usage == nil {
+			continue
+		}
+		if model != "" {
+			return ""
+		}
+		model = name
+	}
+	return model
 }
 
 func optional(value string) *string {

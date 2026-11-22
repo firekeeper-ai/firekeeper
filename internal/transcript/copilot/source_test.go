@@ -54,7 +54,7 @@ func TestReadEvents(t *testing.T) {
 		12: {role: transcript.RoleMeta, model: "gpt-mini-test", tokens: transcript.Tokens{Input: 150, Output: 14, Cache: 20, CacheRead: 20}},
 		13: {role: transcript.RoleAssistant, text: "There is one file: README.md.", model: "gpt-test"},
 		14: {role: transcript.RoleMeta},
-		15: {role: transcript.RoleMeta, tokens: transcript.Tokens{Input: 300, Output: 65, Cache: 1200}},
+		15: {role: transcript.RoleMeta, model: "gpt-test", tokens: transcript.Tokens{Input: 50, Output: 65, Cache: 1450, CacheRead: 1200, CacheWrite: 250}},
 	}
 	checkEvents(t, events, expected, fixtureID)
 	for _, e := range events {
@@ -329,4 +329,105 @@ func TestRegistered(t *testing.T) {
 	if _, ok := reader.For(transcript.ProviderCopilot); !ok {
 		t.Fatal("copilot source not registered")
 	}
+}
+
+// session.shutdown splits cache reads from cache writes, as the event
+// contract asks, and names the model when the run used only one.
+func TestShutdownTokensAndModel(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		metrics string
+		tokens  transcript.Tokens
+		model   string
+	}{
+		{
+			name:    "one model with cache writes",
+			metrics: `{"gpt-test":{"usage":{"inputTokens":1500,"outputTokens":65,"cacheReadTokens":1200,"cacheWriteTokens":250}}}`,
+			tokens:  transcript.Tokens{Input: 50, Output: 65, Cache: 1450, CacheRead: 1200, CacheWrite: 250},
+			model:   "gpt-test",
+		},
+		{
+			name:    "no cache writes field",
+			metrics: `{"gpt-test":{"usage":{"inputTokens":1500,"outputTokens":65,"cacheReadTokens":1200}}}`,
+			tokens:  transcript.Tokens{Input: 300, Output: 65, Cache: 1200, CacheRead: 1200},
+			model:   "gpt-test",
+		},
+		{
+			// One event cannot name two models; the totals stay, unattributed.
+			name: "several models",
+			metrics: `{"model-a":{"usage":{"inputTokens":100,"outputTokens":1,"cacheReadTokens":60,"cacheWriteTokens":10}},` +
+				`"model-b":{"usage":{"inputTokens":200,"outputTokens":2,"cacheReadTokens":100,"cacheWriteTokens":50}}}`,
+			tokens: transcript.Tokens{Input: 80, Output: 3, Cache: 220, CacheRead: 160, CacheWrite: 60},
+		},
+		{
+			name:    "a model without usage is not the run's model",
+			metrics: `{"model-a":{"usage":{"inputTokens":10,"outputTokens":1}},"model-b":{}}`,
+			tokens:  transcript.Tokens{Input: 10, Output: 1},
+			model:   "model-a",
+		},
+		{
+			// Inconsistent counts never go negative.
+			name:    "cache larger than input",
+			metrics: `{"gpt-test":{"usage":{"inputTokens":100,"outputTokens":1,"cacheReadTokens":90,"cacheWriteTokens":50}}}`,
+			tokens:  transcript.Tokens{Input: 0, Output: 1, Cache: 140, CacheRead: 90, CacheWrite: 50},
+			model:   "gpt-test",
+		},
+		{name: "no metrics", metrics: `{}`},
+		{name: "null metrics", metrics: `null`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "events.jsonl")
+			line := `{"type":"session.shutdown","timestamp":"2026-01-01T00:00:00Z","data":{"modelMetrics":` + test.metrics + `}}` + "\n"
+			if err := os.WriteFile(path, []byte(line), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			events, _, err := (&Source{}).Read(path, 0)
+			if err != nil || len(events) != 1 {
+				t.Fatalf("read: %d events, %v", len(events), err)
+			}
+			e := events[0]
+			if e.Role != transcript.RoleMeta || e.Tokens != test.tokens {
+				t.Errorf("role %s tokens %+v; want meta %+v", e.Role, e.Tokens, test.tokens)
+			}
+			got := ""
+			if e.Model != nil {
+				got = *e.Model
+			}
+			if got != test.model {
+				t.Errorf("model %q; want %q", got, test.model)
+			}
+		})
+	}
+}
+
+// FuzzShutdownTokens checks that any modelMetrics object yields a meta event
+// with no negative count and a cache equal to its read and write parts.
+func FuzzShutdownTokens(f *testing.F) {
+	for _, seed := range []string{
+		`{"m":{"usage":{"inputTokens":1500,"outputTokens":65,"cacheReadTokens":1200,"cacheWriteTokens":250}}}`,
+		`{"a":{"usage":{"inputTokens":-5,"cacheReadTokens":-1,"cacheWriteTokens":9}},"b":{}}`,
+		`{}`, `null`, `[]`, `"x"`,
+	} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, metrics string) {
+		path := filepath.Join(t.TempDir(), "events.jsonl")
+		line := []byte(`{"type":"session.shutdown","timestamp":"2026-01-01T00:00:00Z","data":{"modelMetrics":` + metrics + `}}` + "\n")
+		if err := os.WriteFile(path, line, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		events, _, err := (&Source{}).Read(path, 0)
+		if err != nil {
+			t.Fatalf("read: %v", err)
+		}
+		for _, e := range events {
+			tok := e.Tokens
+			if tok.Input < 0 || tok.Cache < 0 || tok.CacheRead < 0 || tok.CacheWrite < 0 {
+				t.Fatalf("negative tokens %+v", tok)
+			}
+			if tok.Cache != tok.CacheRead+tok.CacheWrite {
+				t.Fatalf("cache %d is not read %d + write %d", tok.Cache, tok.CacheRead, tok.CacheWrite)
+			}
+		}
+	})
 }
