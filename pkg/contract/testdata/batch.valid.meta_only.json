@@ -6,7 +6,8 @@
     {
       "meta": {
         "session_id": "0199-abc",
-        "provider": "codex"
+        "provider": "codex",
+        "repo": "github.com/acme/dashboard"
       },
       "events": []
     }

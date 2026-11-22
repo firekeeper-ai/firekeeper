@@ -34,6 +34,7 @@ func isolateGit(t *testing.T) {
 
 func TestCloudSessionDoesNotUseLocalGit(t *testing.T) {
 	root, start := sessionRepo(t)
+	gitAt(t, root, gitT0, "remote", "add", "origin", "git@github.com:acme/demo.git")
 	meta := session.Meta{CWD: root, StartedAt: unixTime(gitT0 + 10), LastActivityAt: unixTime(gitT0 + 40)}
 	r := &run{}
 
@@ -42,6 +43,9 @@ func TestCloudSessionDoesNotUseLocalGit(t *testing.T) {
 		t.Fatalf("local branch and commit = %q, %q", local.Branch, local.Commit)
 	}
 	r.addGitFiles(context.Background(), meta, &local, &SessionResult{})
+	if local.Repo != "github.com/acme/demo" {
+		t.Fatal("local upload missing canonical Git remote")
+	}
 	if local.FilesSource != filesFromGit || len(local.Files) == 0 {
 		t.Fatal("local Git files were not included")
 	}
@@ -54,7 +58,7 @@ func TestCloudSessionDoesNotUseLocalGit(t *testing.T) {
 	// Even a supplied commit must not trigger Git for a cloud session.
 	cloud.commitRaw = start
 	r.addGitFiles(context.Background(), meta, &cloud, &SessionResult{})
-	if cloud.FilesSource != "" || len(cloud.Files) != 0 {
+	if cloud.Repo != "" || cloud.FilesSource != "" || len(cloud.Files) != 0 {
 		t.Fatal("cloud session used local Git files")
 	}
 	meta.Branch = "cloud-branch"

@@ -194,7 +194,7 @@ var (
 	validFiles  = []string{"git", "tool_calls"}
 	// metaKeys are the documented sessions[].meta fields (docs/api.md).
 	metaKeys = []string{
-		"session_id", "provider", "cwd", "project", "branch", "commit", "model",
+		"session_id", "provider", "cwd", "project", "repo", "branch", "commit", "model",
 		"state", "title", "started_at", "last_activity_at", "origin",
 		"files_source", "files", "parent_session_id", "agent_name", "agent_role",
 		"forked_from_session_id",

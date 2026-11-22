@@ -702,7 +702,8 @@ production repository), the same files are served from `B/latest` (JSON with
 ### What is uploaded and what is not caught
 
 For each allowed provider, per session, Firekeeper sends metadata (provider,
-session id, working directory, project name, branch, model, state, title,
+session id, working directory, project name, Git repository identity when available (host/owner/repo from
+the branch tracking remote or a single fetch remote), branch, model, state, title,
 timestamps, event count, token totals; for a Codex subagent also its parent
 session id and the agent's name and role, and for a forked Codex thread the
 session id it was forked from) and every transcript event: prompts,
