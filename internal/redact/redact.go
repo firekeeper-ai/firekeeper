@@ -125,14 +125,14 @@ func redactString(s string, opts Options, counts Counts) string {
 	for _, p := range opts.Paths {
 		s = redactPath(s, p, false, Marker(KindPath), KindPath, counts)
 		if tilde, ok := homeForm(p, opts.HomeDir); ok {
-			s = redactPath(s, tilde, isWindowsDrivePath(opts.HomeDir), Marker(KindPath), KindPath, counts)
+			s = redactPath(s, tilde, isWindowsPath(opts.HomeDir), Marker(KindPath), KindPath, counts)
 		}
 	}
 	return redactPath(s, opts.HomeDir, false, "~", KindHomeDir, counts)
 }
 
 // redactPath replaces p wherever it appears as a whole path prefix. A
-// Windows drive path, and with tilde set the "~\..." form of a path below a
+// Windows drive or UNC path, and with tilde set the "~\..." form of a path below a
 // Windows home, is matched in all its spellings (see windows.go); any other
 // path is matched exactly.
 func redactPath(s, p string, tilde bool, replacement string, kind Kind, counts Counts) string {
@@ -382,14 +382,30 @@ func isValueEnd(c byte) bool {
 // Windows home is compared without regard to case or separator.
 func homeForm(p, home string) (string, bool) {
 	p, home = strings.TrimRight(p, `/\`), strings.TrimRight(home, `/\`)
-	hasPrefix := strings.HasPrefix(p, home)
-	if isWindowsDrivePath(home) && len(p) >= len(home) {
-		hasPrefix = strings.EqualFold(strings.ReplaceAll(p[:len(home)], "/", `\`), strings.ReplaceAll(home, "/", `\`))
+	compareP, compareHome := p, home
+	windows := isWindowsPath(home)
+	if uncHome, ok := windowsUNCPath(home); ok {
+		var ok bool
+		compareP, ok = windowsUNCPath(p)
+		if !ok {
+			return "", false
+		}
+		compareHome = uncHome
+	} else if windows {
+		compareP = strings.ReplaceAll(p, "/", `\`)
+		compareHome = strings.ReplaceAll(home, "/", `\`)
 	}
-	if home == "" || !hasPrefix || len(p) <= len(home) || (p[len(home)] != '/' && p[len(home)] != '\\') {
+	if home == "" || len(compareP) <= len(compareHome) {
 		return "", false
 	}
-	return "~" + p[len(home):], true
+	hasPrefix := strings.HasPrefix(compareP, compareHome)
+	if windows {
+		hasPrefix = strings.EqualFold(compareP[:len(compareHome)], compareHome)
+	}
+	if !hasPrefix || (compareP[len(compareHome)] != '/' && compareP[len(compareHome)] != '\\') {
+		return "", false
+	}
+	return "~" + p[len(p)-(len(compareP)-len(compareHome)):], true
 }
 
 // redactPrefix replaces prefix with replacement wherever it appears as a

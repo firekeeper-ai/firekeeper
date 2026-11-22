@@ -22,7 +22,9 @@ import (
 // DA1F2B~1). These patterns are built from the path's shape, so they behave
 // the same on every operating system; only the transcripts they meet differ.
 // On Windows the path's real short name is looked up as well (shortPathName),
-// which covers hashed names exactly.
+// which covers hashed names exactly. Configured UNC homes also match case,
+// separator, percent-encoding and extended UNC variants on the same host
+// and share.
 
 // windowsPath is the compiled matcher for one Windows-shaped path.
 type windowsPath struct {
@@ -50,8 +52,40 @@ func isWindowsDrivePath(p string) bool {
 	return len(p) >= 3 && isASCIILetter(p[0]) && p[1] == ':' && (p[2] == '\\' || p[2] == '/')
 }
 
+func windowsUNCPath(p string) (string, bool) {
+	if !utf8.ValidString(p) {
+		return "", false
+	}
+	p = strings.TrimRight(strings.ReplaceAll(p, `\`, "/"), "/")
+	if !strings.HasPrefix(p, "//") {
+		return "", false
+	}
+	rest := p[2:]
+	if strings.HasPrefix(strings.ToLower(rest), "?/unc/") {
+		rest = rest[len("?/unc/"):]
+	}
+	comps := strings.Split(rest, "/")
+	if len(comps) < 2 || comps[0] == "." || comps[0] == "?" {
+		return "", false
+	}
+	for _, c := range comps {
+		if c == "" || c == "." || c == ".." || strings.ContainsAny(c, ":?") {
+			return "", false
+		}
+	}
+	return "//" + rest, true
+}
+
+func isWindowsPath(p string) bool {
+	if isWindowsDrivePath(p) {
+		return true
+	}
+	_, ok := windowsUNCPath(p)
+	return ok
+}
+
 // windowsPathFor returns the matcher for p, or nil when p is not a Windows
-// drive path or, with tilde set, a "~\..." form below a Windows home.
+// drive/UNC path or, with tilde set, a "~\..." form below a Windows home.
 func windowsPathFor(p string, tilde bool) *windowsPath {
 	key := p
 	if tilde {
@@ -69,6 +103,7 @@ func compileWindowsPath(p string, tilde bool) *windowsPath {
 	var b strings.Builder
 	b.WriteString(`(?i)`)
 	var rest string
+	unc, isUNC := windowsUNCPath(p)
 	switch {
 	case tilde && len(p) >= 2 && p[0] == '~' && (p[1] == '\\' || p[1] == '/'):
 		b.WriteString(`~`)
@@ -80,6 +115,10 @@ func compileWindowsPath(p string, tilde bool) *windowsPath {
 		// share \\host\c$, also in its long-path form \\?\UNC\host\c$.
 		b.WriteString(`(?:` + d + `(?::|%3a)|(?:/mnt|/cygdrive)?/` + d + `|(?:` + windowsSep + `\?` + windowsSep + `unc)?` + windowsSep + `[a-z0-9._-]+` + windowsSep + d + `(?:\$|%24))`)
 		rest = p[2:]
+	case !tilde && isUNC:
+		host, tail, _ := strings.Cut(unc[2:], "/")
+		b.WriteString(`(?:[\\/]|%5c|%2f){2,}(?:\?` + windowsSep + `unc` + windowsSep + `)?` + componentPattern(host))
+		rest = "/" + tail
 	default:
 		return nil
 	}
@@ -93,7 +132,7 @@ func compileWindowsPath(p string, tilde bool) *windowsPath {
 	// The real short name of each component, when Windows has one that the
 	// patterns below might not predict (a hashed DA1F2B~1).
 	var real []string
-	if !tilde {
+	if !tilde && isWindowsDrivePath(p) {
 		if sp := shortPathName(p); isWindowsDrivePath(sp) {
 			real = strings.FieldsFunc(sp[2:], func(r rune) bool { return r == '\\' || r == '/' })
 			if len(real) != len(comps) {
