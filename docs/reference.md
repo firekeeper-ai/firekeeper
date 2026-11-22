@@ -82,8 +82,10 @@ What differs from macOS and Linux:
 - **The binaries are not code-signed.** `install.ps1` downloads without
   SmartScreen's "downloaded from the internet" mark; a browser download of the
   zip may trigger a prompt.
-- **Updates** re-run `install.ps1` for the new version (with `powershell`, or
-  `pwsh` when Windows PowerShell is missing) instead of `install.sh`. The
+- **Updates** re-run `install.ps1` for the new version instead of
+  `install.sh`, with Windows PowerShell from the system directory (such as
+  `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`, never a
+  `powershell` found on `PATH`), or `pwsh` from `PATH` when that is missing. The
   installer gets your environment minus `PSModulePath`, so updating from a
   PowerShell 7 session works too.
 - **The login service** is a Task Scheduler task; see
