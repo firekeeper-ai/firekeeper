@@ -28,3 +28,27 @@ func TestPublicEntryPoints(t *testing.T) {
 		t.Fatal("Event modified its input")
 	}
 }
+
+func TestEventEncodedWindowsPaths(t *testing.T) {
+	opts := redact.Options{HomeDir: `C:\Users\Dan`}
+	for _, tt := range []struct{ in, want string }{
+		{`%43%3A%5C%55sers%5CD%61n%5Csrc`, `~%5Csrc`},
+		{`%43%3A%5C%55sers%5CD%61n%6Fld`, `%43%3A%5C%55sers%5CD%61n%6Fld`},
+	} {
+		t.Run(tt.in, func(t *testing.T) {
+			originalRaw := `{"cwd":"` + tt.in + `"}`
+			in := event.Event{Provider: event.ProviderCodex, Role: event.RoleToolResult, Text: tt.in, Raw: []byte(originalRaw)}
+			out, counts := redact.Event(in, opts)
+			if out.Text != tt.want || string(out.Raw) != `{"cwd":"`+tt.want+`"}` {
+				t.Fatal("public event redaction disagrees between text and raw")
+			}
+			wantCount := 0
+			if tt.in != tt.want {
+				wantCount = 2
+			}
+			if counts.Total() != wantCount || string(in.Raw) != originalRaw || in.Text != tt.in {
+				t.Fatal("unexpected counts or input mutation")
+			}
+		})
+	}
+}
