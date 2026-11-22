@@ -22,11 +22,15 @@ const (
 )
 
 const (
-	ContextGrowthThresholdTokensPerTurn = 64_000.0
-	ToolErrorRateThreshold              = 0.20
-	AttentionThresholdSeconds           = 300.0
-	RhythmThresholdTurnsPerHour         = 4.0
-	SpendThresholdTokens                = 1_000_000.0
+	// ContextGrowthThresholdTokens is the peak context size past which a
+	// session would likely gain from compacting or a fresh start.
+	ContextGrowthThresholdTokens = 150_000.0
+	ToolErrorRateThreshold       = 0.20
+	// ToolErrorMinSamples is the fewest calls of one tool a rate is judged on.
+	ToolErrorMinSamples         = 5
+	AttentionThresholdSeconds   = 300.0
+	RhythmThresholdTurnsPerHour = 4.0
+	SpendThresholdTokens        = 1_000_000.0
 )
 
 // Session contains local metadata and normalized events for one session.
@@ -48,7 +52,14 @@ type Finding struct {
 	Value     float64             `json:"value"`
 	Threshold float64             `json:"threshold"`
 	Unit      string              `json:"unit"`
+	// Tool and Samples are set on tool_reliability findings: the tool and
+	// the number of its calls the rate covers.
+	Tool    string `json:"tool,omitempty"`
+	Samples int    `json:"samples,omitempty"`
 }
+
+// unknownModel labels spend from events that name no model, as window does.
+const unknownModel = "unknown"
 
 // Spend is the token total for one project, provider, and model.
 type Spend struct {
@@ -73,6 +84,11 @@ type Report struct {
 	Findings        []Finding `json:"findings"`
 	Spend           []Spend   `json:"spend"`
 	Rhythm          []Rhythm  `json:"rhythm"`
+	// RhythmTimezone is the timezone of the Rhythm hours and weekdays.
+	RhythmTimezone string `json:"rhythm_timezone"`
+	// Notes name providers or sessions that could not be read and are not
+	// counted. Build leaves it empty; the caller fills it.
+	Notes []string `json:"notes"`
 }
 
 // Build computes findings over events at or after since. Events without a
@@ -84,6 +100,9 @@ func Build(sessions []Session, since time.Time) Report {
 		Findings: []Finding{},
 		Spend:    []Spend{},
 		Rhythm:   []Rhythm{},
+		Notes:    []string{},
+		// Rhythm buckets are counted in UTC.
+		RhythmTimezone: "UTC",
 	}
 	spend := make(map[spendKey]int64)
 	sessionSpend := make(map[sessionSpendKey]int64)
@@ -101,17 +120,20 @@ func Build(sessions []Session, since time.Time) Report {
 			Project:   session.Project,
 		}
 
-		if average, ok := averageCacheTokens(sessionTurns); ok && average >= ContextGrowthThresholdTokensPerTurn {
+		if peak := peakContext(sessionTurns); peakContextKnown(session.Provider) && float64(peak) >= ContextGrowthThresholdTokens {
 			finding := base
 			finding.Kind = FindingContextGrowth
-			finding.Metric = "cached_tokens_per_turn"
-			finding.Value = average
-			finding.Threshold = ContextGrowthThresholdTokensPerTurn
-			finding.Unit = "tokens/turn"
+			finding.Metric = "peak_context_tokens"
+			finding.Value = float64(peak)
+			finding.Threshold = ContextGrowthThresholdTokens
+			finding.Unit = "tokens"
 			report.Findings = append(report.Findings, finding)
 		}
-		if calls, errors := toolCounts(sessionTurns); calls >= 5 {
-			rate := float64(errors) / float64(calls)
+		for _, tool := range toolCounts(sessionTurns) {
+			if tool.calls < ToolErrorMinSamples {
+				continue
+			}
+			rate := float64(tool.errors) / float64(tool.calls)
 			if rate >= ToolErrorRateThreshold {
 				finding := base
 				finding.Kind = FindingToolReliability
@@ -119,6 +141,8 @@ func Build(sessions []Session, since time.Time) Report {
 				finding.Value = rate
 				finding.Threshold = ToolErrorRateThreshold
 				finding.Unit = "ratio"
+				finding.Tool = tool.name
+				finding.Samples = tool.calls
 				report.Findings = append(report.Findings, finding)
 			}
 		}
@@ -142,8 +166,8 @@ func Build(sessions []Session, since time.Time) Report {
 		}
 
 		for _, event := range events {
-			model := ""
-			if event.Model != nil {
+			model := unknownModel
+			if event.Model != nil && *event.Model != "" {
 				model = *event.Model
 			}
 			tokens := eventTokenCount(event.Tokens)
@@ -204,7 +228,10 @@ func Build(sessions []Session, since time.Time) Report {
 		if a.SessionID != b.SessionID {
 			return a.SessionID < b.SessionID
 		}
-		return a.Metric < b.Metric
+		if a.Metric != b.Metric {
+			return a.Metric < b.Metric
+		}
+		return a.Tool < b.Tool
 	})
 	return report
 }
@@ -231,25 +258,61 @@ func inRange(events []transcript.Event, since time.Time) []transcript.Event {
 	return out
 }
 
-func averageCacheTokens(turns []turns.Turn) (float64, bool) {
-	var total int64
-	n := 0
-	for _, turn := range turns {
-		total += turn.Tokens.CacheRead + turn.Tokens.CacheWrite
-		n++
+// peakContext is the largest context size seen in any turn.
+func peakContext(sessionTurns []turns.Turn) int64 {
+	var peak int64
+	for _, turn := range sessionTurns {
+		peak = max(peak, turn.PeakContextTokens)
 	}
-	if n == 0 {
-		return 0, false
-	}
-	return float64(total) / float64(n), true
+	return peak
 }
 
-func toolCounts(turns []turns.Turn) (calls, errors int) {
-	for _, turn := range turns {
-		calls += turn.ToolCalls
-		errors += turn.ToolErrors
+// peakContextKnown reports whether provider logs usage per model call, so a
+// turn's peak is a context size. Copilot logs its main agent's usage only as
+// run totals.
+func peakContextKnown(provider transcript.Provider) bool {
+	switch provider {
+	case transcript.ProviderCopilot:
+		return false
+	case transcript.ProviderCodex, transcript.ProviderKimi, transcript.ProviderClaude,
+		transcript.ProviderOpenCode, transcript.ProviderGemini, transcript.ProviderCursor:
+		return true
+	default:
+		return false
 	}
-	return calls, errors
+}
+
+type toolCount struct {
+	name   string
+	calls  int
+	errors int
+}
+
+// toolCounts sums calls and errors per tool over a session, sorted by name.
+// Errors on results that name no tool have no call count and are left out.
+func toolCounts(sessionTurns []turns.Turn) []toolCount {
+	byName := map[string]*toolCount{}
+	for _, turn := range sessionTurns {
+		for name, calls := range turn.Tools {
+			if byName[name] == nil {
+				byName[name] = &toolCount{name: name}
+			}
+			byName[name].calls += calls
+		}
+	}
+	for _, turn := range sessionTurns {
+		for name, errors := range turn.ToolErrorsByTool {
+			if byName[name] != nil {
+				byName[name].errors += errors
+			}
+		}
+	}
+	out := make([]toolCount, 0, len(byName))
+	for _, count := range byName {
+		out = append(out, *count)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].name < out[j].name })
+	return out
 }
 
 func medianReplyDelay(turns []turns.Turn) (float64, bool) {
@@ -295,10 +358,5 @@ func peakTurnsPerHour(turns []turns.Turn) int {
 }
 
 func eventTokenCount(tokens transcript.Tokens) int64 {
-	cache := tokens.Cache
-	splitCache := tokens.CacheRead + tokens.CacheWrite
-	if splitCache > cache {
-		cache = splitCache
-	}
-	return tokens.Input + tokens.Output + cache
+	return tokens.Input + tokens.Output + turns.CacheTokens(tokens)
 }

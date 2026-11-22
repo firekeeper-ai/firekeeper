@@ -352,11 +352,18 @@ providers and the last seven days; `--provider` selects one provider, while
 `--all` explicitly selects all providers. `--project` matches the project name
 exactly. Durations accept Go duration syntax and integer day values such as
 `7d`. The JSON contains threshold findings, token totals grouped by project,
-provider and model, and a weekday/hour activity histogram (hours are UTC).
+provider and model (`unknown` when an event names none), and a weekday/hour
+activity histogram whose timezone is in `rhythm_timezone` (UTC). A provider
+that cannot be listed, or a session that cannot be read, is skipped with a
+warning on stderr and named in `notes`; with `--provider`, a provider that
+cannot be listed fails the command instead.
 
-Finding `kind` values are stable: `context_growth` measures average cached
-tokens per turn (threshold 64,000), `tool_reliability` measures a session's
-tool error ratio (threshold 0.20, with at least five tool calls),
+Finding `kind` values are stable: `context_growth` measures the session's peak
+context size, the largest single model call's input plus cache (threshold
+150,000 tokens; not reported for Copilot, which logs only run totals),
+`tool_reliability` measures one tool's error ratio in a session (threshold
+0.20, with at least five calls of that tool; `tool` names it and `samples` is
+its call count),
 `attention` measures median time from one observed turn's end to the next user
 turn (threshold 300 seconds), `rhythm` measures peak turns in a UTC
 weekday/hour bucket (threshold four), and `spend` measures session token total

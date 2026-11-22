@@ -59,6 +59,8 @@ func schemaFor(command string, ndjson bool) map[string]any {
 		addArray("findings")
 		addArray("spend")
 		addArray("rhythm")
+		addString("rhythm_timezone")
+		addStringArray("notes")
 	case "config":
 		addString("server")
 		addString("token")

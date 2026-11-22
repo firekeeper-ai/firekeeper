@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -159,4 +160,88 @@ func FuzzParseStatsDuration(f *testing.F) {
 			t.Fatalf("accepted non-positive duration %s", duration)
 		}
 	})
+}
+
+type statsFailingEnumerator struct{}
+
+func (statsFailingEnumerator) Enumerate(context.Context, reader.EnumerateOptions) ([]session.Meta, error) {
+	return nil, errors.New("database has no session tables")
+}
+
+type statsFailingSource struct{}
+
+func (statsFailingSource) Locate(session.Meta) ([]string, error) { return []string{"fixture"}, nil }
+func (statsFailingSource) Read(string, int64) ([]transcript.Event, int64, error) {
+	return nil, 0, errors.New("truncated record")
+}
+
+// One provider or session that cannot be read must not hide the others:
+// stats --all reports what it could read and names what it skipped.
+func TestRunStatsSkipsFailingProvidersAndSessions(t *testing.T) {
+	oldHome, oldEnumerate, oldSource := configHome, statsEnumerate, statsSource
+	oldSkip, oldNow := statsSkipReason, statsNow
+	configHome = func() (string, error) { return t.TempDir(), nil }
+	statsNow = func() time.Time { return time.Date(2026, 11, 21, 12, 0, 0, 0, time.UTC) }
+	statsSkipReason = func(session.Meta, []string) string { return "" }
+	t.Cleanup(func() {
+		configHome, statsEnumerate, statsSource = oldHome, oldEnumerate, oldSource
+		statsSkipReason, statsNow = oldSkip, oldNow
+	})
+	at := statsNow().Add(-time.Hour)
+	statsEnumerate = func(provider transcript.Provider) (reader.Enumerator, bool) {
+		switch provider {
+		case transcript.ProviderOpenCode:
+			return statsFailingEnumerator{}, true
+		case transcript.ProviderCodex:
+			return statsTestEnumerator{metas: []session.Meta{{ID: "good"}, {ID: "broken"}}}, true
+		}
+		return nil, false
+	}
+	statsSource = func(provider transcript.Provider) (reader.Source, bool) {
+		if provider != transcript.ProviderCodex {
+			return nil, false
+		}
+		return statsSwitchSource{
+			"good":   statsTestSource{events: []transcript.Event{{Role: transcript.RoleUser, TS: &at, Tokens: transcript.Tokens{Input: 7}}}},
+			"broken": statsFailingSource{},
+		}, true
+	}
+
+	var stdout, stderr bytes.Buffer
+	if code := runStats([]string{"--all", "--json"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("code = %d, stderr = %q", code, stderr.String())
+	}
+	var report struct {
+		SessionsScanned int      `json:"sessions_scanned"`
+		Notes           []string `json:"notes"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &report); err != nil {
+		t.Fatalf("decode: %v: %s", err, stdout.String())
+	}
+	if report.SessionsScanned != 1 {
+		t.Fatalf("sessions scanned = %d; want the readable one", report.SessionsScanned)
+	}
+	joined := strings.Join(report.Notes, "\n")
+	if !strings.Contains(joined, "opencode") || !strings.Contains(joined, "1 codex session") {
+		t.Fatalf("notes = %q", report.Notes)
+	}
+	if strings.Contains(joined, "session tables") || strings.Contains(joined, "truncated record") {
+		t.Fatalf("notes repeat provider error text: %q", report.Notes)
+	}
+
+	// A single provider asked for by name still fails loudly.
+	stdout.Reset()
+	stderr.Reset()
+	if code := runStats([]string{"--provider", "opencode", "--json"}, &stdout, &stderr); code != 1 ||
+		!strings.Contains(stderr.String(), "enumerate opencode") {
+		t.Fatalf("named provider: code=%d stderr=%q", code, stderr.String())
+	}
+}
+
+// statsSwitchSource reads a different fixture per session id.
+type statsSwitchSource map[string]reader.Source
+
+func (s statsSwitchSource) Locate(meta session.Meta) ([]string, error) { return []string{meta.ID}, nil }
+func (s statsSwitchSource) Read(path string, offset int64) ([]transcript.Event, int64, error) {
+	return s[path].Read(path, offset)
 }
