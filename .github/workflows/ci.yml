@@ -254,3 +254,5 @@ jobs:
         run: node scripts/test-demo-wasm.cjs
       - name: landing script syntax
         run: node --check docs/landing/demo/processes-demo.js
+      - name: landing theme works without storage
+        run: node scripts/test-landing-theme.cjs
