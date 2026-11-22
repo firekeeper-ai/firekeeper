@@ -61,6 +61,8 @@ var (
 	// ErrUnreadableLogin means the credentials file exists but could not be
 	// read, for example because of its permissions.
 	ErrUnreadableLogin = errors.New("claudecloud: the Claude Code credentials file could not be read")
+	// ErrKeychainTimeout means macOS did not finish the keychain lookup.
+	ErrKeychainTimeout = errors.New("claudecloud: keychain lookup timed out; unlock the keychain and try again")
 )
 
 const (
@@ -78,7 +80,8 @@ const (
 	maxConfigBytes     = 64 << 20
 	// expirySkew treats a token about to expire as expired, so a pass does
 	// not start with a token that dies halfway.
-	expirySkew = time.Minute
+	expirySkew      = time.Minute
+	keychainTimeout = 15 * time.Second
 )
 
 // CredentialOptions replace the real environment in tests. The zero value
@@ -115,6 +118,10 @@ func LoadCredentials(ctx context.Context, home string) (Credentials, error) {
 
 // LoadCredentialsWith is LoadCredentials with injected dependencies.
 func LoadCredentialsWith(ctx context.Context, home string, opts CredentialOptions) (Credentials, error) {
+	return loadCredentialsWithTimeout(ctx, home, opts, keychainTimeout)
+}
+
+func loadCredentialsWithTimeout(ctx context.Context, home string, opts CredentialOptions, timeout time.Duration) (Credentials, error) {
 	goos := opts.GOOS
 	if goos == "" {
 		goos = runtime.GOOS
@@ -138,9 +145,15 @@ func LoadCredentialsWith(ctx context.Context, home string, opts CredentialOption
 		if keychain == nil {
 			keychain = securityFindPassword
 		}
-		raw, err := keychain(ctx)
-		if err != nil && ctx.Err() != nil {
+		keychainCtx, cancel := context.WithTimeout(ctx, timeout)
+		raw, err := keychain(keychainCtx)
+		keychainErr := keychainCtx.Err()
+		cancel()
+		if ctx.Err() != nil {
 			return Credentials{}, ctx.Err()
+		}
+		if keychainErr != nil {
+			return Credentials{}, ErrKeychainTimeout
 		}
 		if err == nil {
 			tok, found = parseLogin(raw)
@@ -177,7 +190,12 @@ func LoadCredentialsWith(ctx context.Context, home string, opts CredentialOption
 // returns its standard output. Failures drop the command's output, which may
 // hold the secret.
 func securityFindPassword(ctx context.Context) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, securityPath, keychainArgs(keychainAccount())...)
+	return runKeychainCommand(ctx, securityPath, keychainArgs(keychainAccount())...)
+}
+
+func runKeychainCommand(ctx context.Context, path string, args ...string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, path, args...)
+	cmd.WaitDelay = time.Second
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, errors.New("keychain lookup failed")
