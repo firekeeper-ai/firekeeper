@@ -340,6 +340,29 @@ Unknown or malformed transcript records remain in the stream as metadata and
 do not start or split turns. Provider transcripts can be incomplete, so these
 best-effort counts may be underreported. Nothing is uploaded.
 
+### Local usage insights
+
+`fk stats [--since 7d] [--provider P|--all] [--project NAME] --json` computes
+local insights from normalized transcript events. It defaults to all registered
+providers and the last seven days; `--provider` selects one provider, while
+`--all` explicitly selects all providers. `--project` matches the project name
+exactly. Durations accept Go duration syntax and integer day values such as
+`7d`. The JSON contains threshold findings, token totals grouped by project,
+provider and model, and a weekday/hour activity histogram (hours are UTC).
+
+Finding `kind` values are stable: `context_growth` measures average cached
+tokens per turn (threshold 64,000), `tool_reliability` measures a session's
+tool error ratio (threshold 0.20, with at least five tool calls),
+`attention` measures median time from one observed turn's end to the next user
+turn (threshold 300 seconds), `rhythm` measures peak turns in a UTC
+weekday/hour bucket (threshold four), and `spend` measures session token total
+(threshold 1,000,000). Each finding includes `session_id`, `metric`, numeric
+`value` and `threshold`, plus provider, project and unit. These are local,
+best-effort transcript metrics, not ground-truth attention states, account
+quotas, or billed costs. In particular, transcript activity cannot establish
+whether a provider's five-hour limit was reached. Prompt text is never included
+in output, and nothing is uploaded.
+
 ### How session discovery works
 
 Firekeeper scans local processes every two seconds with `ps` and collapses

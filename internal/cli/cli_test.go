@@ -32,6 +32,7 @@ func TestRunSubcommandDispatch(t *testing.T) {
 		{args: []string{"unknown"}, handled: false},
 		{args: []string{"export"}, handled: true, code: 2, wantStderr: "firekeeper export: --session is required"},
 		{args: []string{"turns"}, handled: true, code: 2, wantStderr: "--json is required"},
+		{args: []string{"stats"}, handled: true, code: 2, wantStderr: "--json is required"},
 		{args: []string{"report", "--bogus"}, handled: true, code: 2},
 		{args: []string{"serve"}, handled: true, code: 2, wantStderr: "firekeeper-server"},
 		{args: []string{"serve", "--listen", "127.0.0.1:0"}, handled: true, code: 2, wantStderr: "separate commercial binary"},
@@ -99,7 +100,7 @@ func TestUsageListsSubcommands(t *testing.T) {
 	var out bytes.Buffer
 	fs.SetOutput(&out)
 	PrintUsage(fs)
-	for _, want := range []string{"snapshot", "export", "turns", "report", "backfill", "serve", "daemon", "otel-listen", "otel-reconcile", "telemetry"} {
+	for _, want := range []string{"snapshot", "export", "turns", "stats", "report", "backfill", "serve", "daemon", "otel-listen", "otel-reconcile", "telemetry"} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("usage missing %q:\n%s", want, out.String())
 		}
