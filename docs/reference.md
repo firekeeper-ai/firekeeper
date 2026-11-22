@@ -832,11 +832,13 @@ How it works, and what you should know first:
   only to `api.anthropic.com`, with redirects refused. It is never logged,
   saved, or uploaded.
 - **A local cache.** Sessions are written, unredacted like any transcript on
-  disk, to `~/.firekeeper/cloud/claude/` (mode `0600`), not to `~/.claude`.
-  Redaction happens as it does for every upload. A rerun downloads a session
-  again only when it changed, and uploads only its new events. Delete the
-  folder to reclaim space; the next run downloads again, and the server drops
-  events it already has.
+  disk, to `~/.firekeeper/cloud/claude/`, not to `~/.claude`. On Unix the
+  cache directory is mode `0700` and files are mode `0600`; on Windows the
+  cache inherits its parent directory's ACL, with no separate owner-only ACL
+  set by Firekeeper. Redaction happens as it does for every upload. A rerun
+  downloads a session again only when it changed, and uploads only its new
+  events. The cache remains until you delete the folder; the next run
+  downloads again, and the server drops events it already has.
 - **What is imported.** Prompts, replies, tool calls and results, and
   sub-agent messages (shown as meta). Session plumbing (control messages,
   rate limits, environment logs) is dropped. The dashboard shows the cloud
@@ -1100,7 +1102,7 @@ Files Firekeeper reads and writes outside the provider data it only reads:
 | --- | --- | --- |
 | `~/.firekeeper/machine-id` | any command that identifies the machine | this machine's id |
 | `~/.firekeeper/state.json`, `state.lock` | `report`, `backfill`, `daemon` | per-file read offsets and their lock |
-| `~/.firekeeper/cloud/claude/` | `backfill --claude-cloud`, `daemon` with `[claude_cloud]` | cached Claude Code on the web sessions (mode `0600`) |
+| `~/.firekeeper/cloud/claude/` | `backfill --claude-cloud`, `daemon` with `[claude_cloud]` | cached Claude Code on the web sessions (Unix files `0600`, directory `0700`; Windows inherits parent ACL) |
 | `~/.firekeeper/claude-cloud-status.json` | `daemon` with `[claude_cloud]` | time and warning of the last cloud pass, no secrets (mode `0600`) |
 | `~/.firekeeper/config.toml` | you; `login` and `logout` edit `server` and `token` | reporting configuration |
 | `~/.firekeeper/daemon.log`, `daemon.lock` | `daemon` | log and single-instance lock |

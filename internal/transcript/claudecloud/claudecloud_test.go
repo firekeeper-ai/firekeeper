@@ -137,6 +137,21 @@ func syncOnce(t *testing.T, c *Client, dir string, after time.Time) SyncResult {
 	return res
 }
 
+func TestSyncRejectsInvalidCacheDirectory(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "cache")
+	if err := os.WriteFile(dir, []byte("not a directory"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f, c := newFakeCloud(t)
+	_, err := Sync(context.Background(), c, SyncOptions{Dir: dir})
+	if err == nil || strings.Contains(err.Error(), dir) {
+		t.Fatalf("invalid cache directory must fail with a sanitized error: %v", err)
+	}
+	if f.sessionCalls != 0 {
+		t.Fatal("cloud API was called before the cache directory was secured")
+	}
+}
+
 func TestSyncWritesTranscriptAndSource(t *testing.T) {
 	f, c := newFakeCloud(t)
 	f.sessions = []map[string]any{cloudSession(sid, "2026-10-01T11:00:00Z")}

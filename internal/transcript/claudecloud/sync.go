@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 )
 
@@ -65,6 +66,11 @@ func Sync(ctx context.Context, c *Client, opts SyncOptions) (SyncResult, error) 
 	}
 	if err := os.MkdirAll(opts.Dir, 0o700); err != nil {
 		return res, errors.New("claudecloud: create cache directory")
+	}
+	if runtime.GOOS != "windows" {
+		if err := os.Chmod(opts.Dir, 0o700); err != nil {
+			return res, errors.New("claudecloud: protect cache directory")
+		}
 	}
 	sessions, err := c.Sessions(ctx)
 	if err != nil {
