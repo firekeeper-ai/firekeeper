@@ -161,7 +161,14 @@ You do **not** need `login`, `serve`, or `daemon install` to use this dashboard.
   roles, tool calls, models, token counts, and event order.
   `firekeeper window` breaks the window down by session, model and hour (`--json`,
   or `--html FILE` for a standalone page; `--provider` picks the harness).
-  Add `--week` for the weekly window, broken down by day. Transcript exports and server
+  Add `--week` for the weekly window, broken down by day.
+  `firekeeper recent [--json] [--limit N] [--since DUR] [--provider P] [--project NAME]`
+  lists recent sessions locally, newest first. It defaults to 10 sessions from
+  the last 30 days; durations use Go syntax (such as `24h` or `168h`), and
+  `--provider` can be repeated. Project names match exactly. Available model,
+  assistant turns, and token totals come from the full transcript and may be
+  incomplete. Its historical state is `ENDED`, not a live process check.
+  Transcript exports and server
   reporting are separate, optional commands in the [reference](docs/reference.md#reporting).
 
 Usage history is available for Codex, Copilot CLI, Claude Code, and Kimi Code.
