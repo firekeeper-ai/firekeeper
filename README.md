@@ -285,8 +285,6 @@ offers to download a missing server; confirm before stating it here. --> See
 [server installation, updates, and license configuration](docs/reference.md#installing-the-server-from-serve)
 or [server plans](https://firekeeper.ai/#pricing).
 
-![Firekeeper web dashboard — sessions and usage across machines](docs/firekeeper-dashboard.gif)
-
 The protocol is open. The reporter speaks the HTTP API in
 [docs/api.md](docs/api.md) and the event format in
 [docs/event.schema.json](docs/event.schema.json), so other tools can accept
