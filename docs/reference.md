@@ -514,6 +514,28 @@ dashboard says that `firekeeper telemetry enable` gets exact totals.
 `otel-listen` and `otel-reconcile` are the same store, for a one-off capture.
 See [docs/research/otel-telemetry.md](research/otel-telemetry.md).
 
+## CLI machine-readable output and exit codes
+
+Every command accepts `-h` or `--help`. Read commands that support structured
+output accept `--json`; `snapshot`, `recent`, and `export` also accept
+`--ndjson` to write one record per line. JSON objects include
+`"schema_version": "1"`. Array outputs use an object envelope with the
+original records under `sessions`, `turns`, `reports`, or `events`, as
+appropriate; the records' existing fields are unchanged. Use
+`firekeeper <command> --schema` to print the JSON Schema for that command's
+output. Add `--ndjson` for a per-record schema; `export` defaults to NDJSON
+unless `--json` is specified.
+
+Exit codes:
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Command completed successfully. |
+| `1` | Runtime or operational failure (for example unavailable local data or a failed request). |
+| `2` | Invalid command line, arguments, or configuration. |
+| `3` | `daemon status`: the service is not running. |
+| `130` | Interrupted with Ctrl-C during a long-running operation. |
+
 ## Reporting
 
 Reporting is a set of explicit subcommands: `report`, `backfill`, `daemon`,

@@ -155,8 +155,8 @@ You do **not** need `login`, `serve`, or `daemon install` to use this dashboard.
   sessions for scripts, and `firekeeper usage --json` prints quota windows with
   reset times (Claude, Codex, Copilot AI credits) and Kimi's local totals; Gemini,
   Cursor and OpenCode report no usage source. Near a 5-hour limit,
-  `firekeeper export --session ID [--provider P] [--format jsonl] [--no-text] [--since DUR]`
-  writes one normalized transcript event per line locally. It never uploads
+  `firekeeper export --session ID [--provider P] [--format jsonl] [--json|--ndjson] [--no-text] [--since DUR]`
+  writes normalized transcript events locally. It never uploads
   anything. `--no-text` omits `text` and `raw` for a structural view containing
   roles, tool calls, models, token counts, and event order.
   `firekeeper turns SESSION_ID [--provider P] --json` reports per-user-turn
@@ -175,6 +175,9 @@ You do **not** need `login`, `serve`, or `daemon install` to use this dashboard.
   `--provider` can be repeated. Project names match exactly. Available model,
   assistant turns, and token totals come from the full transcript and may be
   incomplete. Its historical state is `ENDED`, not a live process check.
+  JSON output includes `schema_version`; array responses have a named top-level
+  collection. `snapshot`, `recent`, and `export` support `--ndjson`, and
+  `firekeeper <command> --schema` prints the output schema.
   Transcript exports and server
   reporting are separate, optional commands in the [reference](docs/reference.md#reporting).
 

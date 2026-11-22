@@ -276,6 +276,7 @@ func RunRecent(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("firekeeper recent", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	asJSON := fs.Bool("json", false, "print recent sessions as JSON")
+	ndjson := fs.Bool("ndjson", false, "print one session per JSON line")
 	limit := fs.Int("limit", recentSessionLimit, "maximum number of sessions (positive)")
 	since := fs.String("since", recentSessionAge.String(), "look back by a positive duration (for example 24h)")
 	project := fs.String("project", "", "match an exact project name")
@@ -292,6 +293,10 @@ func RunRecent(args []string, stdout, stderr io.Writer) int {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
 		}
+		return 2
+	}
+	if *asJSON && *ndjson {
+		fmt.Fprintln(stderr, "firekeeper recent: use --json or --ndjson, not both")
 		return 2
 	}
 	if fs.NArg() > 0 {
@@ -322,7 +327,7 @@ func RunRecent(args []string, stdout, stderr io.Writer) int {
 	parallel.Bounded(len(sessions), func(i int) {
 		enrichRecentReport(ctx, &report.Sessions[i], sessions[i])
 	})
-	if !*asJSON {
+	if !*asJSON && !*ndjson {
 		if err := writeRecentTable(stdout, report); err != nil {
 			fmt.Fprintf(stderr, "firekeeper recent: write table: %v\n", err)
 			return 1
@@ -330,6 +335,15 @@ func RunRecent(args []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 	enc := json.NewEncoder(stdout)
+	if *ndjson {
+		for _, session := range report.Sessions {
+			if err := enc.Encode(session); err != nil {
+				fmt.Fprintf(stderr, "firekeeper recent: write JSONL: %v\n", err)
+				return 1
+			}
+		}
+		return 0
+	}
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(report); err != nil {
 		fmt.Fprintf(stderr, "firekeeper recent: write JSON: %v\n", err)

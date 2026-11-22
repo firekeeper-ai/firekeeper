@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -54,6 +55,18 @@ func TestTelemetryEnableDisableIsIdempotent(t *testing.T) {
 	stderr.Reset()
 	if code := runTelemetry([]string{"status"}, &stdout, &stderr); code != 0 || !strings.Contains(stdout.String(), "exporting to http://127.0.0.1:4318") || !strings.Contains(stdout.String(), "listener enabled") {
 		t.Fatalf("status = %d\n%s", code, stdout.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if code, handled := RunSubcommand([]string{"telemetry", "status", "--json"}, &stdout, &stderr); !handled || code != 0 {
+		t.Fatalf("JSON status = %d handled=%v stderr=%s", code, handled, stderr.String())
+	}
+	var status map[string]any
+	if err := json.Unmarshal([]byte(stdout.String()), &status); err != nil {
+		t.Fatal(err)
+	}
+	if status["schema_version"] != schemaVersion || status["config_enabled"] != true {
+		t.Fatalf("JSON status = %#v", status)
 	}
 
 	stdout.Reset()

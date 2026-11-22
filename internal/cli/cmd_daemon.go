@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -273,6 +275,7 @@ func runDaemonStatus(args []string, stdout, stderr io.Writer) int {
 	const name = "firekeeper daemon status"
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(stderr)
+	asJSON := fs.Bool("json", false, "print service status as JSON")
 	if code, ok := parseNoArgs(name, fs, args, stderr); !ok {
 		return code
 	}
@@ -285,6 +288,20 @@ func runDaemonStatus(args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		fmt.Fprintf(stderr, "%s: %v\n", name, err)
 		return 1
+	}
+	if *asJSON {
+		if err := json.NewEncoder(stdout).Encode(map[string]any{
+			"service_file": svc.Path(), "installed": st.Installed, "loaded": st.Loaded,
+			"running": st.Running, "state": st.State, "pid": st.PID,
+			"last_exit": st.LastExit, "log": svc.LogPath(),
+		}); err != nil {
+			fmt.Fprintf(stderr, "%s: write JSON: %v\n", name, err)
+			return 1
+		}
+		if !st.Running {
+			return 3
+		}
+		return 0
 	}
 	installed := "no"
 	if st.Installed {
@@ -317,6 +334,7 @@ func runDaemonLogs(args []string, stdout, stderr io.Writer) int {
 	fs.SetOutput(stderr)
 	lines := fs.Int("n", 50, "number of lines to show")
 	follow := fs.Bool("f", false, "keep printing new lines until interrupted")
+	asJSON := fs.Bool("json", false, "print log lines as JSON")
 	if code, ok := parseNoArgs(name, fs, args, stderr); !ok {
 		return code
 	}
@@ -324,12 +342,21 @@ func runDaemonLogs(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "%s: -n must not be negative\n", name)
 		return 2
 	}
+	if *asJSON && *follow {
+		fmt.Fprintf(stderr, "%s: --json cannot be combined with --follow\n", name)
+		return 2
+	}
 	svc, err := newService(nil, stdout)
 	if err != nil {
 		fmt.Fprintf(stderr, "%s: %v\n", name, err)
 		return 1
 	}
-	offset, err := daemon.Tail(svc.LogPath(), *lines, stdout)
+	var captured bytes.Buffer
+	logOutput := stdout
+	if *asJSON {
+		logOutput = &captured
+	}
+	offset, err := daemon.Tail(svc.LogPath(), *lines, logOutput)
 	if errors.Is(err, os.ErrNotExist) {
 		fmt.Fprintf(stderr, "%s: no daemon log yet at %s\n", name, svc.LogPath())
 		printStartupLogHint(svc, stderr)
@@ -341,6 +368,16 @@ func runDaemonLogs(args []string, stdout, stderr io.Writer) int {
 	}
 	if !*follow {
 		printStartupLogHint(svc, stderr)
+		if *asJSON {
+			entries := strings.Split(strings.TrimSuffix(captured.String(), "\n"), "\n")
+			if captured.Len() == 0 {
+				entries = []string{}
+			}
+			if err := json.NewEncoder(stdout).Encode(map[string]any{"lines": entries}); err != nil {
+				fmt.Fprintf(stderr, "%s: write JSON: %v\n", name, err)
+				return 1
+			}
+		}
 		return 0
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -105,6 +106,200 @@ func TestUsageListsSubcommands(t *testing.T) {
 			t.Fatalf("usage missing %q:\n%s", want, out.String())
 		}
 	}
+}
+
+func TestEverySubcommandHelpAndSchema(t *testing.T) {
+	for _, cmd := range subcommands {
+		for _, flag := range []string{"-h", "--help"} {
+			t.Run(cmd.name+"/help/"+flag, func(t *testing.T) {
+				var stdout, stderr bytes.Buffer
+				code, handled := RunSubcommand([]string{cmd.name, flag}, &stdout, &stderr)
+				if !handled || code != 0 {
+					t.Fatalf("help returned code=%d handled=%v stderr=%q", code, handled, stderr.String())
+				}
+			})
+		}
+		t.Run(cmd.name+"/schema", func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			code, handled := RunSubcommand([]string{cmd.name, "--schema"}, &stdout, &stderr)
+			if !handled || code != 0 {
+				t.Fatalf("schema returned code=%d handled=%v stderr=%q", code, handled, stderr.String())
+			}
+			var schema map[string]any
+			if err := json.Unmarshal(stdout.Bytes(), &schema); err != nil {
+				t.Fatalf("invalid schema JSON: %v", err)
+			}
+			sample := map[string]any{"schema_version": schemaVersion}
+			if properties, ok := schema["properties"].(map[string]any); ok {
+				for key, raw := range properties {
+					if property, ok := raw.(map[string]any); ok && property["type"] == "array" {
+						sample[key] = []any{}
+					}
+				}
+			}
+			if err := validateOutputSchema(schema, sample); err != nil {
+				t.Fatalf("schema rejects versioned object: %v", err)
+			}
+		})
+	}
+}
+
+func TestJSONOutputMatchesCommandSchema(t *testing.T) {
+	cases := []struct {
+		command string
+		args    []string
+		input   string
+	}{
+		{"snapshot", []string{"--json"}, `[{"session_id":"s1"}]`},
+		{"snapshot", []string{"--ndjson"}, `{"session_id":"s1"}`},
+		{"recent", []string{"--json"}, `{"generated_at":"2026-01-01T00:00:00Z","sessions":[]}`},
+		{"recent", []string{"--ndjson"}, `{"session_id":"s1"}`},
+		{"turns", []string{"--json"}, `[]`},
+		{"stats", []string{"--json"}, `{"findings":[]}`},
+		{"window", []string{"--json"}, `[]`},
+		{"export", []string{"--json"}, `{"seq":1}` + "\n" + `{"seq":2}`},
+		{"export", []string{"--ndjson"}, `{"seq":1}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.command+"/"+strings.Join(tc.args, "_"), func(t *testing.T) {
+			got, err := transformJSONOutput(tc.command, tc.args, []byte(tc.input))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var output any
+			if hasFlag(tc.args, "--ndjson") && !(tc.command == "export" && hasFlag(tc.args, "--json")) {
+				var rows []any
+				for _, line := range bytes.Split(bytes.TrimSpace(got), []byte{'\n'}) {
+					var row any
+					if err := json.Unmarshal(line, &row); err != nil {
+						t.Fatal(err)
+					}
+					if err := validateOutputSchema(schemaFor(tc.command, true), row); err != nil {
+						t.Fatalf("row fails schema: %v", err)
+					}
+					rows = append(rows, row)
+				}
+				if len(rows) == 0 {
+					t.Fatal("expected NDJSON row")
+				}
+				return
+			}
+			if err := json.Unmarshal(got, &output); err != nil {
+				t.Fatal(err)
+			}
+			if err := validateOutputSchema(schemaFor(tc.command, false), output); err != nil {
+				t.Fatalf("output fails schema: %v\n%s", err, got)
+			}
+		})
+	}
+}
+
+func TestSnapshotCommandOutputValidatesAgainstSchema(t *testing.T) {
+	stubDiscover(t, []session.Meta{{ID: "s1", Provider: "codex"}}, nil)
+	var output, errOutput bytes.Buffer
+	if code, handled := RunSubcommand([]string{"snapshot", "--json"}, &output, &errOutput); !handled || code != 0 {
+		t.Fatalf("snapshot = %d handled=%v stderr=%q", code, handled, errOutput.String())
+	}
+	var result map[string]any
+	if err := json.Unmarshal(output.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	output.Reset()
+	errOutput.Reset()
+	var schema map[string]any
+	if code, handled := RunSubcommand([]string{"snapshot", "--schema"}, &output, &errOutput); !handled || code != 0 {
+		t.Fatalf("schema = %d handled=%v stderr=%q", code, handled, errOutput.String())
+	}
+	if err := json.Unmarshal(output.Bytes(), &schema); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateOutputSchema(schema, result); err != nil {
+		t.Fatalf("snapshot output fails its schema: %v", err)
+	}
+	sessions, ok := result["sessions"].([]any)
+	if !ok || len(sessions) != 1 || result["schema_version"] != schemaVersion {
+		t.Fatalf("snapshot output = %#v", result)
+	}
+	row, ok := sessions[0].(map[string]any)
+	if !ok || row["session_id"] != "s1" || row["provider"] != "codex" {
+		t.Fatalf("snapshot record lost fields: %#v", sessions[0])
+	}
+}
+
+func TestExportJSONEnvelopeValidatesAndPreservesEventFields(t *testing.T) {
+	provider := transcript.ProviderCodex
+	meta := session.Meta{ID: "session-1", Provider: provider}
+	stubExport(t, provider, meta, []transcript.Event{{
+		Provider: provider, Seq: 9, Role: transcript.RoleAssistant, Text: "safe",
+	}})
+	args := []string{"export", "--session", meta.ID, "--provider", string(provider), "--json"}
+	var output, errOutput bytes.Buffer
+	if code, handled := RunSubcommand(args, &output, &errOutput); !handled || code != 0 {
+		t.Fatalf("export = %d handled=%v stderr=%q", code, handled, errOutput.String())
+	}
+	var result map[string]any
+	if err := json.Unmarshal(output.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	output.Reset()
+	if code, handled := RunSubcommand([]string{"export", "--json", "--schema"}, &output, &errOutput); !handled || code != 0 {
+		t.Fatalf("schema = %d handled=%v stderr=%q", code, handled, errOutput.String())
+	}
+	var schema map[string]any
+	if err := json.Unmarshal(output.Bytes(), &schema); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateOutputSchema(schema, result); err != nil {
+		t.Fatalf("export output fails its schema: %v", err)
+	}
+	events, ok := result["events"].([]any)
+	if !ok || len(events) != 1 || result["schema_version"] != schemaVersion {
+		t.Fatalf("export output = %#v", result)
+	}
+	event, ok := events[0].(map[string]any)
+	if !ok || event["seq"] != float64(9) || event["role"] != "assistant" || event["text"] != "safe" {
+		t.Fatalf("export event fields = %#v", events[0])
+	}
+}
+
+func validateOutputSchema(schema map[string]any, output any) error {
+	object, ok := output.(map[string]any)
+	if !ok {
+		return fmt.Errorf("expected object, got %T", output)
+	}
+	var required []string
+	switch values := schema["required"].(type) {
+	case []string:
+		required = values
+	case []any:
+		for _, value := range values {
+			if key, ok := value.(string); ok {
+				required = append(required, key)
+			}
+		}
+	}
+	for _, key := range required {
+		if _, ok := object[key]; !ok {
+			return fmt.Errorf("missing required property %q", key)
+		}
+	}
+	properties, _ := schema["properties"].(map[string]any)
+	for key, property := range properties {
+		value, exists := object[key]
+		if !exists {
+			continue
+		}
+		constraint, _ := property.(map[string]any)
+		if expected, hasConst := constraint["const"]; hasConst && value != expected {
+			return fmt.Errorf("%s must equal %v", key, expected)
+		}
+		if constraint["type"] == "array" {
+			if _, ok := value.([]any); !ok {
+				return fmt.Errorf("%s must be an array", key)
+			}
+		}
+	}
+	return nil
 }
 
 func stubDiscover(t *testing.T, metas []session.Meta, err error) {

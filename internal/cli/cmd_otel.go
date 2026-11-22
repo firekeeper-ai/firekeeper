@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -64,6 +66,7 @@ upload, and does not record prompt or transcript text.
 func runOtelReconcile(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("firekeeper otel-reconcile", flag.ContinueOnError)
 	fs.SetOutput(stderr)
+	asJSON := fs.Bool("json", false, "print the comparison as JSON")
 	fs.Usage = func() {
 		fmt.Fprint(fs.Output(), `Usage:
   firekeeper otel-reconcile <file.jsonl>
@@ -74,7 +77,7 @@ same session ids. Prints the gap. Does not upload, and does not print prompts.
 `)
 		fs.PrintDefaults()
 	}
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(flagsBeforePositionals(args)); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
 		}
@@ -92,11 +95,22 @@ same session ids. Prints the gap. Does not upload, and does not print prompts.
 	if skipped > 0 {
 		fmt.Fprintf(stderr, "firekeeper otel-reconcile: skipped %d unreadable line(s)\n", skipped)
 	}
-	if err := otelrecv.WriteReconcile(stdout, records, func(id string) (otelrecv.SessionUsage, error) {
+	writer := stdout
+	var report bytes.Buffer
+	if *asJSON {
+		writer = &report
+	}
+	if err := otelrecv.WriteReconcile(writer, records, func(id string) (otelrecv.SessionUsage, error) {
 		return otelrecv.LoadTranscript(id, "")
 	}); err != nil {
 		fmt.Fprintf(stderr, "firekeeper otel-reconcile: %v\n", err)
 		return 1
+	}
+	if *asJSON {
+		if err := json.NewEncoder(stdout).Encode(map[string]string{"report": report.String()}); err != nil {
+			fmt.Fprintf(stderr, "firekeeper otel-reconcile: write JSON: %v\n", err)
+			return 1
+		}
 	}
 	return 0
 }
