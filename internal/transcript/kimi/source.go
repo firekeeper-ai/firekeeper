@@ -588,10 +588,14 @@ func truncate(text string) string {
 // tokens, so cache reads and cache writes go to cache and the three counts
 // add up to every token the request processed.
 func tokens(u usage) transcript.Tokens {
+	cacheRead := max(u.InputCacheRead, 0)
+	cacheWrite := max(u.InputCacheCreation, 0)
 	return transcript.Tokens{
-		Input:  max(u.InputOther, 0),
-		Output: max(u.Output, 0),
-		Cache:  max(u.InputCacheRead, 0) + max(u.InputCacheCreation, 0),
+		Input:      max(u.InputOther, 0),
+		Output:     max(u.Output, 0),
+		Cache:      cacheRead + cacheWrite,
+		CacheRead:  cacheRead,
+		CacheWrite: cacheWrite,
 	}
 }
 

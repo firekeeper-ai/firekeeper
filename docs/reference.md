@@ -328,6 +328,18 @@ effort: it comes from an internal Copilot endpoint that is not a supported
 API and may change or disappear. The local history alone is not an
 account-wide quota.
 
+### Per-turn transcript metrics
+
+`firekeeper turns SESSION_ID [--provider P] --json` reads the session's local
+transcript and prints one JSON object per user turn. Each object includes
+start/end times and duration when available, prompt character count (never
+prompt text), token totals and running context tokens, tool-call counts and
+tool names, detected tool errors or interruptions, and the model. Context
+tokens are the running sum of input, cache-read, and cache-write tokens.
+Unknown or malformed transcript records remain in the stream as metadata and
+do not start or split turns. Provider transcripts can be incomplete, so these
+best-effort counts may be underreported. Nothing is uploaded.
+
 ### How session discovery works
 
 Firekeeper scans local processes every two seconds with `ps` and collapses

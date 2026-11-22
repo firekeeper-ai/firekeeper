@@ -578,9 +578,10 @@ func truncate(text string) string {
 func tokens(t tokenSummary) transcript.Tokens {
 	cached := max(t.Cached, 0)
 	return transcript.Tokens{
-		Input:  max(t.Input-cached, 0) + max(t.Tool, 0),
-		Output: max(t.Output, 0) + max(t.Thoughts, 0),
-		Cache:  cached,
+		Input:     max(t.Input-cached, 0) + max(t.Tool, 0),
+		Output:    max(t.Output, 0) + max(t.Thoughts, 0),
+		Cache:     cached,
+		CacheRead: cached,
 	}
 }
 

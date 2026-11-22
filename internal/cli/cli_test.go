@@ -31,6 +31,7 @@ func TestRunSubcommandDispatch(t *testing.T) {
 		{args: []string{"--unknown", "snapshot"}, handled: false},
 		{args: []string{"unknown"}, handled: false},
 		{args: []string{"export"}, handled: true, code: 2, wantStderr: "firekeeper export: --session is required"},
+		{args: []string{"turns"}, handled: true, code: 2, wantStderr: "--json is required"},
 		{args: []string{"report", "--bogus"}, handled: true, code: 2},
 		{args: []string{"serve"}, handled: true, code: 2, wantStderr: "firekeeper-server"},
 		{args: []string{"serve", "--listen", "127.0.0.1:0"}, handled: true, code: 2, wantStderr: "separate commercial binary"},
@@ -98,7 +99,7 @@ func TestUsageListsSubcommands(t *testing.T) {
 	var out bytes.Buffer
 	fs.SetOutput(&out)
 	PrintUsage(fs)
-	for _, want := range []string{"snapshot", "export", "report", "backfill", "serve", "daemon", "otel-listen", "otel-reconcile", "telemetry"} {
+	for _, want := range []string{"snapshot", "export", "turns", "report", "backfill", "serve", "daemon", "otel-listen", "otel-reconcile", "telemetry"} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("usage missing %q:\n%s", want, out.String())
 		}
@@ -234,6 +235,41 @@ func TestExportMissingAndIgnored(t *testing.T) {
 			t.Fatalf("code = %d stderr = %q", code, stderr.String())
 		}
 	})
+}
+
+func TestTurnsJSONContainsMetricsOnly(t *testing.T) {
+	provider := transcript.ProviderCodex
+	meta := session.Meta{ID: "session-1", Provider: provider}
+	prompt := "private prompt text"
+	model := "test-model"
+	tool := "shell"
+	start := time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC)
+	end := start.Add(3 * time.Second)
+	stubExport(t, provider, meta, []transcript.Event{
+		{Provider: provider, Role: transcript.RoleUser, Text: prompt, TS: &start},
+		{Provider: provider, Role: transcript.RoleToolCall, ToolName: &tool, TS: &end},
+		{Provider: provider, Role: transcript.RoleToolResult, Raw: json.RawMessage(`{"result":{"error":"private tool output"}}`), TS: &end},
+		{Provider: provider, Role: transcript.RoleAssistant, Model: &model, TS: &end, Tokens: transcript.Tokens{Input: 12, Output: 5, CacheRead: 4}},
+	})
+	var stdout, stderr bytes.Buffer
+	if code := runTurns([]string{"session-1", "--provider", "codex", "--json"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("code = %d, stderr = %q", code, stderr.String())
+	}
+	var got []map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &got); err != nil {
+		t.Fatalf("decode output: %v", err)
+	}
+	if len(got) != 1 || got[0]["prompt_chars"] != float64(len(prompt)) ||
+		got[0]["tool_calls"] != float64(1) || got[0]["tool_errors"] != float64(1) ||
+		got[0]["context_tokens"] != float64(16) {
+		t.Fatalf("turn output = %v", got)
+	}
+	if strings.Contains(stdout.String(), prompt) || strings.Contains(stdout.String(), "private tool output") {
+		t.Fatal("turn output contains transcript text")
+	}
+	if code := runTurns([]string{"session-1"}, &bytes.Buffer{}, &stderr); code != 2 || !strings.Contains(stderr.String(), "--json is required") {
+		t.Fatalf("missing --json code = %d stderr = %q", code, stderr.String())
+	}
 }
 
 func TestVersionCommand(t *testing.T) {

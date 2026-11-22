@@ -105,55 +105,18 @@ func runExport(args []string, stdout, stderr io.Writer) int {
 		cutoff = time.Now().Add(-*since)
 	}
 
-	var found *session.Meta
-	var foundProvider transcript.Provider
-	for _, provider := range providers {
-		enumerator, ok := exportEnumerate(provider)
-		if !ok {
-			continue
-		}
-		metas, err := enumerator.Enumerate(ctx, reader.EnumerateOptions{
-			ModifiedAfter: cutoff,
-			Skip: func(meta session.Meta) bool {
-				return exportSkipReason(meta, c.Exclude) != ""
-			},
-		})
-		if err != nil {
-			if ctx.Err() != nil {
-				fmt.Fprintln(stderr, "firekeeper export: interrupted")
-				return 1
-			}
-			fmt.Fprintf(stderr, "firekeeper export: enumerate %s: %v\n", provider, err)
-			return 1
-		}
-		for i := range metas {
-			if strings.EqualFold(metas[i].ID, strings.TrimSpace(*sessionID)) {
-				meta := metas[i]
-				found = &meta
-				foundProvider = provider
-				break
-			}
-		}
-		if found != nil {
-			break
-		}
-	}
-	if found == nil {
-		fmt.Fprintf(stderr, "firekeeper export: session %q not found\n", strings.TrimSpace(*sessionID))
-		return 1
-	}
-	if reason := exportSkipReason(*found, c.Exclude); reason != "" {
-		fmt.Fprintf(stderr, "firekeeper export: session %q is excluded: %s\n", found.ID, reason)
-		return 1
-	}
-	source, ok := exportSource(foundProvider)
-	if !ok {
-		fmt.Fprintf(stderr, "firekeeper export: no transcript reader for %s\n", foundProvider)
-		return 1
-	}
-	paths, err := source.Locate(*found)
+	found, foundProvider, err := findTranscriptSession(ctx, strings.TrimSpace(*sessionID), providers, cutoff, c.Exclude)
 	if err != nil {
-		fmt.Fprintf(stderr, "firekeeper export: locate %s: %v\n", found.ID, err)
+		if ctx.Err() != nil {
+			fmt.Fprintln(stderr, "firekeeper export: interrupted")
+		} else {
+			fmt.Fprintf(stderr, "firekeeper export: %v\n", err)
+		}
+		return 1
+	}
+	source, paths, err := locateTranscriptFiles(foundProvider, found)
+	if err != nil {
+		fmt.Fprintf(stderr, "firekeeper export: %v\n", err)
 		return 1
 	}
 
@@ -193,4 +156,60 @@ func runExport(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 	return 0
+}
+
+func findTranscriptSession(ctx context.Context, sessionID string, providers []transcript.Provider, cutoff time.Time, exclude []string) (session.Meta, transcript.Provider, error) {
+	for _, provider := range providers {
+		enumerator, ok := exportEnumerate(provider)
+		if !ok {
+			continue
+		}
+		metas, err := enumerator.Enumerate(ctx, reader.EnumerateOptions{
+			ModifiedAfter: cutoff,
+			Skip: func(meta session.Meta) bool {
+				return exportSkipReason(meta, exclude) != ""
+			},
+		})
+		if err != nil {
+			return session.Meta{}, "", fmt.Errorf("enumerate %s: %w", provider, err)
+		}
+		for _, meta := range metas {
+			if !strings.EqualFold(meta.ID, sessionID) {
+				continue
+			}
+			if reason := exportSkipReason(meta, exclude); reason != "" {
+				return session.Meta{}, "", fmt.Errorf("session %q is excluded: %s", meta.ID, reason)
+			}
+			return meta, provider, nil
+		}
+	}
+	return session.Meta{}, "", fmt.Errorf("session %q not found", sessionID)
+}
+
+func locateTranscriptFiles(provider transcript.Provider, meta session.Meta) (reader.Source, []string, error) {
+	source, ok := exportSource(provider)
+	if !ok {
+		return nil, nil, fmt.Errorf("no transcript reader for %s", provider)
+	}
+	paths, err := source.Locate(meta)
+	if err != nil {
+		return nil, nil, fmt.Errorf("locate %s: %w", meta.ID, err)
+	}
+	return source, paths, nil
+}
+
+func readTranscriptEvents(provider transcript.Provider, meta session.Meta) ([]transcript.Event, error) {
+	source, paths, err := locateTranscriptFiles(provider, meta)
+	if err != nil {
+		return nil, err
+	}
+	var events []transcript.Event
+	for _, path := range paths {
+		part, _, err := source.Read(path, 0)
+		if err != nil {
+			return nil, fmt.Errorf("read %s: %w", meta.ID, err)
+		}
+		events = append(events, part...)
+	}
+	return events, nil
 }

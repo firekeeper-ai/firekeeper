@@ -56,7 +56,7 @@ func TestReadTranscript(t *testing.T) {
 		9: {role: transcript.RoleToolCall, text: `{"command":"ls"}`, tool: "Bash", model: model},
 		// step.end repeats usage.record's counts, so only the latter has them.
 		10: {role: transcript.RoleMeta},
-		11: {role: transcript.RoleMeta, model: model, tokens: transcript.Tokens{Input: 10, Output: 20, Cache: 105}},
+		11: {role: transcript.RoleMeta, model: model, tokens: transcript.Tokens{Input: 10, Output: 20, Cache: 105, CacheRead: 100, CacheWrite: 5}},
 		12: {role: transcript.RoleToolResult, text: "README.md", tool: "Bash"},
 		13: {role: transcript.RoleMeta, model: model},
 		14: {role: transcript.RoleMeta},
@@ -64,7 +64,7 @@ func TestReadTranscript(t *testing.T) {
 		16: {role: transcript.RoleToolResult, text: "Replaced 1 occurrence in README.md", tool: "Edit"},
 		17: {role: transcript.RoleAssistant, text: "Done editing.", model: model},
 		18: {role: transcript.RoleMeta},
-		19: {role: transcript.RoleMeta, model: model, tokens: transcript.Tokens{Input: 3, Output: 4, Cache: 200}},
+		19: {role: transcript.RoleMeta, model: model, tokens: transcript.Tokens{Input: 3, Output: 4, Cache: 200, CacheRead: 200}},
 		20: {role: transcript.RoleMeta},
 		21: {role: transcript.RoleSystem, text: "<system-reminder>Todo list changed.</system-reminder>"},
 		22: {role: transcript.RoleSystem, text: "Background task finished."},
@@ -123,7 +123,7 @@ func TestReadMalformed(t *testing.T) {
 		6:  {role: transcript.RoleToolResult},
 		7:  {role: transcript.RoleSystem},
 		8:  {role: transcript.RoleMeta},
-		9:  {role: transcript.RoleMeta, tokens: transcript.Tokens{Output: 2, Cache: 3}},
+		9:  {role: transcript.RoleMeta, tokens: transcript.Tokens{Output: 2, Cache: 3, CacheWrite: 3}},
 		10: {role: transcript.RoleMeta},
 		11: {role: transcript.RoleSystem},
 	}
