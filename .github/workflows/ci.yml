@@ -240,6 +240,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: verify the embedded icon font is reproducible
+        run: |
+          cd scripts/icon-font
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run build
+          git diff --exit-code -- ../../internal/iconfont/FirekeeperIcons.ttf
       - name: shellcheck
         run: shellcheck cmd/demo-wasm/build.sh
       - name: build the demo with a fresh module cache
