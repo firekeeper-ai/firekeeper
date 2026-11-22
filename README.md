@@ -163,8 +163,6 @@ You do **not** need `login`, `serve`, or `daemon install` to use this dashboard.
 Usage history is available for Codex, Copilot CLI, Claude Code, and Kimi Code.
 Local token totals can be incomplete and are not an account-wide bill.
 
-![Firekeeper Usage — providers, tokens by day, and session history](docs/firekeeper-usage.gif)
-
 ## Supported agents
 
 | Agent | Live dashboard | Optional transcript upload |
