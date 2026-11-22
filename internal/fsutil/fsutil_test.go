@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestReadFile(t *testing.T) {
@@ -42,5 +43,30 @@ func TestOpenedFileCanBeRenamedAndDeleted(t *testing.T) {
 	}
 	if err := os.Remove(path + ".1"); err != nil {
 		t.Fatalf("delete while open: %v", err)
+	}
+}
+
+func TestRenameReplacing(t *testing.T) {
+	dir := t.TempDir()
+	from, to := filepath.Join(dir, "new"), filepath.Join(dir, "old")
+	if err := os.WriteFile(from, []byte("new"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(to, []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := RenameReplacing(from, to); err != nil {
+		t.Fatalf("RenameReplacing: %v", err)
+	}
+	if got, _ := os.ReadFile(to); string(got) != "new" {
+		t.Fatalf("destination = %q, want new", got)
+	}
+	// A missing source is not a lock, so it fails at once rather than retrying.
+	start := time.Now()
+	if err := RenameReplacing(filepath.Join(dir, "missing"), to); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("missing source err = %v, want os.ErrNotExist", err)
+	}
+	if d := time.Since(start); d > time.Second {
+		t.Fatalf("missing source took %v, want no retries", d)
 	}
 }

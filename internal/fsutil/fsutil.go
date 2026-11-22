@@ -1,4 +1,5 @@
-// Package fsutil holds file helpers whose behavior differs on Windows.
+// Package fsutil holds file helpers whose behavior differs on Windows. It is
+// standard library only.
 package fsutil
 
 import (

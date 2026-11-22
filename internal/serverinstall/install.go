@@ -20,6 +20,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/firekeeper-ai/firekeeper/internal/fsutil"
 )
 
 const (
@@ -213,7 +215,7 @@ func (in *Installer) Install(ctx context.Context, dir string) (string, error) {
 		return "", err
 	}
 	final := filepath.Join(dir, exeName)
-	if err := os.Rename(tmp, final); err != nil {
+	if err := fsutil.RenameReplacing(tmp, final); err != nil {
 		return "", err
 	}
 	renamed = true
