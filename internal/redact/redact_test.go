@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/firekeeper-ai/firekeeper/internal/transcript"
 )
@@ -561,6 +562,70 @@ func TestHomeDirBeforeFullStop(t *testing.T) {
 			t.Errorf("String(%q) = %q, want %q", in, got, want)
 		}
 	}
+}
+
+func assertPathRedaction(t *testing.T, in, want string, opts Options, expected Counts) {
+	t.Helper()
+	got, counts := String(in, opts)
+	if got != want {
+		t.Fatalf("unexpected redacted string: got %q, want %q", got, want)
+	}
+	assertCounts(t, counts, expected)
+	if again, counts := String(got, opts); again != got || counts.Total() != 0 {
+		t.Fatal("string redaction is not idempotent")
+	}
+	raw, err := json.Marshal(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, counts := JSON(raw, opts)
+	var decoded string
+	if err := json.Unmarshal(out, &decoded); err != nil {
+		t.Fatalf("invalid redacted JSON: %v", err)
+	}
+	if decoded != want {
+		t.Fatalf("unexpected redacted JSON string: got %q, want %q", decoded, want)
+	}
+	assertCounts(t, counts, expected)
+	if again, counts := JSON(out, opts); string(again) != string(out) || counts.Total() != 0 {
+		t.Fatal("JSON redaction is not idempotent")
+	}
+}
+
+func TestPathEndBoundaries(t *testing.T) {
+	for _, home := range []string{"/Users/me", `C:\Users\me`} {
+		for _, suffix := range []string{".", "...", ". Next", `."`, ".)", "/", `\`} {
+			t.Run(home+suffix, func(t *testing.T) {
+				assertPathRedaction(t, home+suffix, "~"+suffix, Options{HomeDir: home}, Counts{KindHomeDir: 1})
+			})
+		}
+		for _, suffix := range []string{".old/x", "./child", `.\child`, ".%6Fld", "\u00e9", ".\u00e9", "\u0301"} {
+			t.Run(home+suffix, func(t *testing.T) {
+				in := home + suffix
+				assertPathRedaction(t, in, in, Options{HomeDir: home}, Counts{})
+			})
+		}
+	}
+}
+
+func FuzzPathEndBoundaries(f *testing.F) {
+	for _, suffix := range []string{".", "./child", `.\child`, ".%6Fld", ".\u00e9", "/", ". Next"} {
+		f.Add(suffix)
+	}
+	f.Fuzz(func(t *testing.T, suffix string) {
+		if !utf8.ValidString(suffix) {
+			return
+		}
+		opts := Options{HomeDir: "/Users/me"}
+		in := opts.HomeDir + suffix
+		want, counts := String(in, opts)
+		assertPathRedaction(t, in, want, opts, counts)
+		pathCounts := Counts{}
+		redactPrefix(in, opts.HomeDir, "~", KindHomeDir, pathCounts)
+		if continuesName(in, len(opts.HomeDir)) && pathCounts.Total() != 0 {
+			t.Fatal("redacted a longer path component")
+		}
+	})
 }
 
 // A username with a space or non-ASCII letters, percent-encoded in a file
