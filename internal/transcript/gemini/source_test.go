@@ -47,14 +47,14 @@ func TestReadTranscript(t *testing.T) {
 		1: {role: transcript.RoleUser, text: "List the files."},
 		2: {role: transcript.RoleMeta},
 		// Thinking alone is meta; the response's usage arrives with it.
-		3: {role: transcript.RoleMeta, text: "Planning\nLook at the tree.", model: model, tokens: transcript.Tokens{Input: 20, Output: 15, Cache: 100}},
+		3: {role: transcript.RoleMeta, text: "Planning\nLook at the tree.", model: model, tokens: transcript.Tokens{Input: 20, Output: 15, Cache: 100, CacheRead: 100}},
 		4: {role: transcript.RoleMeta},
 		// The message is written again with its tool call; tokens are not
 		// counted twice.
 		5:  {role: transcript.RoleToolCall, text: `{"dir_path":"."}`, tool: "list_directory", model: model},
 		6:  {role: transcript.RoleToolResult, text: "README.md", tool: "list_directory"},
 		7:  {role: transcript.RoleAssistant, text: "I'll fix the typo.", model: model},
-		8:  {role: transcript.RoleMeta, model: model, tokens: transcript.Tokens{Input: 54, Output: 20, Cache: 150}},
+		8:  {role: transcript.RoleMeta, model: model, tokens: transcript.Tokens{Input: 54, Output: 20, Cache: 150, CacheRead: 150}},
 		9:  {role: transcript.RoleToolCall, text: `{"file_path":"README.md","old_string":"teh","new_string":"the"}`, tool: "replace", model: model},
 		10: {role: transcript.RoleToolResult, text: "File not found.", tool: "replace"},
 		11: {role: transcript.RoleAssistant, text: "Done editing.", model: model},
@@ -272,7 +272,7 @@ func TestReadMalformed(t *testing.T) {
 		t.Errorf("non-text content: role %q text %q", events[1].Role, events[1].Text)
 	}
 	// Negative counts are clamped.
-	if e := events[3]; e.Role != transcript.RoleToolCall || deref(e.ToolName) != "run_shell_command" || e.Tokens != (transcript.Tokens{Cache: 9}) {
+	if e := events[3]; e.Role != transcript.RoleToolCall || deref(e.ToolName) != "run_shell_command" || e.Tokens != (transcript.Tokens{Cache: 9, CacheRead: 9}) {
 		t.Errorf("tool calls without ids or args: %+v", e)
 	}
 	if e := events[5]; e.Role != transcript.RoleToolResult || e.Text != `{"status":200}` || deref(e.ToolName) != "web_fetch" {

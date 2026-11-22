@@ -159,6 +159,9 @@ You do **not** need `login`, `serve`, or `daemon install` to use this dashboard.
   writes one normalized transcript event per line locally. It never uploads
   anything. `--no-text` omits `text` and `raw` for a structural view containing
   roles, tool calls, models, token counts, and event order.
+  `firekeeper turns SESSION_ID [--provider P] --json` reports per-user-turn
+  timing, prompt character counts, tokens, running context tokens, tool calls
+  and errors, and model, without including prompt text.
   `firekeeper window` breaks the window down by session, model and hour (`--json`,
   or `--html FILE` for a standalone page; `--provider` picks the harness).
   Add `--week` for the weekly window, broken down by day.
