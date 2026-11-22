@@ -312,7 +312,7 @@ func readCapped(path string, limit int64) ([]byte, error) {
 }
 
 // safeID reports whether id is safe to use as a file name and header value:
-// 1 to 128 ASCII letters, digits, '-' or '_'.
+// 1 to 128 ASCII letters, digits, '-' or '_', excluding Windows device names.
 func safeID(id string) bool {
 	if id == "" || len(id) > 128 {
 		return false
@@ -323,6 +323,15 @@ func safeID(id string) bool {
 		default:
 			return false
 		}
+	}
+	upper := strings.ToUpper(id)
+	switch upper {
+	case "CON", "PRN", "AUX", "NUL":
+		return false
+	}
+	if len(upper) == 4 && (strings.HasPrefix(upper, "COM") || strings.HasPrefix(upper, "LPT")) &&
+		upper[3] >= '0' && upper[3] <= '9' {
+		return false
 	}
 	return true
 }

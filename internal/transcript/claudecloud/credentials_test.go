@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -92,6 +93,7 @@ func TestCredentialsFileOnLinuxAndWindows(t *testing.T) {
 		{"expiresAt of the wrong type is ignored", `{"claudeAiOauth":{"accessToken":"` + testToken + `","expiresAt":"soon"}}`, orgConfig, 0o600, nil},
 		{"no organization", loginJSON(testToken, future), "", 0o600, ErrNoOrganization},
 		{"organization unsafe in a header", loginJSON(testToken, future), `{"oauthAccount":{"organizationUuid":"a\r\nX: y"}}`, 0o600, ErrNoOrganization},
+		{"organization is a device name", loginJSON(testToken, future), `{"oauthAccount":{"organizationUuid":"CON"}}`, 0o600, ErrNoOrganization},
 	}
 	for _, goos := range []string{"linux", "windows"} {
 		for _, tc := range tests {
@@ -284,6 +286,7 @@ func TestKeychainLookup(t *testing.T) {
 	if securityPath != "/usr/bin/security" {
 		t.Fatalf("security is run from %q, want the absolute system path", securityPath)
 	}
+
 	if got := strings.Join(keychainArgs("dan"), " "); got != "find-generic-password -a dan -s Claude Code-credentials -w" {
 		t.Fatalf("args = %q", got)
 	}
@@ -299,4 +302,51 @@ func TestKeychainLookup(t *testing.T) {
 	if u, err := user.Current(); err == nil && keychainAccount() != strings.TrimSpace(u.Username) {
 		t.Fatalf("empty $USER did not fall back to the OS user (%q)", keychainAccount())
 	}
+}
+
+func TestSafeIDRejectsWindowsDevices(t *testing.T) {
+	tests := []struct {
+		id   string
+		want bool
+	}{
+		{"session_01TEST", true},
+		{"console", true},
+		{"COM10", true},
+		{"com1_extra", true},
+		{strings.Repeat("x", 128), true},
+		{"CON", false},
+		{"con", false},
+		{"PrN", false},
+		{"AUX", false},
+		{"nul", false},
+		{"COM0", false},
+		{"cOm1", false},
+		{"COM9", false},
+		{"LPT0", false},
+		{"lPt9", false},
+		{"COM¹", false},
+		{"LPT²", false},
+		{"", false},
+		{"../CON", false},
+		{"CON.txt", false},
+		{strings.Repeat("x", 129), false},
+	}
+	for _, tc := range tests {
+		if got := safeID(tc.id); got != tc.want {
+			t.Errorf("safeID(%q) = %v, want %v", tc.id, got, tc.want)
+		}
+	}
+}
+
+func FuzzSafeID(f *testing.F) {
+	for _, seed := range []string{"session_01TEST", "CON", "cOm1", "COM¹", "../x", ""} {
+		f.Add(seed)
+	}
+	allowed := regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
+	devices := regexp.MustCompile(`(?i)^(CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])$`)
+	f.Fuzz(func(t *testing.T, id string) {
+		if safeID(id) && (!allowed.MatchString(id) || devices.MatchString(id)) {
+			t.Fatal("unsafe session ID accepted")
+		}
+	})
 }

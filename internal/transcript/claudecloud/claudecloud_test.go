@@ -100,6 +100,11 @@ func TestEventsPageThroughAll(t *testing.T) {
 	if _, err := c.Events(context.Background(), "../x"); err == nil {
 		t.Fatal("unsafe session id accepted")
 	}
+	for _, id := range []string{"CON", "nUl", "COM1", "lpt9"} {
+		if _, err := c.Events(context.Background(), id); err == nil || f.eventCalls[id] != 0 {
+			t.Fatal("reserved device name was accepted for events")
+		}
+	}
 }
 
 func TestStatusErrorCarriesNoBodyOrToken(t *testing.T) {
@@ -176,6 +181,34 @@ func TestSyncRejectsInvalidCacheDirectory(t *testing.T) {
 	}
 	if f.sessionCalls != 0 {
 		t.Fatal("cloud API was called before the cache directory was secured")
+	}
+}
+
+func TestSyncDropsReservedDeviceNames(t *testing.T) {
+	f, c := newFakeCloud(t)
+	f.sessions = []map[string]any{
+		cloudSession("CON", "2026-10-01T11:00:00Z"),
+		cloudSession("nUl", "2026-10-01T11:00:00Z"),
+		cloudSession("COM1", "2026-10-01T11:00:00Z"),
+		cloudSession("lpt9", "2026-10-01T11:00:00Z"),
+		cloudSession(sid, "2026-10-01T11:00:00Z"),
+	}
+	f.events[sid] = conversation(sid)
+	dir := filepath.Join(t.TempDir(), "cache")
+	res := syncOnce(t, c, dir, time.Time{})
+	if res.Listed != 1 || res.Fetched != 1 || len(res.Failed) != 0 {
+		t.Fatalf("sync = %+v", res)
+	}
+	for _, id := range []string{"CON", "nUl", "COM1", "lpt9"} {
+		if f.eventCalls[id] != 0 {
+			t.Fatal("events were requested for a reserved device")
+		}
+		if _, _, err := (&Source{Dir: dir}).Read(filepath.Join(dir, id+".jsonl"), 0); err == nil {
+			t.Fatal("reserved device name was accepted for a cached transcript")
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dir, sid+".jsonl")); err != nil {
+		t.Fatal("valid session was not cached")
 	}
 }
 
