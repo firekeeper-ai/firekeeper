@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"github.com/firekeeper-ai/firekeeper/internal/config"
 	"github.com/firekeeper-ai/firekeeper/internal/daemon"
 	"github.com/firekeeper-ai/firekeeper/internal/reporter"
+	"github.com/firekeeper-ai/firekeeper/internal/transcript"
 	"github.com/firekeeper-ai/firekeeper/internal/transcript/claudecloud"
 	"github.com/firekeeper-ai/firekeeper/internal/version"
 )
@@ -102,6 +104,7 @@ func runConfig(args []string, stdout, stderr io.Writer) int {
 	const name = "firekeeper config show"
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(stderr)
+	asJSON := fs.Bool("json", false, "print the merged configuration as JSON")
 	if code, ok := parseNoArgs(name, fs, args[1:], stderr); !ok {
 		return code
 	}
@@ -110,7 +113,22 @@ func runConfig(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "%s: %v\n", name, err)
 		return 1
 	}
-	writeConfig(stdout, c)
+	if *asJSON {
+		values := map[string]any{
+			"server": c.Server, "token": config.MaskToken(c.Token), "providers": append([]transcript.Provider{}, c.Providers...),
+			"interval": c.Interval.String(), "scan_ended": c.ScanEnded,
+			"scan_lookback": c.ScanLookback.String(), "exclude": append([]string{}, c.Exclude...),
+			"redact_paths": append([]string{}, c.RedactPaths...), "telemetry_enabled": c.TelemetryEnabled,
+			"telemetry_port": c.TelemetryPort, "claude_limits_enabled": c.ClaudeLimits,
+			"claude_cloud_enabled": c.ClaudeCloud,
+		}
+		if err := json.NewEncoder(stdout).Encode(values); err != nil {
+			fmt.Fprintf(stderr, "%s: write JSON: %v\n", name, err)
+			return 1
+		}
+	} else {
+		writeConfig(stdout, c)
+	}
 	return 0
 }
 

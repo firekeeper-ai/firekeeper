@@ -27,15 +27,21 @@ var (
 )
 
 type exportStructureOnly struct {
-	MachineID string              `json:"machine_id"`
-	SessionID string              `json:"session_id"`
-	Provider  transcript.Provider `json:"provider"`
-	Seq       int64               `json:"seq"`
-	TS        *time.Time          `json:"ts"`
-	Role      transcript.Role     `json:"role"`
-	ToolName  *string             `json:"tool_name"`
-	Model     *string             `json:"model"`
-	Tokens    transcript.Tokens   `json:"tokens"`
+	SchemaVersion string              `json:"schema_version"`
+	MachineID     string              `json:"machine_id"`
+	SessionID     string              `json:"session_id"`
+	Provider      transcript.Provider `json:"provider"`
+	Seq           int64               `json:"seq"`
+	TS            *time.Time          `json:"ts"`
+	Role          transcript.Role     `json:"role"`
+	ToolName      *string             `json:"tool_name"`
+	Model         *string             `json:"model"`
+	Tokens        transcript.Tokens   `json:"tokens"`
+}
+
+type exportVersionedEvent struct {
+	SchemaVersion string `json:"schema_version"`
+	transcript.Event
 }
 
 func runExport(args []string, stdout, stderr io.Writer) int {
@@ -46,6 +52,8 @@ func runExport(args []string, stdout, stderr io.Writer) int {
 	format := fs.String("format", "jsonl", "output format (jsonl)")
 	noText := fs.Bool("no-text", false, "omit text and raw fields")
 	since := fs.Duration("since", 0, "only search transcripts modified within this duration")
+	asJSON := fs.Bool("json", false, "print events as a JSON array")
+	ndjson := fs.Bool("ndjson", false, "print one event per JSON line (default)")
 
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -55,6 +63,10 @@ func runExport(args []string, stdout, stderr io.Writer) int {
 	}
 	if fs.NArg() > 0 {
 		fmt.Fprintf(stderr, "firekeeper export: unexpected argument %q\n", fs.Arg(0))
+		return 2
+	}
+	if *asJSON && *ndjson {
+		fmt.Fprintln(stderr, "firekeeper export: use --json or --ndjson, not both")
 		return 2
 	}
 	if strings.TrimSpace(*sessionID) == "" {
@@ -120,6 +132,14 @@ func runExport(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
+	if *asJSON {
+		if _, err := io.WriteString(stdout, `{"schema_version":"`+schemaVersion+`","events":[`); err != nil {
+			fmt.Fprintf(stderr, "firekeeper export: write JSON: %v\n", err)
+			return 1
+		}
+		defer fmt.Fprintln(stdout, "]}")
+	}
+	wroteEvent := false
 	enc := json.NewEncoder(stdout)
 	for _, path := range paths {
 		events, _, err := source.Read(path, 0)
@@ -135,21 +155,39 @@ func runExport(args []string, stdout, stderr io.Writer) int {
 				fmt.Fprintf(stderr, "firekeeper export: invalid event: %v\n", err)
 				return 1
 			}
-			var output any = event
+			var output any = exportVersionedEvent{SchemaVersion: schemaVersion, Event: event}
 			if *noText {
 				output = exportStructureOnly{
-					MachineID: event.MachineID,
-					SessionID: event.SessionID,
-					Provider:  event.Provider,
-					Seq:       event.Seq,
-					TS:        event.TS,
-					Role:      event.Role,
-					ToolName:  event.ToolName,
-					Model:     event.Model,
-					Tokens:    event.Tokens,
+					SchemaVersion: schemaVersion,
+					MachineID:     event.MachineID,
+					SessionID:     event.SessionID,
+					Provider:      event.Provider,
+					Seq:           event.Seq,
+					TS:            event.TS,
+					Role:          event.Role,
+					ToolName:      event.ToolName,
+					Model:         event.Model,
+					Tokens:        event.Tokens,
 				}
 			}
-			if err := enc.Encode(output); err != nil {
+			if *asJSON {
+				if wroteEvent {
+					if _, err := io.WriteString(stdout, ","); err != nil {
+						fmt.Fprintf(stderr, "firekeeper export: write JSON: %v\n", err)
+						return 1
+					}
+				}
+				data, err := json.Marshal(output)
+				if err != nil {
+					fmt.Fprintf(stderr, "firekeeper export: encode JSON: %v\n", err)
+					return 1
+				}
+				if _, err := stdout.Write(data); err != nil {
+					fmt.Fprintf(stderr, "firekeeper export: write JSON: %v\n", err)
+					return 1
+				}
+				wroteEvent = true
+			} else if err := enc.Encode(output); err != nil {
 				fmt.Fprintf(stderr, "firekeeper export: write JSONL: %v\n", err)
 				return 1
 			}

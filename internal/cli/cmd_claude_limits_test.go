@@ -1,13 +1,16 @@
 package cli
 
 import (
-	"github.com/firekeeper-ai/firekeeper/internal/claudelimits"
+	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/firekeeper-ai/firekeeper/internal/claudelimits"
 )
 
 func TestClaudeLimitsEnableDisableAndStatus(t *testing.T) {
@@ -36,6 +39,17 @@ func TestClaudeLimitsEnableDisableAndStatus(t *testing.T) {
 	// does not fail.
 	if code, out, _ := run("status"); code != 0 || !strings.Contains(out, "Claude limits: on") || !strings.Contains(out, "no Claude Code sign-in") {
 		t.Fatalf("default status = %d %q", code, out)
+	}
+	var jsonOut, jsonErr bytes.Buffer
+	if code, handled := RunSubcommand([]string{"claude-limits", "status", "--json"}, &jsonOut, &jsonErr); !handled || code != 0 {
+		t.Fatalf("JSON status = %d handled=%v stderr=%s", code, handled, jsonErr.String())
+	}
+	var status map[string]any
+	if err := json.Unmarshal(jsonOut.Bytes(), &status); err != nil {
+		t.Fatal(err)
+	}
+	if status["schema_version"] != schemaVersion || status["enabled"] != true {
+		t.Fatalf("JSON status = %#v", status)
 	}
 	if code, out, _ := run("disable"); code != 0 || !strings.Contains(out, "off") {
 		t.Fatalf("disable = %d %q", code, out)

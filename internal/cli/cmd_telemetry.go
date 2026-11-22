@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -13,7 +14,11 @@ import (
 )
 
 func runTelemetry(args []string, stdout, stderr io.Writer) int {
-	if len(args) != 1 {
+	if hasFlag(args, "-h") || hasFlag(args, "--help") {
+		fmt.Fprintln(stdout, "Usage:\n  firekeeper telemetry enable\n  firekeeper telemetry disable\n  firekeeper telemetry status [--json]")
+		return 0
+	}
+	if len(args) < 1 || len(args) > 2 || (len(args) == 2 && !(args[0] == "status" && args[1] == "--json")) {
 		fmt.Fprintln(stderr, "Usage:\n  firekeeper telemetry enable\n  firekeeper telemetry disable\n  firekeeper telemetry status")
 		return 2
 	}
@@ -38,11 +43,47 @@ func runTelemetry(args []string, stdout, stderr io.Writer) int {
 	case "disable":
 		return telemetryDisable(stdout, stderr, claudeDir, cfgPath)
 	case "status":
+		if len(args) == 2 {
+			return telemetryStatusJSON(stdout, stderr, claudeDir)
+		}
 		return telemetryStatus(stdout, claudeDir)
 	default:
 		fmt.Fprintf(stderr, "firekeeper telemetry: unknown command %q\n", args[0])
 		return 2
 	}
+}
+
+func telemetryStatusJSON(stdout, stderr io.Writer, claudeDir string) int {
+	c, err := config.Load(config.Options{Getenv: os.Getenv})
+	if err != nil {
+		fmt.Fprintf(stderr, "firekeeper telemetry: config: %v\n", err)
+		return 1
+	}
+	port := c.TelemetryPort
+	if port == 0 {
+		port = config.DefaultTelemetryPort
+	}
+	exporting, settingsErr := otelrecv.ClaudeEnv(claudeDir, port)
+	path, pathErr := otelrecv.DefaultPath()
+	var last *time.Time
+	if pathErr == nil {
+		if at, ok, readErr := otelrecv.LastEvent(path); readErr == nil && ok {
+			last = &at
+		}
+	}
+	result := map[string]any{
+		"config_enabled": c.TelemetryEnabled, "port": port,
+		"claude_exporting": exporting, "listener_accepting": probeLoopback(port),
+		"last_event_at": last, "events_available": pathErr == nil && last != nil,
+	}
+	if settingsErr != nil {
+		result["settings_error"] = settingsErr.Error()
+	}
+	if err := json.NewEncoder(stdout).Encode(result); err != nil {
+		fmt.Fprintf(stderr, "firekeeper telemetry: write JSON: %v\n", err)
+		return 1
+	}
+	return 0
 }
 
 func claudeSettingsDir() (string, error) {

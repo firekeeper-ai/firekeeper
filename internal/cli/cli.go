@@ -4,6 +4,7 @@
 package cli
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"io"
@@ -18,8 +19,8 @@ type subcommand struct {
 }
 
 var subcommands = []subcommand{
-	{"snapshot", "print currently discovered sessions (--json)", runSnapshot},
-	{"export", "export local session events as JSONL (--session, --no-text)", runExport},
+	{"snapshot", "print currently discovered sessions (--json, --ndjson)", runSnapshot},
+	{"export", "export local session events (--session, --json or --ndjson, --no-text)", runExport},
 	{"turns", "print per-turn transcript metrics without prompt text (SESSION_ID, --provider, --json)", runTurns},
 	{"stats", "print local transcript insights without prompt text (--since, --provider or --all, --project, --json)", runStats},
 	{"report", "upload session metadata and redacted transcripts once", runReport},
@@ -52,14 +53,65 @@ func RunSubcommand(args []string, stdout, stderr io.Writer) (int, bool) {
 		return 0, false
 	}
 	if args[0] == "--version" {
+		if hasFlag(args[1:], "--schema") {
+			return writeSchema("version", args[1:], stdout), true
+		}
+		if hasFlag(args[1:], "--json") {
+			var output bytes.Buffer
+			code := runVersion(args[1:], &output, stderr)
+			if code != 0 {
+				return code, true
+			}
+			converted, err := transformJSONOutput("version", args[1:], output.Bytes())
+			if err != nil {
+				fmt.Fprintf(stderr, "firekeeper version: add schema version: %v\n", err)
+				return 1, true
+			}
+			_, _ = stdout.Write(converted)
+			return 0, true
+		}
 		return runVersion(args[1:], stdout, stderr), true
 	}
 	for _, cmd := range subcommands {
 		if cmd.name == args[0] {
-			return cmd.run(args[1:], stdout, stderr), true
+			cmdArgs := args[1:]
+			if len(cmdArgs) > 0 && (cmdArgs[0] == "-h" || cmdArgs[0] == "--help") {
+				if cmd.name == "otel-listen" || cmd.name == "otel-reconcile" {
+					return cmd.run(cmdArgs, stdout, stderr), true
+				}
+				fmt.Fprintf(stdout, "Usage: firekeeper %s [flags]\n\n%s\n", cmd.name, cmd.summary)
+				return 0, true
+			}
+			if hasFlag(cmdArgs, "--schema") {
+				return writeSchema(cmd.name, cmdArgs, stdout), true
+			}
+			if cmd.name == "export" {
+				return cmd.run(cmdArgs, stdout, stderr), true
+			}
+			if !isMachineOutput(cmd.name, cmdArgs) {
+				return cmd.run(cmdArgs, stdout, stderr), true
+			}
+			var output bytes.Buffer
+			code := cmd.run(cmdArgs, &output, stderr)
+			if output.Len() == 0 {
+				_, _ = io.Copy(stdout, &output)
+				return code, true
+			}
+			converted, err := transformJSONOutput(cmd.name, cmdArgs, output.Bytes())
+			if err != nil {
+				_, _ = io.Copy(stdout, &output)
+				fmt.Fprintf(stderr, "firekeeper %s: add schema version: %v\n", cmd.name, err)
+				return 1, true
+			}
+			_, _ = stdout.Write(converted)
+			return code, true
 		}
 	}
 	return 0, false
+}
+
+func isMachineOutput(command string, args []string) bool {
+	return hasFlag(args, "--json") || hasFlag(args, "--ndjson") || command == "export"
 }
 
 // PrintUsage writes the top-level usage text and the subcommand list to fs's

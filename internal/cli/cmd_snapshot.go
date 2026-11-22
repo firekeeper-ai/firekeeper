@@ -18,17 +18,22 @@ func runSnapshot(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("firekeeper snapshot", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	asJSON := fs.Bool("json", false, "print sessions as a JSON array")
+	ndjson := fs.Bool("ndjson", false, "print one session per JSON line")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
 		}
 		return 2
 	}
+	if *asJSON && *ndjson {
+		fmt.Fprintln(stderr, "firekeeper snapshot: use --json or --ndjson, not both")
+		return 2
+	}
 	if fs.NArg() > 0 {
 		fmt.Fprintf(stderr, "firekeeper snapshot: unexpected argument %q\n", fs.Arg(0))
 		return 2
 	}
-	if !*asJSON {
+	if !*asJSON && !*ndjson {
 		fmt.Fprintln(stderr, "firekeeper snapshot: only --json output is implemented")
 		return 2
 	}
@@ -46,10 +51,19 @@ func runSnapshot(args []string, stdout, stderr io.Writer) int {
 		metas = []session.Meta{}
 	}
 	enc := json.NewEncoder(stdout)
-	enc.SetIndent("", "  ")
-	if err := enc.Encode(metas); err != nil {
-		fmt.Fprintf(stderr, "firekeeper snapshot: write JSON: %v\n", err)
-		return 1
+	if !*ndjson {
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(metas); err != nil {
+			fmt.Fprintf(stderr, "firekeeper snapshot: write JSON: %v\n", err)
+			return 1
+		}
+	} else {
+		for _, meta := range metas {
+			if err := enc.Encode(meta); err != nil {
+				fmt.Fprintf(stderr, "firekeeper snapshot: write JSONL: %v\n", err)
+				return 1
+			}
+		}
 	}
 	return 0
 }

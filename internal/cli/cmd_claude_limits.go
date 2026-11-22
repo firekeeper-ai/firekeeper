@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -21,7 +22,12 @@ const claudeLimitsUsage = "Usage:\n  firekeeper claude-limits enable\n  firekeep
 // way Claude Code's /usage does, and does nothing when there is no sign-in.
 // Nothing is uploaded and nothing is written to Claude Code's files.
 func runClaudeLimits(args []string, stdout, stderr io.Writer) int {
-	if len(args) != 1 {
+	if hasFlag(args, "-h") || hasFlag(args, "--help") {
+		fmt.Fprintln(stdout, claudeLimitsUsage+" [--json]")
+		return 0
+	}
+	asJSON := len(args) == 2 && args[0] == "status" && args[1] == "--json"
+	if len(args) != 1 && !asJSON {
 		fmt.Fprintln(stderr, claudeLimitsUsage)
 		return 2
 	}
@@ -57,11 +63,52 @@ func runClaudeLimits(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stdout, "Turn them back on with: firekeeper claude-limits enable")
 		return 0
 	case "status":
+		if asJSON {
+			return claudeLimitsStatusJSON(stdout, stderr)
+		}
 		return claudeLimitsStatus(stdout)
 	default:
 		fmt.Fprintf(stderr, "firekeeper claude-limits: unknown command %q\n%s\n", args[0], claudeLimitsUsage)
 		return 2
 	}
+}
+
+func claudeLimitsStatusJSON(stdout, stderr io.Writer) int {
+	c, err := config.Load(config.Options{Getenv: os.Getenv})
+	if err != nil {
+		fmt.Fprintf(stderr, "firekeeper claude-limits: config: %v\n", err)
+		return 1
+	}
+	result := map[string]any{"enabled": c.ClaudeLimits, "signed_in": false, "windows": []any{}}
+	if c.ClaudeLimits {
+		client := newClaudeLimitsClient()
+		result["signed_in"] = client.HasToken()
+		if client.HasToken() {
+			limits, fetchErr := client.Fetch(context.Background())
+			if fetchErr != nil {
+				result["usage_error"] = fetchErr.Error()
+			} else {
+				windows := make([]map[string]any, 0, 4)
+				for _, item := range []struct {
+					name string
+					win  *claudelimits.Window
+				}{
+					{"5-hour", limits.FiveHour}, {"weekly", limits.SevenDay},
+					{"weekly_opus", limits.SevenDayOpus}, {"weekly_sonnet", limits.SevenDaySonnet},
+				} {
+					if item.win != nil {
+						windows = append(windows, map[string]any{"name": item.name, "used_percent": item.win.UsedPercent, "resets_at": item.win.ResetsAt})
+					}
+				}
+				result["windows"] = windows
+			}
+		}
+	}
+	if err := json.NewEncoder(stdout).Encode(result); err != nil {
+		fmt.Fprintf(stderr, "firekeeper claude-limits: write JSON: %v\n", err)
+		return 1
+	}
+	return 0
 }
 
 func claudeLimitsStatus(stdout io.Writer) int {

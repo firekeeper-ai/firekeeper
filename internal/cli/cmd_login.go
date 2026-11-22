@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -95,6 +96,7 @@ func runWhoami(args []string, stdout, stderr io.Writer) int {
 	const name = "firekeeper whoami"
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(stderr)
+	asJSON := fs.Bool("json", false, "print server, account, and machine as JSON")
 	if code, ok := parseNoArgs(name, fs, args, stderr); !ok {
 		return code
 	}
@@ -122,7 +124,16 @@ func runWhoami(args []string, stdout, stderr io.Writer) int {
 	if machine == "" {
 		machine = "(unnamed)"
 	}
-	fmt.Fprintf(stdout, "server:  %s\naccount: %s\nmachine: %s\n", c.Server, id.AccountEmail, machine)
+	if *asJSON {
+		if err := json.NewEncoder(stdout).Encode(map[string]string{
+			"server": c.Server, "account": id.AccountEmail, "machine": machine,
+		}); err != nil {
+			fmt.Fprintf(stderr, "%s: write JSON: %v\n", name, err)
+			return 1
+		}
+	} else {
+		fmt.Fprintf(stdout, "server:  %s\naccount: %s\nmachine: %s\n", c.Server, id.AccountEmail, machine)
+	}
 	return 0
 }
 
