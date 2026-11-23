@@ -682,14 +682,10 @@ func (d *discoverer) readThreadMetadata(threadIDs map[string]bool) (map[string]T
 func (d *discoverer) codexStatePath() (string, error) {
 	codexHome := d.opts.CodexHome
 	if codexHome == "" {
-		codexHome = os.Getenv("CODEX_HOME")
-	}
-	if codexHome == "" {
-		home, err := d.home()
-		if err != nil {
-			return "", fmt.Errorf("find home directory: %w", err)
+		var err error
+		if codexHome, err = d.dirs().Dir(event.ProviderCodex); err != nil {
+			return "", err
 		}
-		codexHome = filepath.Join(home, ".codex")
 	}
 	path := filepath.Join(codexHome, "state_5.sqlite")
 	if _, err := os.Stat(path); err != nil {

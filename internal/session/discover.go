@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/firekeeper-ai/firekeeper/internal/parallel"
+	"github.com/firekeeper-ai/firekeeper/internal/providerdir"
 	"github.com/firekeeper-ai/firekeeper/internal/sqlitejson"
 	"github.com/firekeeper-ai/firekeeper/pkg/event"
 )
@@ -386,6 +387,9 @@ func (d *discoverer) home() (string, error) {
 	}
 	return os.UserHomeDir()
 }
+
+// dirs finds provider data folders with this discovery's home folder.
+func (d *discoverer) dirs() providerdir.Lookup { return providerdir.Lookup{Home: d.home} }
 
 // Unavailable timestamps stay null instead of claiming a year-one activity date.
 func optionalTime(t time.Time) *time.Time {

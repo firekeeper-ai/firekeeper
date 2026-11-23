@@ -7,12 +7,13 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/firekeeper-ai/firekeeper/internal/providerdir"
 	"github.com/firekeeper-ai/firekeeper/internal/transcript"
 )
 
 func TestDetectProviders(t *testing.T) {
 	all := []transcript.Provider{transcript.ProviderCodex, transcript.ProviderCopilot, transcript.ProviderKimi, transcript.ProviderClaude, transcript.ProviderOpenCode, transcript.ProviderGemini, transcript.ProviderCursor}
-	for _, scenario := range []string{"none", "directories", "executables", "override", "missing override", "file"} {
+	for _, scenario := range []string{"none", "directories", "executables", "override", "missing override", "file", "relative override"} {
 		t.Run(scenario, func(t *testing.T) {
 			home := t.TempDir()
 			env := map[string]string{}
@@ -57,12 +58,21 @@ func TestDetectProviders(t *testing.T) {
 				env["GEMINI_CLI_HOME"] = filepath.Join(home, "missing")
 				mkdir(filepath.Join(home, ".cursor"))
 				env["CURSOR_CONFIG_DIR"] = filepath.Join(home, "missing")
+			case "relative override":
+				// Codex is installed, but CODEX_HOME is relative: it is
+				// skipped, with an error naming the variable, and Copilot
+				// is still found.
+				mkdir(filepath.Join(home, ".codex"))
+				commands["codex"] = true
+				env["CODEX_HOME"] = "synthetic-relative-codex"
+				mkdir(filepath.Join(home, ".copilot"))
+				want = []transcript.Provider{transcript.ProviderCopilot}
 			case "file":
 				if err := os.WriteFile(filepath.Join(home, ".codex"), nil, 0600); err != nil {
 					t.Fatal(err)
 				}
 			}
-			got := DetectProviders(home, func(key string) string { return env[key] }, func(command string) (string, error) {
+			got, skipped := DetectProviders(home, func(key string) string { return env[key] }, func(command string) (string, error) {
 				if commands[command] {
 					return filepath.Join(home, command), nil
 				}
@@ -70,6 +80,18 @@ func TestDetectProviders(t *testing.T) {
 			})
 			if !slices.Equal(got, want) {
 				t.Fatalf("providers = %v, want %v", got, want)
+			}
+			if scenario != "relative override" {
+				if len(skipped) != 0 {
+					t.Fatalf("skipped = %v, want none", skipped)
+				}
+				return
+			}
+			if len(skipped) != 1 || !errors.Is(skipped[0], providerdir.ErrRelativeOverride) {
+				t.Fatalf("skipped = %v, want one ErrRelativeOverride", skipped)
+			}
+			if msg := skipped[0].Error(); msg != "codex: CODEX_HOME must be an absolute path" {
+				t.Fatalf("skipped message = %q", msg)
 			}
 		})
 	}

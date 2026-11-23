@@ -94,6 +94,10 @@ firekeeper/
 │   ├── sqlitejson/
 │   │   └── Read-only SQLite query as JSON: the sqlite3 command when it is on
 │   │       PATH, an in-process modernc connection when it is not (Windows)
+│   ├── providerdir/
+│   │   └── Each provider's data folder and its env var override (absolute
+│   │       paths only, as each agent reads them); shared by session,
+│   │       transcript, daemon, cli, tui, claudelimits, and claudecloud
 │   ├── parallel/
 │   │   └── The one fan-out helper: Each (one goroutine per item) and Bounded
 │   │       (at most GOMAXPROCS); panics reach the caller (standard library only)

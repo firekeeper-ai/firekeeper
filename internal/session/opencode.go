@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -55,10 +54,9 @@ func SplitOpenCodeTranscriptPath(path string) (database, id string, ok bool) {
 }
 
 // OpenCodeDatabase returns OpenCode's database path the way OpenCode
-// resolves it: OPENCODE_DB, absolute or relative to the data directory, else
-// opencode.db in $XDG_DATA_HOME/opencode (default ~/.local/share/opencode, on
-// macOS too). It returns "" when OPENCODE_DB is ":memory:", since nothing is
-// stored then. An empty home means the user's home directory.
+// resolves it (see providerdir.Lookup.OpenCodeDatabase). It returns "" when
+// OPENCODE_DB is ":memory:", since nothing is stored then. An empty home
+// means the user's home directory.
 func OpenCodeDatabase(home string) (string, error) {
 	return (&discoverer{opts: Options{Home: home}}).openCodeDatabase()
 }
@@ -67,25 +65,7 @@ func (d *discoverer) openCodeDatabase() (string, error) {
 	if d.opts.OpenCodeDB != "" {
 		return d.opts.OpenCodeDB, nil
 	}
-	data := strings.TrimSpace(os.Getenv("XDG_DATA_HOME"))
-	if !filepath.IsAbs(data) {
-		home, err := d.home()
-		if err != nil {
-			return "", fmt.Errorf("find home directory: %w", err)
-		}
-		data = filepath.Join(home, ".local", "share")
-	}
-	dir := filepath.Join(data, "opencode")
-	switch db := strings.TrimSpace(os.Getenv("OPENCODE_DB")); {
-	case db == ":memory:":
-		return "", nil
-	case db == "":
-		return filepath.Join(dir, "opencode.db"), nil
-	case filepath.IsAbs(db):
-		return db, nil
-	default:
-		return filepath.Join(dir, db), nil
-	}
+	return d.dirs().OpenCodeDatabase()
 }
 
 // openCodeSessionIDFromArgs reads the same id from the arguments after the

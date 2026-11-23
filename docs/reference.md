@@ -499,6 +499,20 @@ CLI's `~/.gemini`), and `CURSOR_CONFIG_DIR` (for Cursor CLI's `~/.cursor`)
 overrides are honored. Provider events
 supply best-effort `ACTIVE`, `WAITING`, and `NEEDS INPUT` states.
 
+Each override is read the way its agent reads it: exactly as set, with an
+empty value meaning unset (spaces are not trimmed). **Overrides must be
+absolute paths.** An agent resolves a relative one against its own working
+directory, which Firekeeper cannot know, so a relative value (including
+`./x`, `x`, and `~/x`) is an error that names the variable, never its value,
+for example `CODEX_HOME must be an absolute path`. The error affects only
+that provider: the dashboard shows it, the daemon logs it once and keeps
+uploading the other providers, and `report` and `backfill` skip that
+provider and exit non-zero only when no requested provider is left. The one
+exception is `OPENCODE_DB`, which may be a file name relative to OpenCode's
+data folder, as OpenCode itself allows. Kimi Code reads only
+`KIMI_CODE_HOME`; `KIMI_SHARE_DIR` belongs to the older `kimi-cli` and is
+ignored.
+
 Discovery is also callable without the TUI through
 `internal/session.Discover(ctx, opts)` and, from the shell, through
 `firekeeper snapshot --json`. Both list the same rows as the dashboard
@@ -1066,7 +1080,8 @@ With no provider flags, `$FIREKEEPER_PROVIDERS`, or configured allowlist,
 Gemini CLI, and Cursor CLI from their existing local data directories or CLI
 executables on `PATH`, honoring `CODEX_HOME`, `COPILOT_HOME`, `KIMI_CODE_HOME`,
 `CLAUDE_CONFIG_DIR`, `XDG_DATA_HOME`, `GEMINI_CLI_HOME`, and
-`CURSOR_CONFIG_DIR`.
+`CURSOR_CONFIG_DIR`. A provider whose override is not an absolute path is
+skipped, with a message naming the variable.
 Installing opts into transcript uploads for those detected providers; it prints
 and saves the allowlist in the service definition. Use `--dry-run` to preview
 it, or `--provider` to select providers explicitly. Environment and config-file

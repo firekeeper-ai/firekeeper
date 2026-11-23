@@ -27,7 +27,9 @@ import (
 	"time"
 
 	"github.com/firekeeper-ai/firekeeper/internal/otelrecv"
+	"github.com/firekeeper-ai/firekeeper/internal/providerdir"
 	"github.com/firekeeper-ai/firekeeper/internal/reporter"
+	"github.com/firekeeper-ai/firekeeper/internal/transcript"
 	"github.com/firekeeper-ai/firekeeper/internal/transcript/claudecloud"
 )
 
@@ -180,11 +182,17 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 
 	d := &daemon{cfg: cfg, log: log.New(w, "", log.LstdFlags)}
+	d.cfg.Reporter.Providers = d.usableProviders(cfg.Reporter.Providers)
 	d.cloud = d.newCloudPoller()
 	listenDone := d.startTelemetry(ctx, w)
-	if cfg.Reporter.Uploading() {
+	switch {
+	case d.cfg.Reporter.Uploading():
 		d.loop(ctx)
-	} else {
+	case cfg.Reporter.Uploading():
+		d.log.Printf("started: no usable upload provider; fix the variables named above and restart")
+		<-ctx.Done()
+		d.log.Printf("stopped")
+	default:
 		d.log.Printf("started: telemetry listener only, no upload providers")
 		<-ctx.Done()
 		d.log.Printf("stopped")
@@ -193,6 +201,30 @@ func Run(ctx context.Context, cfg Config) error {
 		<-listenDone
 	}
 	return nil
+}
+
+// usableProviders is providers without those whose data folder override is
+// not an absolute path. Each one dropped is logged once, here; the others,
+// and the daemon, keep running.
+func (d *daemon) usableProviders(providers []transcript.Provider) []transcript.Provider {
+	dirs := providerdir.Lookup{Home: d.home}
+	var usable []transcript.Provider
+	for _, p := range providers {
+		if err := dirs.Check(p); err != nil {
+			d.log.Printf("skipping provider %s: %v", p, err)
+			continue
+		}
+		usable = append(usable, p)
+	}
+	return usable
+}
+
+// home is the reporter's home folder, or the user's.
+func (d *daemon) home() (string, error) {
+	if d.cfg.Reporter.Home != "" {
+		return d.cfg.Reporter.Home, nil
+	}
+	return os.UserHomeDir()
 }
 
 func (d *daemon) startTelemetry(ctx context.Context, logOut io.Writer) <-chan struct{} {

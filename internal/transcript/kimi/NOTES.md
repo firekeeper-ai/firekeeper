@@ -16,8 +16,13 @@ not read.
 
 ## Layout
 
+Kimi Code reads only `KIMI_CODE_HOME` (`getDataDir` in
+`apps/kimi-code/src/utils/paths.ts` of `MoonshotAI/kimi-code`).
+`KIMI_SHARE_DIR` is the archived `kimi-cli`'s folder (`~/.kimi`, a different
+layout), which Kimi Code reads only to migrate from, so Firekeeper ignores it.
+
 ```text
-$KIMI_CODE_HOME/                       (default ~/.kimi-code; KIMI_SHARE_DIR is a fallback)
+$KIMI_CODE_HOME/                       (default ~/.kimi-code)
   session_index.jsonl                  {sessionId, sessionDir, workDir} per line
   sessions/<work dir key>/<session id>/
     state.json                         session metadata

@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/firekeeper-ai/firekeeper/internal/daemon"
 	"github.com/firekeeper-ai/firekeeper/internal/reporter"
 	"github.com/firekeeper-ai/firekeeper/internal/transcript"
 	"github.com/firekeeper-ai/firekeeper/internal/transcript/claudecloud"
@@ -26,12 +25,12 @@ var (
 	backfillRun                       = reporter.Backfill
 	backfillInput           io.Reader = os.Stdin
 	backfillInteractive               = stdinIsTerminal
-	detectBackfillProviders           = func() ([]transcript.Provider, error) {
+	detectBackfillProviders           = func(stderr io.Writer) ([]transcript.Provider, error) {
 		home, err := configHome()
 		if err != nil {
 			return nil, errors.New("find home directory")
 		}
-		return daemon.DetectProviders(home, nil, nil), nil
+		return detectProviders("firekeeper backfill", home, stderr), nil
 	}
 )
 
@@ -123,7 +122,7 @@ func runBackfill(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 	if *all {
-		cfg.Providers, err = detectBackfillProviders()
+		cfg.Providers, err = detectBackfillProviders(stderr)
 		if err != nil {
 			fmt.Fprintf(stderr, "firekeeper backfill: detect providers: %v\n", err)
 			return 1
@@ -137,6 +136,10 @@ func runBackfill(args []string, stdout, stderr io.Writer) int {
 			names[i] = string(provider)
 		}
 		fmt.Fprintf(stdout, "Detected providers: %s\n", strings.Join(names, ", "))
+	}
+	var ok bool
+	if cfg.Providers, ok = usableProviders("firekeeper backfill", cfg.Providers, stderr); !ok {
+		return 1
 	}
 	if len(cfg.Providers) == 0 && !cfg.DryRun {
 		fmt.Fprintln(stderr, "firekeeper backfill: no --provider given; uploading nothing. Showing the plan.")

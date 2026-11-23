@@ -328,14 +328,7 @@ func (d *discoverer) claudeConfigDir() (string, error) {
 	if d.opts.ClaudeHome != "" {
 		return d.opts.ClaudeHome, nil
 	}
-	if dir := strings.TrimSpace(os.Getenv("CLAUDE_CONFIG_DIR")); dir != "" {
-		return dir, nil
-	}
-	home, err := d.home()
-	if err != nil {
-		return "", fmt.Errorf("find home directory: %w", err)
-	}
-	return filepath.Join(home, ".claude"), nil
+	return d.dirs().Dir(event.ProviderClaude)
 }
 
 // ClaudeConfigDir returns Claude Code's configuration directory, honoring

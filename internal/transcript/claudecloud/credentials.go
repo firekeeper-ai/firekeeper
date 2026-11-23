@@ -30,6 +30,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/firekeeper-ai/firekeeper/internal/providerdir"
 )
 
 // Credentials authenticate API requests as the signed-in Claude Code user.
@@ -72,7 +74,6 @@ const (
 	// credentialsFile is where Claude Code keeps the same JSON on Linux and
 	// Windows, inside its config directory.
 	credentialsFile = ".credentials.json"
-	envConfigDir    = "CLAUDE_CONFIG_DIR"
 	// maxCredentialBytes bounds the keychain item and credentials file;
 	// maxConfigBytes bounds ~/.claude.json, which also holds per-project
 	// history and can be large.
@@ -134,7 +135,10 @@ func loadCredentialsWithTimeout(ctx context.Context, home string, opts Credentia
 	if now == nil {
 		now = time.Now
 	}
-	configDir := strings.TrimSpace(getenv(envConfigDir))
+	configDir, err := providerdir.Lookup{Getenv: getenv}.Override(providerdir.EnvClaude)
+	if err != nil {
+		return Credentials{}, err
+	}
 
 	var (
 		tok   login

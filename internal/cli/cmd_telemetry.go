@@ -6,11 +6,12 @@ import (
 	"io"
 	"net"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/firekeeper-ai/firekeeper/internal/config"
 	"github.com/firekeeper-ai/firekeeper/internal/otelrecv"
+	"github.com/firekeeper-ai/firekeeper/internal/providerdir"
+	"github.com/firekeeper-ai/firekeeper/internal/transcript"
 )
 
 func runTelemetry(args []string, stdout, stderr io.Writer) int {
@@ -87,14 +88,7 @@ func telemetryStatusJSON(stdout, stderr io.Writer, claudeDir string) int {
 }
 
 func claudeSettingsDir() (string, error) {
-	if dir := os.Getenv("CLAUDE_CONFIG_DIR"); dir != "" {
-		return dir, nil
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("find home directory")
-	}
-	return filepath.Join(home, ".claude"), nil
+	return providerdir.Lookup{}.Dir(transcript.ProviderClaude)
 }
 
 func telemetryEnable(stdout, stderr io.Writer, claudeDir, cfgPath string) int {

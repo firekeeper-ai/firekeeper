@@ -363,7 +363,7 @@ func TestDaemonInstallDetectsProviders(t *testing.T) {
 			isolateDaemonConfig(t)
 			args, runner, _ := stubService(t, "linux")
 			previous := detectDaemonProviders
-			detectDaemonProviders = func() ([]transcript.Provider, error) {
+			detectDaemonProviders = func(io.Writer) ([]transcript.Provider, error) {
 				return []transcript.Provider{transcript.ProviderCodex, transcript.ProviderClaude}, nil
 			}
 			t.Cleanup(func() { detectDaemonProviders = previous })
@@ -395,7 +395,7 @@ func TestDaemonInstallDetectionPrecedence(t *testing.T) {
 			args, runner, _ := stubService(t, "linux")
 			called := false
 			previous := detectDaemonProviders
-			detectDaemonProviders = func() ([]transcript.Provider, error) { called = true; return nil, nil }
+			detectDaemonProviders = func(io.Writer) ([]transcript.Provider, error) { called = true; return nil, nil }
 			t.Cleanup(func() { detectDaemonProviders = previous })
 			command := []string{"install", "--dry-run"}
 			switch source {

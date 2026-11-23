@@ -150,14 +150,7 @@ func (d *discoverer) copilotHome() (string, error) {
 	if d.opts.CopilotHome != "" {
 		return d.opts.CopilotHome, nil
 	}
-	if home := strings.TrimSpace(os.Getenv("COPILOT_HOME")); home != "" {
-		return home, nil
-	}
-	home, err := d.home()
-	if err != nil {
-		return "", fmt.Errorf("find home directory: %w", err)
-	}
-	return filepath.Join(home, ".copilot"), nil
+	return d.dirs().Dir(event.ProviderCopilot)
 }
 
 func (d *discoverer) discoverOpenCopilotSessions(pids []int) (map[int][]string, error) {
