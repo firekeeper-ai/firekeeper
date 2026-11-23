@@ -129,6 +129,11 @@ func NewService(args []string, out io.Writer) (*Service, error) {
 	}
 	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
 		exe = resolved
+		if goos == "darwin" {
+			if stable := brewExecutable(resolved, false); stable != "" {
+				exe = stable
+			}
+		}
 	}
 	env := map[string]string{}
 	for _, key := range serviceEnv {
@@ -222,11 +227,14 @@ func (s *Service) check() error {
 	if !isAbsolute(s.GOOS, s.Executable) {
 		return errors.New("the firekeeper executable path is not absolute")
 	}
-	if transientExecutable(s.Executable) {
+	if s.TemporaryExecutable() {
 		return errors.New("firekeeper is running from a temporary build (go run?); install it first, for example with go install github.com/firekeeper-ai/firekeeper@latest, and run that binary")
 	}
 	return nil
 }
+
+// TemporaryExecutable reports whether the service binary is in a temporary build location.
+func (s *Service) TemporaryExecutable() bool { return transientExecutable(s.Executable) }
 
 // transientExecutable reports whether path looks like a go run build,
 // which is deleted when go run exits.
@@ -311,6 +319,30 @@ func (s *Service) Install(ctx context.Context) error {
 	return nil
 }
 
+// Start runs the existing login service with its installed arguments.
+func (s *Service) Start(ctx context.Context) error {
+	switch s.GOOS {
+	case "darwin":
+		repaired, err := s.repairLaunchdExecutable(ctx)
+		if err != nil {
+			return err
+		}
+		if repaired {
+			return s.bootstrapLaunchd(ctx)
+		}
+		if s.launchdLoaded(ctx) {
+			return s.run(ctx, "launchctl", "kickstart", s.target())
+		}
+		return s.bootstrapLaunchd(ctx)
+	case "windows":
+		return s.run(ctx, "schtasks", "/Run", "/TN", s.taskName())
+	case "linux":
+		return s.run(ctx, "systemctl", "--user", "start", SystemdUnit)
+	default:
+		return fmt.Errorf("daemon service unsupported on %s", s.GOOS)
+	}
+}
+
 func (s *Service) installLaunchd(ctx context.Context) error {
 	// bootstrap fails on a loaded service, so unload any earlier install.
 	if s.launchdLoaded(ctx) {
@@ -318,6 +350,10 @@ func (s *Service) installLaunchd(ctx context.Context) error {
 			return err
 		}
 	}
+	return s.bootstrapLaunchd(ctx)
+}
+
+func (s *Service) bootstrapLaunchd(ctx context.Context) error {
 	// bootstrap also fails on a service someone disabled.
 	if err := s.run(ctx, "launchctl", "enable", s.target()); err != nil {
 		return err
@@ -492,6 +528,10 @@ func (s *Service) Status(ctx context.Context) (Status, error) {
 	out, err := s.Runner.Run(ctx, "systemctl", "--user", "show", SystemdUnit,
 		"--property=LoadState,ActiveState,SubState,MainPID,ExecMainStatus")
 	if err != nil {
+		var cmdErr *CommandError
+		if errors.As(err, &cmdErr) && cmdErr.Code == 4 {
+			return st, nil
+		} // systemctl: unknown unit
 		return st, err
 	}
 	parseSystemdShow(string(out), &st)

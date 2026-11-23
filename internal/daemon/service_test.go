@@ -570,3 +570,82 @@ func TestNewServiceCapturesProviderHomes(t *testing.T) {
 		t.Fatal("unset variables must not be captured")
 	}
 }
+
+func TestStartInstalledService(t *testing.T) {
+	for _, tt := range []struct{ platform, command string }{
+		{"darwin", "launchctl kickstart gui/501/dev.firekeeper.daemon"},
+		{"linux", "systemctl --user start " + SystemdUnit},
+		{"windows", "schtasks /Run /TN " + TaskName},
+	} {
+		t.Run(tt.platform, func(t *testing.T) {
+			svc, runner, _ := testService(t, tt.platform)
+			if err := svc.Start(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if got := runner.calls[len(runner.calls)-1]; got != tt.command {
+				t.Fatalf("got %q want %q", got, tt.command)
+			}
+			failure := errors.New("manager unavailable")
+			runner.reply(tt.command, reply{err: failure})
+			if err := svc.Start(context.Background()); !errors.Is(err, failure) {
+				t.Fatal("missing start failure")
+			}
+		})
+	}
+}
+
+func TestStartRepairsRemovedBrewVersion(t *testing.T) {
+	if runtime.GOOS == "windows" { // Windows test accounts cannot always create symlinks.
+		return
+	}
+	svc, runner, _ := testService(t, "darwin")
+	prefix, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	formula := filepath.Join(prefix, "Cellar", "firekeeper")
+	old := filepath.Join(formula, "0.11.1", "bin", "firekeeper")
+	current := filepath.Join(formula, "0.18.0", "bin", "firekeeper")
+	if err := os.MkdirAll(filepath.Dir(current), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(current, []byte("fixture"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	svc.Executable = old
+	if err := writeFileAtomic(svc.Path(), launchdPlist(svc), 0644); err != nil {
+		t.Fatal(err)
+	}
+	original, err := os.ReadFile(svc.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Start(context.Background()); !errors.Is(err, ErrMissingBrewExecutable) || len(runner.calls) != 0 {
+		t.Fatalf("missing formula: %v", err)
+	}
+	opt := filepath.Join(prefix, "opt", "firekeeper")
+	if err := os.MkdirAll(filepath.Dir(opt), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Dir(filepath.Dir(current)), opt); err != nil {
+		t.Fatal(err)
+	}
+	stable := filepath.Join(opt, "bin", "firekeeper")
+	if brewExecutable(current, false) != stable {
+		t.Fatal("new installation pinned to version")
+	}
+	if err := svc.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(svc.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(data, bytes.Replace(original, []byte(old), []byte(stable), 1)) {
+		t.Fatal("did not preserve service settings")
+	}
+	want := []string{"launchctl print " + svc.target(), "launchctl bootout " + svc.target(), "launchctl enable " + svc.target(), "launchctl bootstrap " + svc.domain() + " " + svc.Path()}
+	if !slices.Equal(runner.calls, want) {
+		t.Fatalf("service manager calls %q", runner.calls)
+	}
+}

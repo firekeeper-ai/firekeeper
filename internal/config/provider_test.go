@@ -77,12 +77,12 @@ func TestParseProviderRejectsLookAlikes(t *testing.T) {
 }
 
 func TestParseProvidersSkipsEmptyAndDuplicates(t *testing.T) {
-	got, err := parseProviders(strings.Split("Claude, codex,,claude,", ","))
+	got, err := ParseProviders(strings.Split("Claude, codex,,claude,", ","))
 	want := []transcript.Provider{transcript.ProviderClaude, transcript.ProviderCodex}
 	if err != nil || !slices.Equal(got, want) {
 		t.Fatalf("parseProviders = %v, %v; want %v", got, err, want)
 	}
-	if _, err := parseProviders([]string{"codex", "gpt"}); !errors.Is(err, ErrUnknownProvider) {
+	if _, err := ParseProviders([]string{"codex", "gpt"}); !errors.Is(err, ErrUnknownProvider) {
 		t.Fatalf("parseProviders with an unknown name: %v, want ErrUnknownProvider", err)
 	}
 }

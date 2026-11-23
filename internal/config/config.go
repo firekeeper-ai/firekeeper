@@ -198,7 +198,7 @@ func Load(opts Options) (Config, error) {
 		c.Token, c.Sources["token"] = v, "env"
 	}
 	if v := strings.TrimSpace(getenv(EnvProviders)); v != "" {
-		ps, err := parseProviders(strings.Split(v, ","))
+		ps, err := ParseProviders(strings.Split(v, ","))
 		if err != nil {
 			return Config{}, fmt.Errorf("config: %s: %w", EnvProviders, err)
 		}
@@ -247,7 +247,7 @@ func (c *Config) readFile(path, home string) error {
 		c.Token, c.Sources["token"] = *f.Token, "file"
 	}
 	if md.IsDefined("providers") {
-		ps, err := parseProviders(f.Providers)
+		ps, err := ParseProviders(f.Providers)
 		if err != nil {
 			return fmt.Errorf("config: %s: providers: %w", path, err)
 		}
@@ -396,9 +396,9 @@ func providerNames() string {
 	return strings.Join(names, ", ")
 }
 
-// parseProviders reads a list of provider names. Empty entries, such as the
+// ParseProviders reads a list of provider names. Empty entries, such as the
 // one after a trailing comma, are skipped; duplicates are kept once.
-func parseProviders(names []string) ([]transcript.Provider, error) {
+func ParseProviders(names []string) ([]transcript.Provider, error) {
 	out := []transcript.Provider{}
 	seen := map[transcript.Provider]bool{}
 	for _, n := range names {

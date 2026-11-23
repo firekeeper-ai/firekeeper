@@ -93,7 +93,14 @@ Linux (amd64 and arm64) is best effort.
    an existing session running. Firekeeper does not install or launch agents.
 2. Open another terminal window, tab, or pane on the same machine, as the same
    user, and run `firekeeper` from any directory.
-3. The **Processes** view should show your running agents within a couple of
+3. First interactive launch opens **Machine settings**. Click a provider or
+   move with ↑/↓ and press Space to toggle reporting. Select the interval to
+   edit it in place. Press **s** to save or **Esc** to leave without saving.
+   In `fk setup`, the same selection controls manual and background reporting.
+   Saving restarts a running login service to apply changes. Daemon status updates automatically at the top. Press
+   **d** to review and install or start the login service, or **r** to refresh
+   its status. Use `fk setup --status` for a text summary.
+4. The **Processes** view should show your running agents within a couple of
    seconds. Select a row to see its project, state, model (with the reasoning effort for Codex, Claude Code and Copilot CLI, when the session records one), and available tokens. The Usage tab's session panel shows the effort too.
 
 | Key | What to do |

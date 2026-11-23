@@ -1125,8 +1125,38 @@ service file. The daemon reads the ingest token from the config file, where
 
 ### Configuration
 
-`report`, `backfill`, `daemon`, `login`, `whoami`, `logout`, and
-`config show` read `~/.firekeeper/config.toml`, or the file
+Run `fk setup` to open Machine settings. Provider switches and the shared
+reporting interval appear beside the destination and daemon details. In narrow
+terminals the details appear below the controls. Scroll with the mouse or
+PgUp/PgDn. Click a control or use ↑/↓ or Tab to move focus. Space toggles
+a provider. Enter edits the interval and applies the typed duration.
+
+Choose Save settings or press Ctrl+S to save. Esc cancels an interval edit
+first, then closes setup and discards unsaved changes. Environment-controlled
+preferences are read-only. The provider selection and interval apply to both
+manual reporting and the installed login service. For an older service with
+startup overrides, setup uses the saved config selection if present, otherwise
+it preselects the installed providers. Save migrates the service to the shared
+settings. A running service restarts. A stopped service picks them up on its
+next start. Clearing all providers and choosing **Save & disable service**
+removes the login service and keeps reporting history. If local telemetry is
+enabled, the service continues with transcript reporting disabled.
+
+Click **Install daemon** or press **d** to review the checked providers,
+destination and interval, then confirm with **y** to save and start reporting
+now and at login. **Start daemon** starts a stopped service.
+Setup checks status every two seconds while open. After a start request it
+shows **Starting…** until the daemon is observed running, or reports an
+unconfirmed start after 15 seconds. Press **r** for an immediate check. Installation requires a persistent executable (use the installed
+`fk` or `firekeeper` binary). First-run dashboard setup shows status and
+directs you to the explicit setup command for service management.
+
+First interactive dashboard launch opens the editor until setup is saved.
+`fk setup --status` prints a read-only summary. Redirected streams, `CI`,
+and `FIREKEEPER_NO_PROMPT` suppress the editor. Set `NO_COLOR=1` to disable color.
+
+`report`, `backfill`, `daemon`, `login`, `whoami`, `logout`,
+`setup`, and `config show` read `~/.firekeeper/config.toml`, or the file
 `$FIREKEEPER_CONFIG` names (a missing file named that way is an error).
 Precedence is flags, then environment (`FIREKEEPER_SERVER`,
 `FIREKEEPER_TOKEN`, `FIREKEEPER_PROVIDERS` as a comma list,
@@ -1175,6 +1205,7 @@ Files Firekeeper reads and writes outside the provider data it only reads:
 
 | Path | Written by | Holds |
 | --- | --- | --- |
+| `~/.firekeeper/setup-complete` | interactive setup | completed first-run setup for this user |
 | `~/.firekeeper/machine-id` | any command that identifies the machine | this machine's id |
 | `~/.firekeeper/state.json`, `state.lock` | `report`, `backfill`, `daemon` | per-file read offsets and their lock |
 | `~/.firekeeper/cloud/claude/` | `backfill --claude-cloud`, `daemon` with `[claude_cloud]` | cached Claude Code on the web sessions (Unix files `0600`, directory `0700`; Windows inherits parent ACL) |
