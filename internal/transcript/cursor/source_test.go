@@ -19,13 +19,6 @@ const (
 	malformed   = "testdata/malformed.jsonl"
 )
 
-type want struct {
-	role  transcript.Role
-	text  string
-	tool  string
-	model string
-}
-
 func TestRegistered(t *testing.T) {
 	if _, ok := reader.For(transcript.ProviderCursor); !ok {
 		t.Fatal("cursor source not registered")
@@ -44,23 +37,24 @@ func TestReadTranscript(t *testing.T) {
 	if end != info.Size() {
 		t.Fatalf("end offset = %d, want file size %d", end, info.Size())
 	}
-	expected := []want{
+	expected := []transcripttest.Want{
 		// Only the prompt inside <user_query> is the user's text.
-		0: {role: transcript.RoleUser, text: "List the files."},
-		1: {role: transcript.RoleMeta, text: "I should list the directory."},
-		2: {role: transcript.RoleToolCall, text: "Listing files.\n" + `{"command":"ls","working_directory":"/workspace/demo"}`, tool: "Shell"},
+		0: {Role: transcript.RoleUser, Text: "List the files."},
+		1: {Role: transcript.RoleMeta, Text: "I should list the directory."},
+		2: {Role: transcript.RoleToolCall, Text: "Listing files.\n" + `{"command":"ls","working_directory":"/workspace/demo"}`, Tool: "Shell"},
 		// The result names only the call id; the tool comes from the call.
-		3: {role: transcript.RoleToolResult, text: "README.md", tool: "Shell"},
-		4: {role: transcript.RoleToolCall, text: `{"path":"README.md"}`, tool: "read_file"},
-		5: {role: transcript.RoleToolResult, text: "# Demo", tool: "read_file"},
-		6: {role: transcript.RoleAssistant, text: "There is one file: README.md.", model: "cursor-test"},
-		7: {role: transcript.RoleMeta},
-		8: {role: transcript.RoleSystem, text: "Connection lost"},
-		9: {role: transcript.RoleUser, text: "Thanks"},
+		3: {Role: transcript.RoleToolResult, Text: "README.md", Tool: "Shell"},
+		4: {Role: transcript.RoleToolCall, Text: `{"path":"README.md"}`, Tool: "read_file"},
+		5: {Role: transcript.RoleToolResult, Text: "# Demo", Tool: "read_file"},
+		6: {Role: transcript.RoleAssistant, Text: "There is one file: README.md.", Model: "cursor-test"},
+		7: {Role: transcript.RoleMeta},
+		8: {Role: transcript.RoleSystem, Text: "Connection lost"},
+		9: {Role: transcript.RoleUser, Text: "Thanks"},
 		// An unknown block's visible text still reads as the reply.
-		10: {role: transcript.RoleAssistant, text: "A block type added later."},
+		10: {Role: transcript.RoleAssistant, Text: "A block type added later."},
 	}
-	checkEvents(t, events, expected, fixtureID)
+	// Cursor records carry no token counts, so every row expects zero tokens.
+	transcripttest.CheckEvents(t, events, expected, transcript.ProviderCursor, fixtureID)
 	for _, e := range events {
 		if e.TS != nil {
 			t.Errorf("seq %d: Cursor records carry no timestamp", e.Seq)
@@ -73,55 +67,25 @@ func TestReadMalformed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := []want{
-		0:  {role: transcript.RoleMeta},
-		1:  {role: transcript.RoleMeta},
-		2:  {role: transcript.RoleMeta},
-		3:  {role: transcript.RoleMeta},
-		4:  {role: transcript.RoleAssistant, text: "plain string"},
-		5:  {role: transcript.RoleUser},
-		6:  {role: transcript.RoleToolResult},
-		7:  {role: transcript.RoleMeta},
-		8:  {role: transcript.RoleMeta},
-		9:  {role: transcript.RoleSystem, text: "System note."},
-		10: {role: transcript.RoleUser, text: "no tags here"},
+	expected := []transcripttest.Want{
+		0:  {Role: transcript.RoleMeta},
+		1:  {Role: transcript.RoleMeta},
+		2:  {Role: transcript.RoleMeta},
+		3:  {Role: transcript.RoleMeta},
+		4:  {Role: transcript.RoleAssistant, Text: "plain string"},
+		5:  {Role: transcript.RoleUser},
+		6:  {Role: transcript.RoleToolResult},
+		7:  {Role: transcript.RoleMeta},
+		8:  {Role: transcript.RoleMeta},
+		9:  {Role: transcript.RoleSystem, Text: "System note."},
+		10: {Role: transcript.RoleUser, Text: "no tags here"},
 	}
 	// The file name is not a session id, so events carry none.
-	checkEvents(t, events, expected, "")
+	transcripttest.CheckEvents(t, events, expected, transcript.ProviderCursor, "")
 	var quoted string
 	if json.Unmarshal(events[0].Raw, &quoted) != nil {
 		t.Error("seq 0: invalid JSON line should be kept as a JSON string in raw")
 	}
-}
-
-func checkEvents(t *testing.T, events []transcript.Event, expected []want, sessionID string) {
-	t.Helper()
-	if len(events) != len(expected) {
-		t.Fatalf("got %d events, want %d", len(events), len(expected))
-	}
-	for i, e := range events {
-		w := expected[i]
-		if err := e.Validate(); err != nil {
-			t.Errorf("seq %d: %v", i, err)
-		}
-		if e.Seq != int64(i) || e.Role != w.role || e.Text != w.text || deref(e.ToolName) != w.tool || deref(e.Model) != w.model {
-			t.Errorf("seq %d: got seq %d role %s tool %q model %q text len %d; want role %s tool %q model %q text len %d",
-				i, e.Seq, e.Role, deref(e.ToolName), deref(e.Model), len(e.Text), w.role, w.tool, w.model, len(w.text))
-		}
-		if e.SessionID != sessionID || e.Provider != transcript.ProviderCursor {
-			t.Errorf("seq %d: session %q provider %q", i, e.SessionID, e.Provider)
-		}
-		if e.Tokens != (transcript.Tokens{}) {
-			t.Errorf("seq %d: Cursor records carry no token counts", i)
-		}
-	}
-}
-
-func deref(s *string) string {
-	if s == nil {
-		return ""
-	}
-	return *s
 }
 
 func TestSeqStability(t *testing.T) {
@@ -143,7 +107,7 @@ func TestReadFromOffsetRestoresToolNames(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tail) == 0 || tail[0].Seq != 3 || deref(tail[0].ToolName) != "Shell" {
+	if len(tail) == 0 || tail[0].Seq != 3 || transcripttest.Deref(tail[0].ToolName) != "Shell" {
 		t.Fatal("tool result read from an offset lost its tool name")
 	}
 }

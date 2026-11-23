@@ -25,14 +25,6 @@ const (
 	model       = "kimi-k3-test"
 )
 
-type want struct {
-	role   transcript.Role
-	text   string
-	tool   string
-	model  string
-	tokens transcript.Tokens
-}
-
 func TestReadTranscript(t *testing.T) {
 	events, end, err := (&Source{}).Read(fixturePath, 0)
 	if err != nil {
@@ -42,41 +34,41 @@ func TestReadTranscript(t *testing.T) {
 	if end != info.Size() {
 		t.Fatalf("end offset = %d, want file size %d", end, info.Size())
 	}
-	expected := []want{
-		0: {role: transcript.RoleMeta},
-		1: {role: transcript.RoleMeta},
-		2: {role: transcript.RoleMeta},
+	expected := []transcripttest.Want{
+		0: {Role: transcript.RoleMeta},
+		1: {Role: transcript.RoleMeta},
+		2: {Role: transcript.RoleMeta},
 		// turn.prompt repeats the user message that follows it.
-		3: {role: transcript.RoleMeta},
-		4: {role: transcript.RoleUser, text: "List the files."},
-		5: {role: transcript.RoleMeta, model: model},
-		6: {role: transcript.RoleMeta},
-		7: {role: transcript.RoleMeta, text: "Planning.", model: model},
-		8: {role: transcript.RoleAssistant, text: "Listing files.", model: model},
-		9: {role: transcript.RoleToolCall, text: `{"command":"ls"}`, tool: "Bash", model: model},
+		3: {Role: transcript.RoleMeta},
+		4: {Role: transcript.RoleUser, Text: "List the files."},
+		5: {Role: transcript.RoleMeta, Model: model},
+		6: {Role: transcript.RoleMeta},
+		7: {Role: transcript.RoleMeta, Text: "Planning.", Model: model},
+		8: {Role: transcript.RoleAssistant, Text: "Listing files.", Model: model},
+		9: {Role: transcript.RoleToolCall, Text: `{"command":"ls"}`, Tool: "Bash", Model: model},
 		// step.end repeats usage.record's counts, so only the latter has them.
-		10: {role: transcript.RoleMeta},
-		11: {role: transcript.RoleMeta, model: model, tokens: transcript.Tokens{Input: 10, Output: 20, Cache: 105, CacheRead: 100, CacheWrite: 5}},
-		12: {role: transcript.RoleToolResult, text: "README.md", tool: "Bash"},
-		13: {role: transcript.RoleMeta, model: model},
-		14: {role: transcript.RoleMeta},
-		15: {role: transcript.RoleToolCall, text: `{"path":"README.md","old_string":"a","new_string":"b"}`, tool: "Edit", model: model},
-		16: {role: transcript.RoleToolResult, text: "Replaced 1 occurrence in README.md", tool: "Edit"},
-		17: {role: transcript.RoleAssistant, text: "Done editing.", model: model},
-		18: {role: transcript.RoleMeta},
-		19: {role: transcript.RoleMeta, model: model, tokens: transcript.Tokens{Input: 3, Output: 4, Cache: 200, CacheRead: 200}},
-		20: {role: transcript.RoleMeta},
-		21: {role: transcript.RoleSystem, text: "<system-reminder>Todo list changed.</system-reminder>"},
-		22: {role: transcript.RoleSystem, text: "Background task finished."},
-		23: {role: transcript.RoleUser, text: "/review"},
-		24: {role: transcript.RoleSystem, text: "Compacted summary."},
+		10: {Role: transcript.RoleMeta},
+		11: {Role: transcript.RoleMeta, Model: model, Tokens: transcript.Tokens{Input: 10, Output: 20, Cache: 105, CacheRead: 100, CacheWrite: 5}},
+		12: {Role: transcript.RoleToolResult, Text: "README.md", Tool: "Bash"},
+		13: {Role: transcript.RoleMeta, Model: model},
+		14: {Role: transcript.RoleMeta},
+		15: {Role: transcript.RoleToolCall, Text: `{"path":"README.md","old_string":"a","new_string":"b"}`, Tool: "Edit", Model: model},
+		16: {Role: transcript.RoleToolResult, Text: "Replaced 1 occurrence in README.md", Tool: "Edit"},
+		17: {Role: transcript.RoleAssistant, Text: "Done editing.", Model: model},
+		18: {Role: transcript.RoleMeta},
+		19: {Role: transcript.RoleMeta, Model: model, Tokens: transcript.Tokens{Input: 3, Output: 4, Cache: 200, CacheRead: 200}},
+		20: {Role: transcript.RoleMeta},
+		21: {Role: transcript.RoleSystem, Text: "<system-reminder>Todo list changed.</system-reminder>"},
+		22: {Role: transcript.RoleSystem, Text: "Background task finished."},
+		23: {Role: transcript.RoleUser, Text: "/review"},
+		24: {Role: transcript.RoleSystem, Text: "Compacted summary."},
 		// Session-scope usage (titles, compaction) still counts.
-		25: {role: transcript.RoleMeta, model: model, tokens: transcript.Tokens{Input: 1, Output: 2}},
-		26: {role: transcript.RoleMeta},
-		27: {role: transcript.RoleMeta, model: model},
-		28: {role: transcript.RoleMeta},
+		25: {Role: transcript.RoleMeta, Model: model, Tokens: transcript.Tokens{Input: 1, Output: 2}},
+		26: {Role: transcript.RoleMeta},
+		27: {Role: transcript.RoleMeta, Model: model},
+		28: {Role: transcript.RoleMeta},
 	}
-	checkEvents(t, events, expected, fixtureID)
+	transcripttest.CheckEvents(t, events, expected, transcript.ProviderKimi, fixtureID)
 	for _, e := range events {
 		if e.TS == nil {
 			t.Errorf("seq %d: missing timestamp", e.Seq)
@@ -95,17 +87,17 @@ func TestReadMigratedTranscript(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	checkEvents(t, events, []want{
-		0: {role: transcript.RoleMeta},
-		1: {role: transcript.RoleMeta},
-		2: {role: transcript.RoleSystem, text: "You are Kimi."},
-		3: {role: transcript.RoleUser, text: "Write the file."},
-		4: {role: transcript.RoleToolCall, text: "Writing.\n" + `{"path": "notes.md", "content": "hi"}`, tool: "Write"},
-		5: {role: transcript.RoleToolResult, text: "Wrote 2 bytes to notes.md", tool: "Write"},
-		6: {role: transcript.RoleAssistant, text: "Done."},
-		7: {role: transcript.RoleMeta, text: "Nothing left."},
-		8: {role: transcript.RoleSystem, text: "Summary message."},
-	}, legacyID)
+	transcripttest.CheckEvents(t, events, []transcripttest.Want{
+		0: {Role: transcript.RoleMeta},
+		1: {Role: transcript.RoleMeta},
+		2: {Role: transcript.RoleSystem, Text: "You are Kimi."},
+		3: {Role: transcript.RoleUser, Text: "Write the file."},
+		4: {Role: transcript.RoleToolCall, Text: "Writing.\n" + `{"path": "notes.md", "content": "hi"}`, Tool: "Write"},
+		5: {Role: transcript.RoleToolResult, Text: "Wrote 2 bytes to notes.md", Tool: "Write"},
+		6: {Role: transcript.RoleAssistant, Text: "Done."},
+		7: {Role: transcript.RoleMeta, Text: "Nothing left."},
+		8: {Role: transcript.RoleSystem, Text: "Summary message."},
+	}, transcript.ProviderKimi, legacyID)
 }
 
 func TestReadMalformed(t *testing.T) {
@@ -113,22 +105,22 @@ func TestReadMalformed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := []want{
-		0:  {role: transcript.RoleMeta},
-		1:  {role: transcript.RoleMeta},
-		2:  {role: transcript.RoleMeta},
-		3:  {role: transcript.RoleMeta},
-		4:  {role: transcript.RoleMeta},
-		5:  {role: transcript.RoleMeta},
-		6:  {role: transcript.RoleToolResult},
-		7:  {role: transcript.RoleSystem},
-		8:  {role: transcript.RoleMeta},
-		9:  {role: transcript.RoleMeta, tokens: transcript.Tokens{Output: 2, Cache: 3, CacheWrite: 3}},
-		10: {role: transcript.RoleMeta},
-		11: {role: transcript.RoleSystem},
+	expected := []transcripttest.Want{
+		0:  {Role: transcript.RoleMeta},
+		1:  {Role: transcript.RoleMeta},
+		2:  {Role: transcript.RoleMeta},
+		3:  {Role: transcript.RoleMeta},
+		4:  {Role: transcript.RoleMeta},
+		5:  {Role: transcript.RoleMeta},
+		6:  {Role: transcript.RoleToolResult},
+		7:  {Role: transcript.RoleSystem},
+		8:  {Role: transcript.RoleMeta},
+		9:  {Role: transcript.RoleMeta, Tokens: transcript.Tokens{Output: 2, Cache: 3, CacheWrite: 3}},
+		10: {Role: transcript.RoleMeta},
+		11: {Role: transcript.RoleSystem},
 	}
 	// The path is not a session log, so no session id is known.
-	checkEvents(t, events, expected, "")
+	transcripttest.CheckEvents(t, events, expected, transcript.ProviderKimi, "")
 	// Only seq 5 carries a usable time; undecodable, bogus, negative,
 	// overflowing, and missing times are null.
 	for _, e := range events {
@@ -140,34 +132,6 @@ func TestReadMalformed(t *testing.T) {
 	if json.Unmarshal(events[0].Raw, &quoted) != nil {
 		t.Error("seq 0: invalid JSON line should be kept as a JSON string in raw")
 	}
-}
-
-func checkEvents(t *testing.T, events []transcript.Event, expected []want, sessionID string) {
-	t.Helper()
-	if len(events) != len(expected) {
-		t.Fatalf("got %d events, want %d", len(events), len(expected))
-	}
-	for i, e := range events {
-		w := expected[i]
-		if err := e.Validate(); err != nil {
-			t.Errorf("seq %d: %v", i, err)
-		}
-		if e.Seq != int64(i) || e.Role != w.role || e.Text != w.text || deref(e.ToolName) != w.tool ||
-			deref(e.Model) != w.model || e.Tokens != w.tokens {
-			t.Errorf("seq %d: got seq %d role %s tool %q model %q tokens %+v text len %d; want role %s tool %q model %q tokens %+v text len %d",
-				i, e.Seq, e.Role, deref(e.ToolName), deref(e.Model), e.Tokens, len(e.Text), w.role, w.tool, w.model, w.tokens, len(w.text))
-		}
-		if e.SessionID != sessionID || e.Provider != transcript.ProviderKimi {
-			t.Errorf("seq %d: session %q provider %q", i, e.SessionID, e.Provider)
-		}
-	}
-}
-
-func deref(s *string) string {
-	if s == nil {
-		return ""
-	}
-	return *s
 }
 
 func TestSeqStability(t *testing.T) {
@@ -220,8 +184,8 @@ func TestReadFromOffsetRestoresState(t *testing.T) {
 			}
 			for i, e := range tail {
 				w := whole[split+i]
-				if e.Seq != w.Seq || e.Tokens != w.Tokens || deref(e.Model) != deref(w.Model) ||
-					deref(e.ToolName) != deref(w.ToolName) || e.SessionID != w.SessionID {
+				if e.Seq != w.Seq || e.Tokens != w.Tokens || transcripttest.Deref(e.Model) != transcripttest.Deref(w.Model) ||
+					transcripttest.Deref(e.ToolName) != transcripttest.Deref(w.ToolName) || e.SessionID != w.SessionID {
 					t.Errorf("split %d: seq %d differs between split and whole reads", split, w.Seq)
 				}
 			}

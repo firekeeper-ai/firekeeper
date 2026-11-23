@@ -16,6 +16,7 @@ import (
 	"github.com/firekeeper-ai/firekeeper/internal/session"
 	"github.com/firekeeper-ai/firekeeper/internal/transcript"
 	"github.com/firekeeper-ai/firekeeper/internal/transcript/reader"
+	"github.com/firekeeper-ai/firekeeper/internal/transcript/transcripttest"
 )
 
 const (
@@ -27,21 +28,6 @@ const (
 	idCorrupt  = "66666666-6666-4666-8666-666666666666"
 	idLarge    = "77777777-7777-4777-8777-777777777777"
 )
-
-func writeFile(t *testing.T, path, contents string, mtime time.Time) {
-	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte(contents), 0600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Chtimes(path, mtime, mtime); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func day(d int) time.Time { return time.Date(2026, 1, d, 12, 0, 0, 0, time.UTC) }
 
 func sessionMeta(cwd, branch string) string {
 	return `{"timestamp":"2026-01-02T03:04:05.000Z","type":"session_meta","payload":{"id":"x","timestamp":"2026-01-02T03:04:05.000Z","cwd":"` + cwd + `","git":{"branch":"` + branch + `"}}}` + "\n"
@@ -65,12 +51,12 @@ func fixture(t *testing.T) (home string, paths map[string]string) {
 		idCorrupt:  filepath.Join(home, "sessions", "2026", "01", "03", "rollout-2026-01-03T01-00-00-"+idCorrupt+".jsonl"),
 		idLarge:    filepath.Join(home, "sessions", "2026", "01", "04", "rollout-2026-01-04T00-00-00-"+idLarge+".jsonl"),
 	}
-	writeFile(t, paths[idStore], sessionMeta("/wrong", "wrong")+turnContext("wrong"), day(5))
-	writeFile(t, paths[idHead], sessionMeta("/work/head", "feature")+turnContext("head-model"), day(6))
-	writeFile(t, paths[idExcluded], sessionMeta("/excluded/repo", "main"), day(7))
-	writeFile(t, paths[idArchived], sessionMeta("/work/archived", "old-branch")+turnContext("archived-model"), day(1))
-	writeFile(t, paths[idEmpty], "", day(8))
-	writeFile(t, paths[idCorrupt], "not json\n{{{{\n", day(8))
+	transcripttest.WriteFile(t, paths[idStore], sessionMeta("/wrong", "wrong")+turnContext("wrong"), transcripttest.Day(5))
+	transcripttest.WriteFile(t, paths[idHead], sessionMeta("/work/head", "feature")+turnContext("head-model"), transcripttest.Day(6))
+	transcripttest.WriteFile(t, paths[idExcluded], sessionMeta("/excluded/repo", "main"), transcripttest.Day(7))
+	transcripttest.WriteFile(t, paths[idArchived], sessionMeta("/work/archived", "old-branch")+turnContext("archived-model"), transcripttest.Day(1))
+	transcripttest.WriteFile(t, paths[idEmpty], "", transcripttest.Day(8))
+	transcripttest.WriteFile(t, paths[idCorrupt], "not json\n{{{{\n", transcripttest.Day(8))
 
 	var large strings.Builder
 	large.WriteString(sessionMeta("/work/large", "big"))
@@ -80,10 +66,10 @@ func fixture(t *testing.T) (home string, paths map[string]string) {
 		large.WriteString(filler)
 	}
 	large.WriteString(turnContext("tail-model"))
-	writeFile(t, paths[idLarge], large.String(), day(4))
+	transcripttest.WriteFile(t, paths[idLarge], large.String(), transcripttest.Day(4))
 
-	writeFile(t, filepath.Join(home, "sessions", "2026", "01", "02", "rollout-no-uuid.jsonl"), sessionMeta("/x", "y"), day(9))
-	writeFile(t, filepath.Join(home, "state_5.sqlite"), "", day(1))
+	transcripttest.WriteFile(t, filepath.Join(home, "sessions", "2026", "01", "02", "rollout-no-uuid.jsonl"), sessionMeta("/x", "y"), transcripttest.Day(9))
+	transcripttest.WriteFile(t, filepath.Join(home, "state_5.sqlite"), "", transcripttest.Day(1))
 	return home, paths
 }
 
@@ -91,9 +77,9 @@ func fixture(t *testing.T) (home string, paths map[string]string) {
 // complete, so its rollout never needs opening; the excluded one names its
 // directory but no model; the archived one lacks a branch.
 var storeRows = []threadRow{
-	{ID: idStore, Title: "Stored title", CWD: "/work/store", Model: "store-model", Branch: "main", CreatedMS: day(2).UnixMilli(), UpdatedMS: day(5).UnixMilli()},
+	{ID: idStore, Title: "Stored title", CWD: "/work/store", Model: "store-model", Branch: "main", CreatedMS: transcripttest.Day(2).UnixMilli(), UpdatedMS: transcripttest.Day(5).UnixMilli()},
 	{ID: idExcluded, Title: "Excluded", CWD: "/excluded/repo"},
-	{ID: idArchived, Title: "Archived", CWD: "/work/archived", Model: "store-archived-model", CreatedMS: day(1).UnixMilli() - 1000, UpdatedMS: day(1).UnixMilli()},
+	{ID: idArchived, Title: "Archived", CWD: "/work/archived", Model: "store-archived-model", CreatedMS: transcripttest.Day(1).UnixMilli() - 1000, UpdatedMS: transcripttest.Day(1).UnixMilli()},
 }
 
 func fakeSQLite(t *testing.T, home string, fail bool) func(context.Context, string, ...string) ([]byte, error) {
@@ -217,7 +203,7 @@ func TestEnumerate(t *testing.T) {
 	stored := byID[idStore]
 	if stored.CWD != "/work/store" || stored.Project != "store" || stored.Model != "store-model" || stored.Branch != "main" ||
 		stored.Title != "Stored title" || stored.Name != "Stored title" || stored.GitBranch != "main" ||
-		!stored.StartedAt.Equal(day(2)) || !stored.LastActivityAt.Equal(day(5)) {
+		!stored.StartedAt.Equal(transcripttest.Day(2)) || !stored.LastActivityAt.Equal(transcripttest.Day(5)) {
 		t.Errorf("store-backed meta = %+v", stored)
 	}
 	headed := byID[idHead]
@@ -249,7 +235,7 @@ func TestEnumerate(t *testing.T) {
 func TestEnumerateModifiedAfter(t *testing.T) {
 	home, _ := fixture(t)
 	source := &Source{CodexHome: home, run: fakeSQLite(t, home, false)}
-	metas, err := source.Enumerate(context.Background(), reader.EnumerateOptions{ModifiedAfter: day(5)})
+	metas, err := source.Enumerate(context.Background(), reader.EnumerateOptions{ModifiedAfter: transcripttest.Day(5)})
 	if err != nil {
 		// Only rollouts modified after day 5 remain: the head-only one, the
 		// excluded one (no Skip here), and the empty and corrupt ones.

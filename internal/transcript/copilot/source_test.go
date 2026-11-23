@@ -20,14 +20,6 @@ const (
 	malformed   = "testdata/malformed.jsonl"
 )
 
-type want struct {
-	role   transcript.Role
-	text   string
-	tool   string
-	model  string
-	tokens transcript.Tokens
-}
-
 func TestReadEvents(t *testing.T) {
 	events, end, err := (&Source{}).Read(fixturePath, 0)
 	if err != nil {
@@ -37,26 +29,26 @@ func TestReadEvents(t *testing.T) {
 	if end != info.Size() {
 		t.Fatalf("end offset = %d, want file size %d", end, info.Size())
 	}
-	expected := []want{
-		0:  {role: transcript.RoleMeta},
-		1:  {role: transcript.RoleMeta, model: "gpt-test"},
-		2:  {role: transcript.RoleSystem, text: "Follow the sandbox rules."},
-		3:  {role: transcript.RoleUser, text: "List the files."},
-		4:  {role: transcript.RoleMeta},
-		5:  {role: transcript.RoleAssistant, text: "Listing files.", model: "gpt-test"},
-		6:  {role: transcript.RoleMeta},
-		7:  {role: transcript.RoleMeta},
-		8:  {role: transcript.RoleToolCall, text: `{"command":"ls","description":"List files"}`, tool: "bash", model: "gpt-test"},
-		9:  {role: transcript.RoleToolResult, text: "README.md", tool: "bash", model: "gpt-test"},
-		10: {role: transcript.RoleAssistant, model: "gpt-test"},
+	expected := []transcripttest.Want{
+		0:  {Role: transcript.RoleMeta},
+		1:  {Role: transcript.RoleMeta, Model: "gpt-test"},
+		2:  {Role: transcript.RoleSystem, Text: "Follow the sandbox rules."},
+		3:  {Role: transcript.RoleUser, Text: "List the files."},
+		4:  {Role: transcript.RoleMeta},
+		5:  {Role: transcript.RoleAssistant, Text: "Listing files.", Model: "gpt-test"},
+		6:  {Role: transcript.RoleMeta},
+		7:  {Role: transcript.RoleMeta},
+		8:  {Role: transcript.RoleToolCall, Text: `{"command":"ls","description":"List files"}`, Tool: "bash", Model: "gpt-test"},
+		9:  {Role: transcript.RoleToolResult, Text: "README.md", Tool: "bash", Model: "gpt-test"},
+		10: {Role: transcript.RoleAssistant, Model: "gpt-test"},
 		// The failed call never started; its name comes from toolRequests.
-		11: {role: transcript.RoleToolResult, text: "file not found", tool: "view", model: "gpt-test"},
-		12: {role: transcript.RoleMeta, model: "gpt-mini-test", tokens: transcript.Tokens{Input: 150, Output: 14, Cache: 20, CacheRead: 20}},
-		13: {role: transcript.RoleAssistant, text: "There is one file: README.md.", model: "gpt-test"},
-		14: {role: transcript.RoleMeta},
-		15: {role: transcript.RoleMeta, model: "gpt-test", tokens: transcript.Tokens{Input: 50, Output: 65, Cache: 1450, CacheRead: 1200, CacheWrite: 250}},
+		11: {Role: transcript.RoleToolResult, Text: "file not found", Tool: "view", Model: "gpt-test"},
+		12: {Role: transcript.RoleMeta, Model: "gpt-mini-test", Tokens: transcript.Tokens{Input: 150, Output: 14, Cache: 20, CacheRead: 20}},
+		13: {Role: transcript.RoleAssistant, Text: "There is one file: README.md.", Model: "gpt-test"},
+		14: {Role: transcript.RoleMeta},
+		15: {Role: transcript.RoleMeta, Model: "gpt-test", Tokens: transcript.Tokens{Input: 50, Output: 65, Cache: 1450, CacheRead: 1200, CacheWrite: 250}},
 	}
-	checkEvents(t, events, expected, fixtureID)
+	transcripttest.CheckEvents(t, events, expected, transcript.ProviderCopilot, fixtureID)
 	for _, e := range events {
 		if e.TS == nil {
 			t.Errorf("seq %d: missing timestamp", e.Seq)
@@ -69,20 +61,20 @@ func TestReadMalformed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := []want{
-		0: {role: transcript.RoleMeta},
-		1: {role: transcript.RoleMeta},
-		2: {role: transcript.RoleUser, text: "hello"},
-		3: {role: transcript.RoleMeta},
-		4: {role: transcript.RoleAssistant},
-		5: {role: transcript.RoleToolCall, text: "raw args"},
-		6: {role: transcript.RoleMeta},
-		7: {role: transcript.RoleMeta},
-		8: {role: transcript.RoleMeta},
-		9: {role: transcript.RoleToolResult},
+	expected := []transcripttest.Want{
+		0: {Role: transcript.RoleMeta},
+		1: {Role: transcript.RoleMeta},
+		2: {Role: transcript.RoleUser, Text: "hello"},
+		3: {Role: transcript.RoleMeta},
+		4: {Role: transcript.RoleAssistant},
+		5: {Role: transcript.RoleToolCall, Text: "raw args"},
+		6: {Role: transcript.RoleMeta},
+		7: {Role: transcript.RoleMeta},
+		8: {Role: transcript.RoleMeta},
+		9: {Role: transcript.RoleToolResult},
 	}
 	// The path has no session directory, so session.start supplies the id.
-	checkEvents(t, events, expected, "0199b2c3-d4e5-7f60-8a9b-1c2d3e4f5a6c")
+	transcripttest.CheckEvents(t, events, expected, transcript.ProviderCopilot, "0199b2c3-d4e5-7f60-8a9b-1c2d3e4f5a6c")
 	if events[2].TS != nil {
 		t.Error("seq 2: unparseable timestamp should be null")
 	}
@@ -109,34 +101,6 @@ func TestSessionIDFromWorkspace(t *testing.T) {
 	if err != nil || len(events) != 1 || events[0].SessionID != id {
 		t.Fatalf("got %d events, err %v; want session id from workspace.yaml", len(events), err)
 	}
-}
-
-func checkEvents(t *testing.T, events []transcript.Event, expected []want, sessionID string) {
-	t.Helper()
-	if len(events) != len(expected) {
-		t.Fatalf("got %d events, want %d", len(events), len(expected))
-	}
-	for i, e := range events {
-		w := expected[i]
-		if err := e.Validate(); err != nil {
-			t.Errorf("seq %d: %v", i, err)
-		}
-		if e.Seq != int64(i) || e.Role != w.role || e.Text != w.text || deref(e.ToolName) != w.tool ||
-			deref(e.Model) != w.model || e.Tokens != w.tokens {
-			t.Errorf("seq %d: got seq %d role %s tool %q model %q tokens %+v text len %d; want role %s tool %q model %q tokens %+v text len %d",
-				i, e.Seq, e.Role, deref(e.ToolName), deref(e.Model), e.Tokens, len(e.Text), w.role, w.tool, w.model, w.tokens, len(w.text))
-		}
-		if e.SessionID != sessionID || e.Provider != transcript.ProviderCopilot {
-			t.Errorf("seq %d: session %q provider %q", i, e.SessionID, e.Provider)
-		}
-	}
-}
-
-func deref(s *string) string {
-	if s == nil {
-		return ""
-	}
-	return *s
 }
 
 func TestSeqStability(t *testing.T) {
@@ -179,7 +143,7 @@ func TestReadFromOffsetRestoresState(t *testing.T) {
 		}
 		for i, e := range tail {
 			w := whole[split+i]
-			if e.Seq != w.Seq || deref(e.Model) != deref(w.Model) || deref(e.ToolName) != deref(w.ToolName) || e.SessionID != w.SessionID {
+			if e.Seq != w.Seq || transcripttest.Deref(e.Model) != transcripttest.Deref(w.Model) || transcripttest.Deref(e.ToolName) != transcripttest.Deref(w.ToolName) || e.SessionID != w.SessionID {
 				t.Errorf("split %d: seq %d differs between split and whole reads", split, w.Seq)
 			}
 		}

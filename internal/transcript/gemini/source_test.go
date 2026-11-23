@@ -25,14 +25,6 @@ const (
 	model       = "gemini-3-pro-test"
 )
 
-type want struct {
-	role   transcript.Role
-	text   string
-	tool   string
-	model  string
-	tokens transcript.Tokens
-}
-
 func TestReadTranscript(t *testing.T) {
 	events, end, err := (&Source{}).Read(fixturePath, 0)
 	if err != nil {
@@ -42,35 +34,35 @@ func TestReadTranscript(t *testing.T) {
 	if end != info.Size() {
 		t.Fatalf("end offset = %d, want file size %d", end, info.Size())
 	}
-	expected := []want{
-		0: {role: transcript.RoleMeta},
-		1: {role: transcript.RoleUser, text: "List the files."},
-		2: {role: transcript.RoleMeta},
+	expected := []transcripttest.Want{
+		0: {Role: transcript.RoleMeta},
+		1: {Role: transcript.RoleUser, Text: "List the files."},
+		2: {Role: transcript.RoleMeta},
 		// Thinking alone is meta; the response's usage arrives with it.
-		3: {role: transcript.RoleMeta, text: "Planning\nLook at the tree.", model: model, tokens: transcript.Tokens{Input: 20, Output: 15, Cache: 100, CacheRead: 100}},
-		4: {role: transcript.RoleMeta},
+		3: {Role: transcript.RoleMeta, Text: "Planning\nLook at the tree.", Model: model, Tokens: transcript.Tokens{Input: 20, Output: 15, Cache: 100, CacheRead: 100}},
+		4: {Role: transcript.RoleMeta},
 		// The message is written again with its tool call; tokens are not
 		// counted twice.
-		5:  {role: transcript.RoleToolCall, text: `{"dir_path":"."}`, tool: "list_directory", model: model},
-		6:  {role: transcript.RoleToolResult, text: "README.md", tool: "list_directory"},
-		7:  {role: transcript.RoleAssistant, text: "I'll fix the typo.", model: model},
-		8:  {role: transcript.RoleMeta, model: model, tokens: transcript.Tokens{Input: 54, Output: 20, Cache: 150, CacheRead: 150}},
-		9:  {role: transcript.RoleToolCall, text: `{"file_path":"README.md","old_string":"teh","new_string":"the"}`, tool: "replace", model: model},
-		10: {role: transcript.RoleToolResult, text: "File not found.", tool: "replace"},
-		11: {role: transcript.RoleAssistant, text: "Done editing.", model: model},
-		12: {role: transcript.RoleSystem, text: "Request cancelled."},
+		5:  {Role: transcript.RoleToolCall, Text: `{"dir_path":"."}`, Tool: "list_directory", Model: model},
+		6:  {Role: transcript.RoleToolResult, Text: "README.md", Tool: "list_directory"},
+		7:  {Role: transcript.RoleAssistant, Text: "I'll fix the typo.", Model: model},
+		8:  {Role: transcript.RoleMeta, Model: model, Tokens: transcript.Tokens{Input: 54, Output: 20, Cache: 150, CacheRead: 150}},
+		9:  {Role: transcript.RoleToolCall, Text: `{"file_path":"README.md","old_string":"teh","new_string":"the"}`, Tool: "replace", Model: model},
+		10: {Role: transcript.RoleToolResult, Text: "File not found.", Tool: "replace"},
+		11: {Role: transcript.RoleAssistant, Text: "Done editing.", Model: model},
+		12: {Role: transcript.RoleSystem, Text: "Request cancelled."},
 		// What the user typed, not the expanded @file content.
-		13: {role: transcript.RoleUser, text: "/review @README.md"},
-		14: {role: transcript.RoleSystem, text: "<session_context>\nWorkspace: /work/demo\n</session_context>"},
-		15: {role: transcript.RoleMeta},
-		16: {role: transcript.RoleMeta},
-		17: {role: transcript.RoleMeta},
+		13: {Role: transcript.RoleUser, Text: "/review @README.md"},
+		14: {Role: transcript.RoleSystem, Text: "<session_context>\nWorkspace: /work/demo\n</session_context>"},
+		15: {Role: transcript.RoleMeta},
+		16: {Role: transcript.RoleMeta},
+		17: {Role: transcript.RoleMeta},
 		// A response for a call whose result was already emitted.
-		18: {role: transcript.RoleMeta},
-		19: {role: transcript.RoleMeta},
-		20: {role: transcript.RoleSystem, text: "Quota exceeded."},
+		18: {Role: transcript.RoleMeta},
+		19: {Role: transcript.RoleMeta},
+		20: {Role: transcript.RoleSystem, Text: "Quota exceeded."},
 	}
-	checkEvents(t, events, expected, fixtureID)
+	transcripttest.CheckEvents(t, events, expected, transcript.ProviderGemini, fixtureID)
 	for _, seq := range []int{0, 1, 3, 5, 6, 13, 17, 20} {
 		if events[seq].TS == nil {
 			t.Errorf("seq %d: missing timestamp", seq)
@@ -91,41 +83,6 @@ func TestReadTranscript(t *testing.T) {
 	if got := transcript.TouchedFiles(events[9]); len(got) != 1 || got[0] != "README.md" {
 		t.Errorf("TouchedFiles(replace call) = %q", got)
 	}
-}
-
-func checkEvents(t *testing.T, events []transcript.Event, expected []want, sessionID string) {
-	t.Helper()
-	if len(events) != len(expected) {
-		t.Fatalf("got %d events, want %d", len(events), len(expected))
-	}
-	for i, e := range events {
-		w := expected[i]
-		if e.Seq != int64(i) || e.Provider != transcript.ProviderGemini || e.SessionID != sessionID {
-			t.Errorf("event %d: seq %d provider %q session %q", i, e.Seq, e.Provider, e.SessionID)
-		}
-		if e.Role != w.role || e.Text != w.text {
-			t.Errorf("seq %d: role %q text %q, want role %q text %q", i, e.Role, e.Text, w.role, w.text)
-		}
-		if got := deref(e.ToolName); got != w.tool {
-			t.Errorf("seq %d: tool %q, want %q", i, got, w.tool)
-		}
-		if got := deref(e.Model); got != w.model {
-			t.Errorf("seq %d: model %q, want %q", i, got, w.model)
-		}
-		if e.Tokens != w.tokens {
-			t.Errorf("seq %d: tokens %+v, want %+v", i, e.Tokens, w.tokens)
-		}
-		if err := e.Validate(); err != nil {
-			t.Errorf("seq %d: %v", i, err)
-		}
-	}
-}
-
-func deref(s *string) string {
-	if s == nil {
-		return ""
-	}
-	return *s
 }
 
 func TestReadSeqStability(t *testing.T) {
@@ -160,7 +117,7 @@ func TestReadFromEveryOffset(t *testing.T) {
 		}
 		for i, e := range tail {
 			w := whole[seq+i]
-			if e.Seq != w.Seq || e.Role != w.Role || e.Text != w.Text || e.Tokens != w.Tokens || deref(e.ToolName) != deref(w.ToolName) || deref(e.Model) != deref(w.Model) {
+			if e.Seq != w.Seq || e.Role != w.Role || e.Text != w.Text || e.Tokens != w.Tokens || transcripttest.Deref(e.ToolName) != transcripttest.Deref(w.ToolName) || transcripttest.Deref(e.Model) != transcripttest.Deref(w.Model) {
 				t.Fatalf("read from seq %d: event %d differs from the whole read", seq, w.Seq)
 			}
 		}
@@ -222,12 +179,12 @@ func TestReadLegacy(t *testing.T) {
 	if end != info.Size() {
 		t.Fatalf("end offset = %d, want file size %d", end, info.Size())
 	}
-	checkEvents(t, events, []want{
-		{role: transcript.RoleUser, text: "Write hello.txt"},
+	transcripttest.CheckEvents(t, events, []transcripttest.Want{
+		{Role: transcript.RoleUser, Text: "Write hello.txt"},
 		// Legacy files hold tool results only in the call record.
-		{role: transcript.RoleToolCall, text: "{\"file_path\":\"hello.txt\",\"content\":\"hi\"}\nCreated hello.txt", tool: "write_file", model: "gemini-2.5-pro", tokens: transcript.Tokens{Input: 50, Output: 5}},
-		{role: transcript.RoleAssistant, text: "Created hello.txt.", model: "gemini-2.5-pro"},
-	}, legacyID)
+		{Role: transcript.RoleToolCall, Text: "{\"file_path\":\"hello.txt\",\"content\":\"hi\"}\nCreated hello.txt", Tool: "write_file", Model: "gemini-2.5-pro", Tokens: transcript.Tokens{Input: 50, Output: 5}},
+		{Role: transcript.RoleAssistant, Text: "Created hello.txt.", Model: "gemini-2.5-pro"},
+	}, transcript.ProviderGemini, legacyID)
 	if !json.Valid(events[1].Raw) || strings.Contains(string(events[1].Raw), "\n") {
 		t.Error("legacy raw must be the compact message record")
 	}
@@ -272,10 +229,10 @@ func TestReadMalformed(t *testing.T) {
 		t.Errorf("non-text content: role %q text %q", events[1].Role, events[1].Text)
 	}
 	// Negative counts are clamped.
-	if e := events[3]; e.Role != transcript.RoleToolCall || deref(e.ToolName) != "run_shell_command" || e.Tokens != (transcript.Tokens{Cache: 9, CacheRead: 9}) {
+	if e := events[3]; e.Role != transcript.RoleToolCall || transcripttest.Deref(e.ToolName) != "run_shell_command" || e.Tokens != (transcript.Tokens{Cache: 9, CacheRead: 9}) {
 		t.Errorf("tool calls without ids or args: %+v", e)
 	}
-	if e := events[5]; e.Role != transcript.RoleToolResult || e.Text != `{"status":200}` || deref(e.ToolName) != "web_fetch" {
+	if e := events[5]; e.Role != transcript.RoleToolResult || e.Text != `{"status":200}` || transcripttest.Deref(e.ToolName) != "web_fetch" {
 		t.Errorf("response without id: role %q text %q", e.Role, e.Text)
 	}
 	for _, seq := range []int{0, 2, 4, 6, 7, 8, 9} {

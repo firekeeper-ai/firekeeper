@@ -16,6 +16,7 @@ import (
 	"github.com/firekeeper-ai/firekeeper/internal/testenv"
 	"github.com/firekeeper-ai/firekeeper/internal/transcript"
 	"github.com/firekeeper-ai/firekeeper/internal/transcript/reader"
+	"github.com/firekeeper-ai/firekeeper/internal/transcript/transcripttest"
 )
 
 const fixtureID = "ses_fixtureA"
@@ -43,38 +44,29 @@ func at(db string, offset time.Duration) *Source {
 	return &Source{Database: db, now: func() time.Time { return base.Add(offset) }}
 }
 
-type want struct {
-	seq    int64
-	role   transcript.Role
-	text   string
-	tool   string
-	model  string
-	tokens transcript.Tokens
-}
-
 func TestRead(t *testing.T) {
 	db := fixtureDB(t)
 	path := session.OpenCodeTranscriptPath(db, fixtureID)
 	const model = "model-test"
-	expected := []want{
-		{seq: 1, role: transcript.RoleMeta},
-		{seq: 2, role: transcript.RoleMeta, model: model},
-		{seq: 3, role: transcript.RoleUser, text: "Fix the parser."},
+	expected := []transcripttest.Want{
+		{Seq: 1, Role: transcript.RoleMeta},
+		{Seq: 2, Role: transcript.RoleMeta, Model: model},
+		{Seq: 3, Role: transcript.RoleUser, Text: "Fix the parser."},
 		// Undecodable data is kept as meta.
-		{seq: 4, role: transcript.RoleMeta},
+		{Seq: 4, Role: transcript.RoleMeta},
 		// Only tool calls, so the calls and their output are the text.
-		{seq: 5, role: transcript.RoleToolCall, tool: "edit", model: model,
-			text: `{"path":"parser.go","oldString":"a","newString":"b"}` + "\nEdited parser.go\n" +
+		{Seq: 5, Role: transcript.RoleToolCall, Tool: "edit", Model: model,
+			Text: `{"path":"parser.go","oldString":"a","newString":"b"}` + "\nEdited parser.go\n" +
 				`{"patchText":"*** Begin Patch\n*** Add File: parser_test.go\n+package parser\n*** End Patch"}` + "\nerror: denied",
-			tokens: transcript.Tokens{Input: 10, Output: 9, Cache: 500, CacheRead: 400, CacheWrite: 100}},
+			Tokens: transcript.Tokens{Input: 10, Output: 9, Cache: 500, CacheRead: 400, CacheWrite: 100}},
 		// A reply with a tool call reads as the reply.
-		{seq: 6, role: transcript.RoleAssistant, text: "Fixed the parser.", tool: "read", model: model,
-			tokens: transcript.Tokens{Input: 20, Output: 9, Cache: 500, CacheRead: 500}},
-		{seq: 7, role: transcript.RoleToolResult, text: "$ go test ./...\nok", tool: "shell"},
-		{seq: 9, role: transcript.RoleMeta},
-		{seq: 10, role: transcript.RoleUser, text: "Now add tests."},
-		{seq: 11, role: transcript.RoleSystem, text: "Parser fixed; tests next.", model: model,
-			tokens: transcript.Tokens{Input: 1, Output: 2, Cache: 3, CacheRead: 3}},
+		{Seq: 6, Role: transcript.RoleAssistant, Text: "Fixed the parser.", Tool: "read", Model: model,
+			Tokens: transcript.Tokens{Input: 20, Output: 9, Cache: 500, CacheRead: 500}},
+		{Seq: 7, Role: transcript.RoleToolResult, Text: "$ go test ./...\nok", Tool: "shell"},
+		{Seq: 9, Role: transcript.RoleMeta},
+		{Seq: 10, Role: transcript.RoleUser, Text: "Now add tests."},
+		{Seq: 11, Role: transcript.RoleSystem, Text: "Parser fixed; tests next.", Model: model,
+			Tokens: transcript.Tokens{Input: 1, Output: 2, Cache: 3, CacheRead: 3}},
 	}
 
 	// Message 12 is still being written, so the read stops before it, and
@@ -86,7 +78,7 @@ func TestRead(t *testing.T) {
 	if end != 12 {
 		t.Errorf("end offset = %d, want 12", end)
 	}
-	check(t, events, expected)
+	transcripttest.CheckEvents(t, events, expected, transcript.ProviderOpenCode, fixtureID)
 	again, againEnd, err := at(db, 20*time.Second).Read(path, end)
 	if err != nil || len(again) != 0 || againEnd != end {
 		t.Errorf("read at unfinished message = %d events, offset %d, %v; want none at %d", len(again), againEnd, err, end)
@@ -100,10 +92,10 @@ func TestRead(t *testing.T) {
 	if end != 14 {
 		t.Errorf("stale end offset = %d, want 14", end)
 	}
-	check(t, events, append(expected,
-		want{seq: 12, role: transcript.RoleAssistant, text: "Writing tes", model: model},
-		want{seq: 13, role: transcript.RoleUser, text: "Use table tests."},
-	))
+	transcripttest.CheckEvents(t, events, append(expected,
+		transcripttest.Want{Seq: 12, Role: transcript.RoleAssistant, Text: "Writing tes", Model: model},
+		transcripttest.Want{Seq: 13, Role: transcript.RoleUser, Text: "Use table tests."},
+	), transcript.ProviderOpenCode, fixtureID)
 	for _, e := range events {
 		if err := e.Validate(); err != nil {
 			t.Errorf("seq %d: %v", e.Seq, err)
@@ -191,35 +183,6 @@ func seqs(events []transcript.Event) []int64 {
 		out = append(out, e.Seq)
 	}
 	return out
-}
-
-func check(t *testing.T, events []transcript.Event, expected []want) {
-	t.Helper()
-	if len(events) != len(expected) {
-		t.Fatalf("got %d events %v, want %d", len(events), seqs(events), len(expected))
-	}
-	for i, w := range expected {
-		e := events[i]
-		if e.Seq != w.seq || e.Role != w.role || e.Text != w.text || e.Tokens != w.tokens {
-			// Names seqs and roles only; fixture text is synthetic but the
-			// message stays in the same shape as for real data.
-			t.Errorf("event %d: seq %d role %s tokens %+v text match %v; want seq %d role %s tokens %+v",
-				i, e.Seq, e.Role, e.Tokens, e.Text == w.text, w.seq, w.role, w.tokens)
-		}
-		if got := deref(e.ToolName); got != w.tool {
-			t.Errorf("seq %d: tool %q, want %q", e.Seq, got, w.tool)
-		}
-		if got := deref(e.Model); got != w.model {
-			t.Errorf("seq %d: model %q, want %q", e.Seq, got, w.model)
-		}
-	}
-}
-
-func deref(s *string) string {
-	if s == nil {
-		return ""
-	}
-	return *s
 }
 
 func TestTouchedFiles(t *testing.T) {
