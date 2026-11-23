@@ -10,6 +10,7 @@ import (
 
 	"github.com/firekeeper-ai/firekeeper/internal/session"
 	"github.com/firekeeper-ai/firekeeper/internal/transcript/reader"
+	"github.com/firekeeper-ai/firekeeper/internal/transcript/transcripttest"
 )
 
 // TestEnumerateSubagents checks that a Codex subagent thread's parent, agent
@@ -29,14 +30,14 @@ func TestEnumerateSubagents(t *testing.T) {
 		return filepath.Join(home, "sessions", "2026", "01", "02", "rollout-2026-01-02T03-04-05-"+id+".jsonl")
 	}
 	for _, id := range []string{parent, child, review, self} {
-		writeFile(t, rollout(id), sessionMeta("/work/repo", "main")+turnContext("gpt-5"), day(3))
+		transcripttest.WriteFile(t, rollout(id), sessionMeta("/work/repo", "main")+turnContext("gpt-5"), transcripttest.Day(3))
 	}
 	// The grandchild has no row in the database, so the rollout head names
 	// its parent: session_meta.source is an object there, not a string.
-	writeFile(t, rollout(grandchild),
+	transcripttest.WriteFile(t, rollout(grandchild),
 		`{"timestamp":"2026-01-02T03:04:05.000Z","type":"session_meta","payload":{"id":"`+grandchild+`","timestamp":"2026-01-02T03:04:05.000Z","cwd":"/work/repo","source":{"subagent":{"thread_spawn":{"parent_thread_id":"`+child+`","depth":2,"agent_path":null,"agent_nickname":"Noether","agent_role":null}}},"git":{"branch":"main"}}}`+"\n"+turnContext("gpt-5"),
-		day(4))
-	writeFile(t, filepath.Join(home, "state_5.sqlite"), "", day(1))
+		transcripttest.Day(4))
+	transcripttest.WriteFile(t, filepath.Join(home, "state_5.sqlite"), "", transcripttest.Day(1))
 
 	spawn := func(parentID, nickname, role string) string {
 		data, _ := json.Marshal(map[string]any{"subagent": map[string]any{"thread_spawn": map[string]any{
@@ -45,10 +46,10 @@ func TestEnumerateSubagents(t *testing.T) {
 		return string(data)
 	}
 	rows := []threadRow{
-		{ID: parent, CWD: "/work/repo", Model: "gpt-5", Branch: "main", CreatedMS: day(2).UnixMilli(), Source: "cli"},
-		{ID: child, CWD: "/work/repo", Model: "gpt-5", Branch: "main", CreatedMS: day(2).UnixMilli(), Source: spawn(parent, "Galileo", "explorer")},
-		{ID: review, CWD: "/work/repo", Model: "gpt-5", Branch: "main", CreatedMS: day(2).UnixMilli(), Source: `{"subagent":"review"}`},
-		{ID: self, CWD: "/work/repo", Model: "gpt-5", Branch: "main", CreatedMS: day(2).UnixMilli(), Source: spawn(self, "Loop", "")},
+		{ID: parent, CWD: "/work/repo", Model: "gpt-5", Branch: "main", CreatedMS: transcripttest.Day(2).UnixMilli(), Source: "cli"},
+		{ID: child, CWD: "/work/repo", Model: "gpt-5", Branch: "main", CreatedMS: transcripttest.Day(2).UnixMilli(), Source: spawn(parent, "Galileo", "explorer")},
+		{ID: review, CWD: "/work/repo", Model: "gpt-5", Branch: "main", CreatedMS: transcripttest.Day(2).UnixMilli(), Source: `{"subagent":"review"}`},
+		{ID: self, CWD: "/work/repo", Model: "gpt-5", Branch: "main", CreatedMS: transcripttest.Day(2).UnixMilli(), Source: spawn(self, "Loop", "")},
 	}
 	var query string
 	source := &Source{CodexHome: home, run: func(_ context.Context, _ string, args ...string) ([]byte, error) {
@@ -115,21 +116,21 @@ func TestEnumerateForkedSubagents(t *testing.T) {
 		return filepath.Join(home, "sessions", "2026", "01", "02", "rollout-2026-01-02T03-04-05-"+id+".jsonl")
 	}
 	// noRow: a user fork of sub that the database does not list.
-	writeFile(t, rollout(noRow), meta(noRow, "2026-01-02T03:04:05.000Z", "/fork", `"cli"`)+copied, day(3))
+	transcripttest.WriteFile(t, rollout(noRow), meta(noRow, "2026-01-02T03:04:05.000Z", "/fork", `"cli"`)+copied, transcripttest.Day(3))
 	// cliRow: the same fork, listed with source "cli" but without a model,
 	// so the rollout head is still read for the model.
-	writeFile(t, rollout(cliRow), meta(cliRow, "2026-01-02T03:04:05.000Z", "/fork", `"cli"`)+copied, day(3))
+	transcripttest.WriteFile(t, rollout(cliRow), meta(cliRow, "2026-01-02T03:04:05.000Z", "/fork", `"cli"`)+copied, transcripttest.Day(3))
 	// spawned: a subagent spawned with forked context; its own source names
 	// sub, the copied one names root.
-	writeFile(t, rollout(spawned), meta(spawned, "2026-01-02T03:04:05.000Z", "/fork", ownSpawn)+copied, day(3))
+	transcripttest.WriteFile(t, rollout(spawned), meta(spawned, "2026-01-02T03:04:05.000Z", "/fork", ownSpawn)+copied, transcripttest.Day(3))
 	// oldRow: a row from a database without a source column, so the head is
 	// the only place the spawn is recorded.
-	writeFile(t, rollout(oldRow), meta(oldRow, "2026-01-02T03:04:05.000Z", "/fork", ownSpawn)+copied, day(3))
-	writeFile(t, filepath.Join(home, "state_5.sqlite"), "", day(1))
+	transcripttest.WriteFile(t, rollout(oldRow), meta(oldRow, "2026-01-02T03:04:05.000Z", "/fork", ownSpawn)+copied, transcripttest.Day(3))
+	transcripttest.WriteFile(t, filepath.Join(home, "state_5.sqlite"), "", transcripttest.Day(1))
 
 	rows := []threadRow{
-		{ID: cliRow, CWD: "/fork", Branch: "main", CreatedMS: day(2).UnixMilli(), Source: "cli"},
-		{ID: oldRow, CWD: "/fork", Branch: "main", CreatedMS: day(2).UnixMilli()},
+		{ID: cliRow, CWD: "/fork", Branch: "main", CreatedMS: transcripttest.Day(2).UnixMilli(), Source: "cli"},
+		{ID: oldRow, CWD: "/fork", Branch: "main", CreatedMS: transcripttest.Day(2).UnixMilli()},
 	}
 	source := &Source{CodexHome: home, run: func(_ context.Context, _ string, args ...string) ([]byte, error) {
 		if strings.HasPrefix(args[3], "PRAGMA") {
@@ -173,10 +174,10 @@ func TestEnumerateForkedSubagents(t *testing.T) {
 func TestReadHeadFirstMetaWithoutID(t *testing.T) {
 	const id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
 	path := filepath.Join(t.TempDir(), "rollout-2026-01-02T03-04-05-"+id+".jsonl")
-	writeFile(t, path,
+	transcripttest.WriteFile(t, path,
 		`{"timestamp":"2026-01-02T03:04:05.000Z","type":"session_meta","payload":{"timestamp":"2026-01-02T03:04:05.000Z","cwd":"/first","source":"cli"}}`+"\n"+
 			`{"timestamp":"2026-01-02T03:04:06.000Z","type":"session_meta","payload":{"id":"other","timestamp":"2026-01-01T00:00:00.000Z","cwd":"/second","source":{"subagent":{"thread_spawn":{"parent_thread_id":"p"}}}}}`+"\n",
-		day(3))
+		transcripttest.Day(3))
 	h, err := (&Source{}).readHead(path, id)
 	if err != nil {
 		t.Fatal(err)
@@ -214,13 +215,13 @@ func TestEnumerateForkedFrom(t *testing.T) {
 	rollout := func(id string) string {
 		return filepath.Join(home, "sessions", "2026", "01", "02", "rollout-2026-01-02T03-04-05-"+id+".jsonl")
 	}
-	writeFile(t, rollout(spawned), line(spawned, root, spawnSrc)+line(root, "", `"cli"`)+turnContext("gpt-5"), day(3))
-	writeFile(t, rollout(userFork), line(userFork, sub, `"cli"`)+copied, day(3))
-	writeFile(t, rollout(plain), line(plain, "", `"cli"`)+copied, day(3))
-	writeFile(t, filepath.Join(home, "state_5.sqlite"), "", day(1))
+	transcripttest.WriteFile(t, rollout(spawned), line(spawned, root, spawnSrc)+line(root, "", `"cli"`)+turnContext("gpt-5"), transcripttest.Day(3))
+	transcripttest.WriteFile(t, rollout(userFork), line(userFork, sub, `"cli"`)+copied, transcripttest.Day(3))
+	transcripttest.WriteFile(t, rollout(plain), line(plain, "", `"cli"`)+copied, transcripttest.Day(3))
+	transcripttest.WriteFile(t, filepath.Join(home, "state_5.sqlite"), "", transcripttest.Day(1))
 	// Every row is complete, so only the own header is read for the fork.
 	full := func(id, source string) threadRow {
-		return threadRow{ID: id, CWD: "/w", Model: "gpt-5", Branch: "main", CreatedMS: day(2).UnixMilli(), Source: source}
+		return threadRow{ID: id, CWD: "/w", Model: "gpt-5", Branch: "main", CreatedMS: transcripttest.Day(2).UnixMilli(), Source: source}
 	}
 	rows := []threadRow{full(spawned, spawnSrc), full(userFork, "cli"), full(plain, "cli")}
 	source := &Source{CodexHome: home, run: func(_ context.Context, _ string, args ...string) ([]byte, error) {

@@ -15,6 +15,7 @@ import (
 	"github.com/firekeeper-ai/firekeeper/internal/session"
 	"github.com/firekeeper-ai/firekeeper/internal/transcript"
 	"github.com/firekeeper-ai/firekeeper/internal/transcript/reader"
+	"github.com/firekeeper-ai/firekeeper/internal/transcript/transcripttest"
 )
 
 const (
@@ -25,21 +26,6 @@ const (
 	idCorrupt   = "55555555-5555-4555-8555-555555555555"
 	idLarge     = "66666666-6666-4666-8666-666666666666"
 )
-
-func writeFile(t *testing.T, path, contents string, mtime time.Time) {
-	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte(contents), 0600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Chtimes(path, mtime, mtime); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func day(d int) time.Time { return time.Date(2026, 1, d, 12, 0, 0, 0, time.UTC) }
 
 func start(cwd string) string {
 	return `{"type":"session.start","data":{"startTime":"2026-01-02T03:04:05.000Z","context":{"cwd":"` + cwd + `","gitRoot":"` + cwd + `","branch":"head-branch"}},"timestamp":"2026-01-02T03:04:05.000Z"}` + "\n"
@@ -58,14 +44,14 @@ func fixture(t *testing.T) (home string, paths map[string]string) {
 	for _, id := range []string{idWorkspace, idHeadOnly, idExcluded, idEmpty, idCorrupt, idLarge} {
 		paths[id] = filepath.Join(home, "session-state", id, "events.jsonl")
 	}
-	writeFile(t, filepath.Join(home, "session-state", idWorkspace, "workspace.yaml"),
-		"id: "+idWorkspace+"\ncwd: /work/repo/sub\ngit_root: /work/repo\nbranch: main\nname: Named session\ncreated_at: 2026-01-02T00:00:00.000Z\nupdated_at: 2026-01-05T00:00:00.000Z\n", day(5))
-	writeFile(t, paths[idWorkspace], start("/wrong")+modelChange("first-model")+modelChange("workspace-model"), day(5))
-	writeFile(t, paths[idHeadOnly], start("/work/head")+modelChange("head-model"), day(6))
-	writeFile(t, filepath.Join(home, "session-state", idExcluded, "workspace.yaml"), "id: "+idExcluded+"\ncwd: /excluded/repo\n", day(7))
-	writeFile(t, paths[idExcluded], start("/excluded/repo"), day(7))
-	writeFile(t, paths[idEmpty], "", day(8))
-	writeFile(t, paths[idCorrupt], "not json\n[[[\n", day(8))
+	transcripttest.WriteFile(t, filepath.Join(home, "session-state", idWorkspace, "workspace.yaml"),
+		"id: "+idWorkspace+"\ncwd: /work/repo/sub\ngit_root: /work/repo\nbranch: main\nname: Named session\ncreated_at: 2026-01-02T00:00:00.000Z\nupdated_at: 2026-01-05T00:00:00.000Z\n", transcripttest.Day(5))
+	transcripttest.WriteFile(t, paths[idWorkspace], start("/wrong")+modelChange("first-model")+modelChange("workspace-model"), transcripttest.Day(5))
+	transcripttest.WriteFile(t, paths[idHeadOnly], start("/work/head")+modelChange("head-model"), transcripttest.Day(6))
+	transcripttest.WriteFile(t, filepath.Join(home, "session-state", idExcluded, "workspace.yaml"), "id: "+idExcluded+"\ncwd: /excluded/repo\n", transcripttest.Day(7))
+	transcripttest.WriteFile(t, paths[idExcluded], start("/excluded/repo"), transcripttest.Day(7))
+	transcripttest.WriteFile(t, paths[idEmpty], "", transcripttest.Day(8))
+	transcripttest.WriteFile(t, paths[idCorrupt], "not json\n[[[\n", transcripttest.Day(8))
 
 	var large strings.Builder
 	large.WriteString(start("/work/large"))
@@ -75,9 +61,9 @@ func fixture(t *testing.T) (home string, paths map[string]string) {
 		large.WriteString(filler)
 	}
 	large.WriteString(modelChange("tail-model"))
-	writeFile(t, paths[idLarge], large.String(), day(4))
+	transcripttest.WriteFile(t, paths[idLarge], large.String(), transcripttest.Day(4))
 
-	writeFile(t, filepath.Join(home, "session-state", "not-a-uuid", "events.jsonl"), start("/x"), day(9))
+	transcripttest.WriteFile(t, filepath.Join(home, "session-state", "not-a-uuid", "events.jsonl"), start("/x"), transcripttest.Day(9))
 	return home, paths
 }
 
@@ -169,7 +155,7 @@ func TestEnumerate(t *testing.T) {
 	}
 	ws := byID[idWorkspace]
 	if ws.CWD != "/work/repo/sub" || ws.Project != "repo" || ws.Branch != "main" || ws.Title != "Named session" ||
-		ws.Model != "workspace-model" || !ws.StartedAt.Equal(day(2).Add(-12*time.Hour)) || !ws.LastActivityAt.Equal(day(5).Add(-12*time.Hour)) {
+		ws.Model != "workspace-model" || !ws.StartedAt.Equal(transcripttest.Day(2).Add(-12*time.Hour)) || !ws.LastActivityAt.Equal(transcripttest.Day(5).Add(-12*time.Hour)) {
 		t.Errorf("workspace-backed meta = %+v", ws)
 	}
 	head := byID[idHeadOnly]
@@ -194,7 +180,7 @@ func TestEnumerate(t *testing.T) {
 func TestEnumerateModifiedAfterAndEnv(t *testing.T) {
 	home, _ := fixture(t)
 	t.Setenv("COPILOT_HOME", home)
-	metas, err := (&Source{}).Enumerate(context.Background(), reader.EnumerateOptions{ModifiedAfter: day(6)})
+	metas, err := (&Source{}).Enumerate(context.Background(), reader.EnumerateOptions{ModifiedAfter: transcripttest.Day(6)})
 	var warning *session.Warning
 	if err != nil && !errors.As(err, &warning) {
 		t.Fatal(err)
