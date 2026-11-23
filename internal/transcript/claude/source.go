@@ -18,15 +18,11 @@ import (
 	"sort"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/firekeeper-ai/firekeeper/internal/session"
 	"github.com/firekeeper-ai/firekeeper/internal/transcript"
 	"github.com/firekeeper-ai/firekeeper/internal/transcript/reader"
 )
-
-// maxToolText is the longest tool output kept in Event.Text.
-const maxToolText = 64 << 10
 
 // syntheticModel marks assistant messages Claude Code writes itself, such as
 // API error notices, rather than ones a model produced.
@@ -115,12 +111,12 @@ func ReadAs(path string, fromOffset int64, sessionID string) ([]transcript.Event
 	}
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, fromOffset, fmt.Errorf("claude: open transcript: %w", cause(err))
+		return nil, fromOffset, fmt.Errorf("claude: open transcript: %w", transcript.ErrorCause(err))
 	}
 	defer file.Close()
 	info, err := file.Stat()
 	if err != nil {
-		return nil, fromOffset, fmt.Errorf("claude: stat transcript: %w", cause(err))
+		return nil, fromOffset, fmt.Errorf("claude: stat transcript: %w", transcript.ErrorCause(err))
 	}
 	if fromOffset > info.Size() {
 		return nil, fromOffset, fmt.Errorf("claude: offset %d is past end of transcript (%d bytes); file was truncated or rotated", fromOffset, info.Size())
@@ -146,22 +142,12 @@ func ReadAs(path string, fromOffset int64, sessionID string) ([]transcript.Event
 			if errors.Is(err, io.EOF) {
 				return events, offset, nil
 			}
-			return events, offset, fmt.Errorf("claude: read transcript: %w", cause(err))
+			return events, offset, fmt.Errorf("claude: read transcript: %w", transcript.ErrorCause(err))
 		}
 		offset += int64(len(line))
 		events = append(events, p.parse(bytes.TrimRight(line, "\r\n")))
 		p.seq++
 	}
-}
-
-// cause drops the path from filesystem errors so messages stay free of
-// machine-specific locations.
-func cause(err error) error {
-	var pathErr *os.PathError
-	if errors.As(err, &pathErr) {
-		return pathErr.Err
-	}
-	return err
 }
 
 // sessionIDFromPath returns the uuid file name of a transcript, or "".
@@ -247,7 +233,7 @@ func (p *parser) track(rec record) bool {
 	if rec.Type != "assistant" || rec.Message == nil {
 		return false
 	}
-	for _, b := range blocks(rec.Message.Content) {
+	for _, b := range transcript.JSONArray[block](rec.Message.Content) {
 		if b.Type == "tool_use" && b.ID != "" {
 			p.toolNames[b.ID] = b.Name
 		}
@@ -296,7 +282,7 @@ func (p *parser) parse(line []byte) transcript.Event {
 		p.assistant(&event, rec, countUsage)
 	case "system":
 		event.Role = transcript.RoleSystem
-		event.Text = stringValue(rec.Content)
+		event.Text, _ = transcript.JSONString(rec.Content)
 	}
 	// Subagent work is kept, but as meta so it does not read as part of the
 	// main conversation. Raw keeps the record's own isSidechain tag.
@@ -315,12 +301,12 @@ func (p *parser) user(event *transcript.Event, rec record) {
 		// Context Claude Code injects on the user's behalf.
 		role = transcript.RoleSystem
 	}
-	if text, ok := stringContent(rec.Message.Content); ok {
+	if text, ok := transcript.JSONString(rec.Message.Content); ok {
 		event.Role = role
 		event.Text = text
 		return
 	}
-	content := blocks(rec.Message.Content)
+	content := transcript.JSONArray[block](rec.Message.Content)
 	if content == nil {
 		return
 	}
@@ -333,7 +319,7 @@ func (p *parser) user(event *transcript.Event, rec record) {
 			}
 		case "tool_result":
 			if event.ToolName == nil {
-				event.ToolName = optional(p.toolNames[b.ToolUseID])
+				event.ToolName = transcript.OptionalString(p.toolNames[b.ToolUseID])
 			}
 			if text := resultText(b.Content); text != "" {
 				results = append(results, text)
@@ -342,7 +328,7 @@ func (p *parser) user(event *transcript.Event, rec record) {
 	}
 	if hasType(content, "tool_result") {
 		event.Role = transcript.RoleToolResult
-		event.Text = truncate(strings.Join(append(results, texts...), "\n"))
+		event.Text = transcript.TruncateToolText(strings.Join(append(results, texts...), "\n"))
 		return
 	}
 	event.Role = role
@@ -354,14 +340,14 @@ func (p *parser) assistant(event *transcript.Event, rec record, countUsage bool)
 		return
 	}
 	if model := rec.Message.Model; model != syntheticModel {
-		event.Model = optional(model)
+		event.Model = transcript.OptionalString(model)
 	}
 	if countUsage {
 		event.Tokens = tokens(*rec.Message.Usage)
 	}
-	content := blocks(rec.Message.Content)
+	content := transcript.JSONArray[block](rec.Message.Content)
 	if content == nil {
-		if text, ok := stringContent(rec.Message.Content); ok {
+		if text, ok := transcript.JSONString(rec.Message.Content); ok {
 			event.Role = transcript.RoleAssistant
 			event.Text = text
 		}
@@ -380,10 +366,10 @@ func (p *parser) assistant(event *transcript.Event, rec record, countUsage bool)
 			}
 		case "tool_use":
 			if event.ToolName == nil {
-				event.ToolName = optional(b.Name)
+				event.ToolName = transcript.OptionalString(b.Name)
 			}
 			if len(b.Input) > 0 {
-				inputs = append(inputs, compact(b.Input))
+				inputs = append(inputs, transcript.CompactJSON(b.Input))
 			}
 		}
 	}
@@ -400,18 +386,6 @@ func (p *parser) assistant(event *transcript.Event, rec record, countUsage bool)
 	}
 }
 
-// blocks decodes a content array. It returns nil when content is not one.
-func blocks(raw json.RawMessage) []block {
-	var content []block
-	if len(raw) == 0 || raw[0] != '[' || json.Unmarshal(raw, &content) != nil {
-		return nil
-	}
-	if content == nil {
-		content = []block{}
-	}
-	return content
-}
-
 func hasType(content []block, blockType string) bool {
 	for _, b := range content {
 		if b.Type == blockType {
@@ -421,51 +395,19 @@ func hasType(content []block, blockType string) bool {
 	return false
 }
 
-func stringContent(raw json.RawMessage) (string, bool) {
-	var text string
-	if len(raw) == 0 || json.Unmarshal(raw, &text) != nil {
-		return "", false
-	}
-	return text, true
-}
-
-func stringValue(raw json.RawMessage) string {
-	text, _ := stringContent(raw)
-	return text
-}
-
 // resultText reads a tool_result content, which is either a string or an
 // array of blocks. Only text blocks are readable; images stay in Raw.
 func resultText(raw json.RawMessage) string {
-	if text, ok := stringContent(raw); ok {
+	if text, ok := transcript.JSONString(raw); ok {
 		return text
 	}
 	var texts []string
-	for _, b := range blocks(raw) {
+	for _, b := range transcript.JSONArray[block](raw) {
 		if b.Type == "text" && b.Text != "" {
 			texts = append(texts, b.Text)
 		}
 	}
 	return strings.Join(texts, "\n")
-}
-
-func compact(raw json.RawMessage) string {
-	var out bytes.Buffer
-	if json.Compact(&out, raw) != nil {
-		return string(raw)
-	}
-	return out.String()
-}
-
-func truncate(text string) string {
-	if len(text) <= maxToolText {
-		return text
-	}
-	cut := maxToolText
-	for cut > 0 && !utf8.RuneStart(text[cut]) {
-		cut--
-	}
-	return fmt.Sprintf("%s\n[truncated %d bytes]", text[:cut], len(text)-cut)
 }
 
 // tokens maps Anthropic usage onto the event contract. input_tokens excludes
@@ -481,11 +423,4 @@ func tokens(u usage) transcript.Tokens {
 		CacheRead:  cacheRead,
 		CacheWrite: cacheWrite,
 	}
-}
-
-func optional(value string) *string {
-	if value == "" {
-		return nil
-	}
-	return &value
 }

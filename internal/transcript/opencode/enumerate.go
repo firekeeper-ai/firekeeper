@@ -3,7 +3,6 @@ package opencode
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/firekeeper-ai/firekeeper/internal/session"
@@ -43,7 +42,6 @@ func (s *Source) Enumerate(ctx context.Context, opts reader.EnumerateOptions) ([
 	if err := s.query(ctx, db, query, &rows); err != nil {
 		return nil, err
 	}
-	clean := func(value string) string { return strings.TrimSpace(session.SanitizeProcessCommand(value)) }
 	var metas []session.Meta
 	bad := 0
 	for _, row := range rows {
@@ -62,9 +60,9 @@ func (s *Source) Enumerate(ctx context.Context, opts reader.EnumerateOptions) ([
 			ID:             row.ID,
 			Provider:       transcript.ProviderOpenCode,
 			State:          session.SessionStateEnded,
-			CWD:            clean(row.Directory),
-			Model:          clean(session.OpenCodeModel([]byte(row.Model))),
-			Title:          clean(row.Title),
+			CWD:            session.SanitizeField(row.Directory),
+			Model:          session.SanitizeField(session.OpenCodeModel([]byte(row.Model))),
+			Title:          session.SanitizeField(row.Title),
 			RolloutPath:    session.OpenCodeTranscriptPath(db, row.ID),
 			UpdatedAt:      updated,
 			LastActivityAt: &updated,

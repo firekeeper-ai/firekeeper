@@ -425,14 +425,3 @@ func TestSettled(t *testing.T) {
 		}
 	}
 }
-
-func TestTruncate(t *testing.T) {
-	long := strings.Repeat("é", maxToolText)
-	got := truncate(long)
-	if !strings.HasSuffix(got, " bytes]") || len(got) > maxToolText+64 || !json.Valid([]byte(`"`+strings.Split(got, "\n")[0]+`"`)) {
-		t.Errorf("truncate kept %d bytes", len(got))
-	}
-	if truncate("short") != "short" {
-		t.Error("short text changed")
-	}
-}

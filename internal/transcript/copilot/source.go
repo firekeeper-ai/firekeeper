@@ -17,15 +17,11 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/firekeeper-ai/firekeeper/internal/session"
 	"github.com/firekeeper-ai/firekeeper/internal/transcript"
 	"github.com/firekeeper-ai/firekeeper/internal/transcript/reader"
 )
-
-// maxToolText is the longest tool output kept in Event.Text.
-const maxToolText = 64 << 10
 
 const eventsFile = "events.jsonl"
 
@@ -72,7 +68,7 @@ func (s *Source) Locate(meta session.Meta) ([]string, error) {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("copilot: find events file: %w", cause(err))
+		return nil, fmt.Errorf("copilot: find events file: %w", transcript.ErrorCause(err))
 	}
 	return []string{path}, nil
 }
@@ -105,12 +101,12 @@ func (s *Source) Read(path string, fromOffset int64) ([]transcript.Event, int64,
 	}
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, fromOffset, fmt.Errorf("copilot: open events: %w", cause(err))
+		return nil, fromOffset, fmt.Errorf("copilot: open events: %w", transcript.ErrorCause(err))
 	}
 	defer file.Close()
 	info, err := file.Stat()
 	if err != nil {
-		return nil, fromOffset, fmt.Errorf("copilot: stat events: %w", cause(err))
+		return nil, fromOffset, fmt.Errorf("copilot: stat events: %w", transcript.ErrorCause(err))
 	}
 	if fromOffset > info.Size() {
 		return nil, fromOffset, fmt.Errorf("copilot: offset %d is past end of events (%d bytes); file was truncated or rotated", fromOffset, info.Size())
@@ -136,22 +132,12 @@ func (s *Source) Read(path string, fromOffset int64) ([]transcript.Event, int64,
 			if errors.Is(err, io.EOF) {
 				return events, offset, nil
 			}
-			return events, offset, fmt.Errorf("copilot: read events: %w", cause(err))
+			return events, offset, fmt.Errorf("copilot: read events: %w", transcript.ErrorCause(err))
 		}
 		offset += int64(len(line))
 		events = append(events, p.parse(bytes.TrimRight(line, "\r\n")))
 		p.seq++
 	}
-}
-
-// cause drops the path from filesystem errors so messages stay free of
-// machine-specific locations.
-func cause(err error) error {
-	var pathErr *os.PathError
-	if errors.As(err, &pathErr) {
-		return pathErr.Err
-	}
-	return err
 }
 
 // sessionIDForPath takes the id from the session directory name, then from
@@ -319,38 +305,38 @@ func (p *parser) parse(line []byte) transcript.Event {
 	switch rec.Type {
 	case "user.message":
 		event.Role = transcript.RoleUser
-		event.Text, _ = asString(body.Content)
+		event.Text, _ = transcript.JSONString(body.Content)
 	case "assistant.message":
 		event.Role = transcript.RoleAssistant
-		event.Text, _ = asString(body.Content)
-		event.Model = optional(p.modelFor(body))
+		event.Text, _ = transcript.JSONString(body.Content)
+		event.Model = transcript.OptionalString(p.modelFor(body))
 	case "system.message":
 		event.Role = transcript.RoleSystem
-		event.Text, _ = asString(body.Content)
+		event.Text, _ = transcript.JSONString(body.Content)
 	case "tool.execution_start":
 		event.Role = transcript.RoleToolCall
-		event.ToolName = optional(body.ToolName)
-		event.Text = argumentsText(body.Arguments)
-		event.Model = optional(p.modelFor(body))
+		event.ToolName = transcript.OptionalString(body.ToolName)
+		event.Text = transcript.JSONText(body.Arguments)
+		event.Model = transcript.OptionalString(p.modelFor(body))
 	case "tool.execution_complete":
 		event.Role = transcript.RoleToolResult
-		event.ToolName = optional(p.toolNames[body.ToolCallID])
-		event.Text = truncate(resultText(body))
-		event.Model = optional(p.modelFor(body))
+		event.ToolName = transcript.OptionalString(p.toolNames[body.ToolCallID])
+		event.Text = transcript.TruncateToolText(resultText(body))
+		event.Model = transcript.OptionalString(p.modelFor(body))
 	case "session.model_change":
-		event.Model = optional(body.NewModel)
+		event.Model = transcript.OptionalString(body.NewModel)
 	case "model.model_call_success":
 		// Auxiliary model calls log their own usage; main-agent calls do
 		// not, so their totals come from session.shutdown instead.
 		if body.ResponseUsage != nil {
 			event.Tokens = callTokens(*body.ResponseUsage)
 			if body.ModelCall != nil {
-				event.Model = optional(body.ModelCall.Model)
+				event.Model = transcript.OptionalString(body.ModelCall.Model)
 			}
 		}
 	case "session.shutdown":
 		event.Tokens = runTokens(body)
-		event.Model = optional(runModel(body))
+		event.Model = transcript.OptionalString(runModel(body))
 	}
 	return event
 }
@@ -362,36 +348,14 @@ func (p *parser) modelFor(body data) string {
 	return p.model
 }
 
-// argumentsText renders tool arguments, which are usually an object, as
-// compact JSON; a string is returned as is.
-func argumentsText(raw json.RawMessage) string {
-	if len(raw) == 0 || string(raw) == "null" {
-		return ""
-	}
-	if text, ok := asString(raw); ok {
-		return text
-	}
-	var compact bytes.Buffer
-	if json.Compact(&compact, raw) != nil {
-		return ""
-	}
-	return compact.String()
-}
-
-// asString decodes raw when it is a JSON string.
-func asString(raw json.RawMessage) (string, bool) {
-	var text string
-	return text, json.Unmarshal(raw, &text) == nil
-}
-
 // resultText prefers result.content, then a string or {message} error.
 func resultText(body data) string {
 	if body.Result != nil {
-		if text, ok := asString(body.Result.Content); ok {
+		if text, ok := transcript.JSONString(body.Result.Content); ok {
 			return text
 		}
 	}
-	if text, ok := asString(body.Error); ok {
+	if text, ok := transcript.JSONString(body.Error); ok {
 		return text
 	}
 	var withMessage struct {
@@ -401,17 +365,6 @@ func resultText(body data) string {
 		return withMessage.Message
 	}
 	return ""
-}
-
-func truncate(text string) string {
-	if len(text) <= maxToolText {
-		return text
-	}
-	cut := maxToolText
-	for cut > 0 && !utf8.RuneStart(text[cut]) {
-		cut--
-	}
-	return fmt.Sprintf("%s\n[truncated %d bytes]", text[:cut], len(text)-cut)
 }
 
 // callTokens maps OpenAI usage onto the event contract. prompt_tokens
@@ -462,11 +415,4 @@ func runModel(body data) string {
 		model = name
 	}
 	return model
-}
-
-func optional(value string) *string {
-	if value == "" {
-		return nil
-	}
-	return &value
 }

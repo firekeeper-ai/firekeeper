@@ -16,15 +16,11 @@ import (
 	"os"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/firekeeper-ai/firekeeper/internal/session"
 	"github.com/firekeeper-ai/firekeeper/internal/transcript"
 	"github.com/firekeeper-ai/firekeeper/internal/transcript/reader"
 )
-
-// maxToolText is the longest tool output kept in Event.Text.
-const maxToolText = 64 << 10
 
 func init() {
 	reader.Register(transcript.ProviderGemini, &Source{})
@@ -93,12 +89,12 @@ func (s *Source) Read(path string, fromOffset int64) ([]transcript.Event, int64,
 	}
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, fromOffset, fmt.Errorf("gemini: open transcript: %w", cause(err))
+		return nil, fromOffset, fmt.Errorf("gemini: open transcript: %w", transcript.ErrorCause(err))
 	}
 	defer file.Close()
 	info, err := file.Stat()
 	if err != nil {
-		return nil, fromOffset, fmt.Errorf("gemini: stat transcript: %w", cause(err))
+		return nil, fromOffset, fmt.Errorf("gemini: stat transcript: %w", transcript.ErrorCause(err))
 	}
 	if fromOffset > info.Size() {
 		return nil, fromOffset, fmt.Errorf("gemini: offset %d is past end of transcript (%d bytes); file was truncated or rewritten", fromOffset, info.Size())
@@ -126,7 +122,7 @@ func (s *Source) Read(path string, fromOffset int64) ([]transcript.Event, int64,
 			if errors.Is(err, io.EOF) {
 				return events, offset, nil
 			}
-			return events, offset, fmt.Errorf("gemini: read transcript: %w", cause(err))
+			return events, offset, fmt.Errorf("gemini: read transcript: %w", transcript.ErrorCause(err))
 		}
 		offset += int64(len(line))
 		events = append(events, p.parse(bytes.TrimRight(line, "\r\n")))
@@ -161,16 +157,6 @@ func readLegacy(file *os.File, size, fromOffset int64) ([]transcript.Event, int6
 		events = append(events, p.parse(compacted.Bytes()))
 	}
 	return events, size, nil
-}
-
-// cause drops the path from filesystem errors so messages stay free of
-// machine-specific locations.
-func cause(err error) error {
-	var pathErr *os.PathError
-	if errors.As(err, &pathErr) {
-		return pathErr.Err
-	}
-	return err
 }
 
 // record is one session log line. Only the fields the parser reads are
@@ -332,13 +318,13 @@ func (p *parser) userMessage(event *transcript.Event, rec record) {
 				p.results[r.ID] = true
 			}
 			if event.ToolName == nil {
-				event.ToolName = optional(session.FirstNonEmpty(r.Name, p.toolNames[r.ID]))
+				event.ToolName = transcript.OptionalString(session.FirstNonEmpty(r.Name, p.toolNames[r.ID]))
 			}
 			texts = append(texts, responseText(r.Response))
 		}
 		if len(texts) > 0 {
 			event.Role = transcript.RoleToolResult
-			event.Text = truncate(strings.Join(texts, "\n"))
+			event.Text = transcript.TruncateToolText(strings.Join(texts, "\n"))
 		}
 		return
 	}
@@ -361,7 +347,7 @@ func (p *parser) geminiMessage(event *transcript.Event, rec record, m *message, 
 	if model := strings.TrimSpace(rec.Model); model != "" {
 		p.model = model
 	}
-	event.Model = optional(p.model)
+	event.Model = transcript.OptionalString(p.model)
 	if rec.Tokens != nil && !m.tokens {
 		m.tokens = true
 		event.Tokens = tokens(*rec.Tokens)
@@ -385,7 +371,7 @@ func (p *parser) geminiMessage(event *transcript.Event, rec record, m *message, 
 		if !m.calls[key] {
 			m.calls[key] = true
 			if event.ToolName == nil {
-				event.ToolName = optional(call.Name)
+				event.ToolName = transcript.OptionalString(call.Name)
 			}
 			calls = append(calls, argsText(call.Args))
 		}
@@ -408,7 +394,7 @@ func (p *parser) geminiMessage(event *transcript.Event, rec record, m *message, 
 			}
 		}
 		if len(results) > 0 {
-			texts = append(texts, truncate(strings.Join(results, "\n")))
+			texts = append(texts, transcript.TruncateToolText(strings.Join(results, "\n")))
 		}
 		event.Text = strings.Join(texts, "\n")
 	case newText != "":
@@ -492,14 +478,14 @@ func responseText(raw json.RawMessage) string {
 				return text
 			}
 			if hasValue(field) {
-				return compact(field)
+				return transcript.CompactJSON(field)
 			}
 		}
 	}
 	if !hasValue(raw) {
 		return ""
 	}
-	return compact(raw)
+	return transcript.CompactJSON(raw)
 }
 
 // resultText reads a legacy tool call's result: the function responses in
@@ -525,7 +511,7 @@ func argsText(raw json.RawMessage) string {
 	if !hasValue(raw) {
 		return ""
 	}
-	return compact(raw)
+	return transcript.CompactJSON(raw)
 }
 
 func thoughtText(thoughts []thought) string {
@@ -551,25 +537,6 @@ func timestamp(value string) *time.Time {
 	return &ts
 }
 
-func compact(raw json.RawMessage) string {
-	var out bytes.Buffer
-	if json.Compact(&out, raw) != nil {
-		return string(raw)
-	}
-	return out.String()
-}
-
-func truncate(text string) string {
-	if len(text) <= maxToolText {
-		return text
-	}
-	cut := maxToolText
-	for cut > 0 && !utf8.RuneStart(text[cut]) {
-		cut--
-	}
-	return fmt.Sprintf("%s\n[truncated %d bytes]", text[:cut], len(text)-cut)
-}
-
 // tokens maps Gemini usage onto the event contract. Gemini's prompt count
 // includes cached tokens and leaves out tool-use prompt tokens, and its
 // candidate count leaves out thinking tokens, so input is the uncached prompt
@@ -583,11 +550,4 @@ func tokens(t tokenSummary) transcript.Tokens {
 		Cache:     cached,
 		CacheRead: cached,
 	}
-}
-
-func optional(value string) *string {
-	if value == "" {
-		return nil
-	}
-	return &value
 }

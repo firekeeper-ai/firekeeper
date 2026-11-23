@@ -92,8 +92,7 @@ func (s *Source) Enumerate(ctx context.Context, opts reader.EnumerateOptions) ([
 			case err != nil || !strings.EqualFold(chat.ID, meta.ID):
 				bad++
 			default:
-				clean := func(value string) string { return strings.TrimSpace(session.SanitizeProcessCommand(value)) }
-				meta.Title, meta.Name, meta.Model = clean(chat.Name), clean(chat.Name), clean(chat.Model)
+				meta.Title, meta.Name, meta.Model = session.SanitizeField(chat.Name), session.SanitizeField(chat.Name), session.SanitizeField(chat.Model)
 				if !chat.CreatedAt.IsZero() {
 					started := chat.CreatedAt
 					meta.StartedAt = &started

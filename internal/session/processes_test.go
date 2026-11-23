@@ -3,6 +3,7 @@ package session
 import (
 	"strings"
 	"testing"
+	"unicode"
 
 	"github.com/firekeeper-ai/firekeeper/pkg/event"
 )
@@ -200,4 +201,44 @@ func classifyLine(command string) string {
 		return ToolName(provider)
 	}
 	return ToolName(provider) + "/" + role.String()
+}
+
+func TestSanitizeField(t *testing.T) {
+	for value, want := range map[string]string{
+		"Fix parser":              "Fix parser",
+		"  feature/x  ":           "feature/x",
+		"title\x1b[31m red":       "title [31m red",
+		"line one\nline two\ttab": "line one line two tab",
+		"\x00\x07\r\n":            "",
+		"":                        "",
+		"   ":                     "",
+		"/Users/me/My Project":    "/Users/me/My Project",
+		"emoji 🔥 and accents é":   "emoji 🔥 and accents é",
+	} {
+		got := SanitizeField(value)
+		if got != want {
+			t.Errorf("SanitizeField(%q) = %q; want %q", value, got, want)
+		}
+		if strings.ContainsFunc(got, unicode.IsControl) {
+			t.Errorf("SanitizeField(%q) kept a control character", value)
+		}
+	}
+}
+
+func FuzzSanitizeField(f *testing.F) {
+	for _, seed := range []string{"title", "  a\nb  ", "\x1b[0m", ""} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, value string) {
+		got := SanitizeField(value)
+		if strings.ContainsFunc(got, unicode.IsControl) {
+			t.Fatalf("SanitizeField(%q) = %q keeps a control character", value, got)
+		}
+		if got != strings.TrimSpace(got) {
+			t.Fatalf("SanitizeField(%q) = %q is not trimmed", value, got)
+		}
+		if SanitizeField(got) != got {
+			t.Fatalf("SanitizeField is not stable on %q", got)
+		}
+	})
 }

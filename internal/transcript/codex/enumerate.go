@@ -118,10 +118,10 @@ func (s *Source) Enumerate(ctx context.Context, opts reader.EnumerateOptions) ([
 		sourceKnown := false
 		if row, ok := rows[strings.ToLower(c.id)]; ok {
 			sourceKnown = strings.TrimSpace(row.Source) != ""
-			meta.Title = clean(row.Title)
-			meta.CWD = clean(row.CWD)
-			meta.Model = clean(row.Model)
-			meta.Branch = clean(row.Branch)
+			meta.Title = session.SanitizeField(row.Title)
+			meta.CWD = session.SanitizeField(row.CWD)
+			meta.Model = session.SanitizeField(row.Model)
+			meta.Branch = session.SanitizeField(row.Branch)
 			meta.StartedAt = millis(row.CreatedMS)
 			meta.LastActivityAt = millis(row.UpdatedMS)
 			setSpawn(&meta, session.ParseCodexSpawn([]byte(row.Source)))
@@ -149,9 +149,9 @@ func (s *Source) Enumerate(ctx context.Context, opts reader.EnumerateOptions) ([
 			if !sourceKnown {
 				setSpawn(&meta, h.spawn)
 			}
-			meta.CWD = session.FirstNonEmpty(meta.CWD, clean(h.cwd))
-			meta.Branch = session.FirstNonEmpty(meta.Branch, clean(h.branch))
-			meta.Model = session.FirstNonEmpty(meta.Model, clean(h.model))
+			meta.CWD = session.FirstNonEmpty(meta.CWD, session.SanitizeField(h.cwd))
+			meta.Branch = session.FirstNonEmpty(meta.Branch, session.SanitizeField(h.branch))
+			meta.Model = session.FirstNonEmpty(meta.Model, session.SanitizeField(h.model))
 			if meta.StartedAt == nil && !h.started.IsZero() {
 				started := h.started
 				meta.StartedAt = &started
@@ -167,7 +167,7 @@ func (s *Source) Enumerate(ctx context.Context, opts reader.EnumerateOptions) ([
 			}
 		}
 		if forkedFrom != "" && forkedFrom != meta.ID {
-			meta.ForkedFromID = clean(forkedFrom)
+			meta.ForkedFromID = session.SanitizeField(forkedFrom)
 		}
 		meta = finish(meta)
 		if !checked && opts.Skip != nil && opts.Skip(meta) {
@@ -193,9 +193,9 @@ func setSpawn(meta *session.Meta, spawn session.CodexSpawn) {
 	if spawn.ParentID == "" || spawn.ParentID == meta.ID {
 		return
 	}
-	meta.ParentID = clean(spawn.ParentID)
-	meta.AgentName = clean(spawn.AgentName)
-	meta.AgentRole = clean(spawn.AgentRole)
+	meta.ParentID = session.SanitizeField(spawn.ParentID)
+	meta.AgentName = session.SanitizeField(spawn.AgentName)
+	meta.AgentRole = session.SanitizeField(spawn.AgentRole)
 }
 
 // finish fills the fields derived from the others, matching Discover.
@@ -207,10 +207,6 @@ func finish(meta session.Meta) session.Meta {
 		meta.UpdatedAt = *meta.LastActivityAt
 	}
 	return meta
-}
-
-func clean(value string) string {
-	return strings.TrimSpace(session.SanitizeProcessCommand(value))
 }
 
 func millis(ms int64) *time.Time {

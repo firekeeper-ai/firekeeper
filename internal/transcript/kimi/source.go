@@ -18,15 +18,11 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/firekeeper-ai/firekeeper/internal/session"
 	"github.com/firekeeper-ai/firekeeper/internal/transcript"
 	"github.com/firekeeper-ai/firekeeper/internal/transcript/reader"
 )
-
-// maxToolText is the longest tool output kept in Event.Text.
-const maxToolText = 64 << 10
 
 // maxIDLength bounds session directory names accepted as ids.
 const maxIDLength = 128
@@ -145,12 +141,12 @@ func (s *Source) Read(path string, fromOffset int64) ([]transcript.Event, int64,
 	}
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, fromOffset, fmt.Errorf("kimi: open transcript: %w", cause(err))
+		return nil, fromOffset, fmt.Errorf("kimi: open transcript: %w", transcript.ErrorCause(err))
 	}
 	defer file.Close()
 	info, err := file.Stat()
 	if err != nil {
-		return nil, fromOffset, fmt.Errorf("kimi: stat transcript: %w", cause(err))
+		return nil, fromOffset, fmt.Errorf("kimi: stat transcript: %w", transcript.ErrorCause(err))
 	}
 	if fromOffset > info.Size() {
 		return nil, fromOffset, fmt.Errorf("kimi: offset %d is past end of transcript (%d bytes); file was truncated or rewritten", fromOffset, info.Size())
@@ -176,22 +172,12 @@ func (s *Source) Read(path string, fromOffset int64) ([]transcript.Event, int64,
 			if errors.Is(err, io.EOF) {
 				return events, offset, nil
 			}
-			return events, offset, fmt.Errorf("kimi: read transcript: %w", cause(err))
+			return events, offset, fmt.Errorf("kimi: read transcript: %w", transcript.ErrorCause(err))
 		}
 		offset += int64(len(line))
 		events = append(events, p.parse(bytes.TrimRight(line, "\r\n")))
 		p.seq++
 	}
-}
-
-// cause drops the path from filesystem errors so messages stay free of
-// machine-specific locations.
-func cause(err error) error {
-	var pathErr *os.PathError
-	if errors.As(err, &pathErr) {
-		return pathErr.Err
-	}
-	return err
 }
 
 // record is the wire log line envelope: {"type", ...payload, "time"}. Only
@@ -328,7 +314,7 @@ func (p *parser) parse(line []byte) transcript.Event {
 		event.Role = transcript.RoleSystem
 		event.Text = compactionText(rec)
 	case "llm.request":
-		event.Model = optional(strings.TrimSpace(rec.Model))
+		event.Model = transcript.OptionalString(strings.TrimSpace(rec.Model))
 	case "usage.record":
 		// Every provider call writes one usage.record, including compaction
 		// and title calls that have no loop step, so token totals come from
@@ -336,7 +322,7 @@ func (p *parser) parse(line []byte) transcript.Event {
 		if rec.Usage != nil {
 			event.Tokens = tokens(*rec.Usage)
 		}
-		event.Model = optional(session.FirstNonEmpty(p.model, modelID(rec.Model)))
+		event.Model = transcript.OptionalString(session.FirstNonEmpty(p.model, modelID(rec.Model)))
 	}
 	return event
 }
@@ -356,17 +342,17 @@ func (p *parser) message(event *transcript.Event, m *message) {
 	case "assistant":
 		// Live sessions record replies as loop events; this form comes from
 		// sessions migrated from older Kimi releases.
-		event.Model = optional(p.model)
+		event.Model = transcript.OptionalString(p.model)
 		text := joinText(content)
 		if len(m.ToolCalls) > 0 {
 			event.Role = transcript.RoleToolCall
-			event.ToolName = optional(m.ToolCalls[0].Name)
+			event.ToolName = transcript.OptionalString(m.ToolCalls[0].Name)
 			texts := []string{}
 			if text != "" {
 				texts = append(texts, text)
 			}
 			for _, call := range m.ToolCalls {
-				if args := argumentsText(call.Arguments); args != "" {
+				if args := transcript.JSONText(call.Arguments); args != "" {
 					texts = append(texts, args)
 				}
 			}
@@ -382,8 +368,8 @@ func (p *parser) message(event *transcript.Event, m *message) {
 		event.Text = joinThink(content)
 	case "tool":
 		event.Role = transcript.RoleToolResult
-		event.ToolName = optional(p.toolNames[m.ToolCallID])
-		event.Text = truncate(outputText(m.Content))
+		event.ToolName = transcript.OptionalString(p.toolNames[m.ToolCallID])
+		event.Text = transcript.TruncateToolText(outputText(m.Content))
 	case "system":
 		event.Role = transcript.RoleSystem
 		event.Text = joinText(content)
@@ -399,7 +385,7 @@ func (p *parser) loopEvent(event *transcript.Event, e *loopEvent) {
 		if e.Part == nil {
 			return
 		}
-		event.Model = optional(p.model)
+		event.Model = transcript.OptionalString(p.model)
 		switch e.Part.Type {
 		case "text":
 			event.Role = transcript.RoleAssistant
@@ -410,16 +396,16 @@ func (p *parser) loopEvent(event *transcript.Event, e *loopEvent) {
 		}
 	case "tool.call":
 		event.Role = transcript.RoleToolCall
-		event.ToolName = optional(e.Name)
-		event.Model = optional(p.model)
+		event.ToolName = transcript.OptionalString(e.Name)
+		event.Model = transcript.OptionalString(p.model)
 		if len(e.Args) > 0 && !bytes.Equal(e.Args, []byte("null")) {
-			event.Text = compact(e.Args)
+			event.Text = transcript.CompactJSON(e.Args)
 		}
 	case "tool.result":
 		event.Role = transcript.RoleToolResult
-		event.ToolName = optional(p.toolNames[e.ToolCallID])
+		event.ToolName = transcript.OptionalString(p.toolNames[e.ToolCallID])
 		if e.Result != nil {
-			event.Text = truncate(outputText(e.Result.Output))
+			event.Text = transcript.TruncateToolText(outputText(e.Result.Output))
 		}
 	}
 }
@@ -510,19 +496,6 @@ func compactionText(rec record) string {
 	return ""
 }
 
-// argumentsText returns tool call arguments, which ContextMessage stores as a
-// JSON-encoded string.
-func argumentsText(raw json.RawMessage) string {
-	var text string
-	if len(raw) > 0 && json.Unmarshal(raw, &text) == nil {
-		return text
-	}
-	if len(raw) == 0 || bytes.Equal(raw, []byte("null")) {
-		return ""
-	}
-	return compact(raw)
-}
-
 // modelID drops the placeholder alias Kimi Code records when the model comes
 // from the environment, which names no model.
 func modelID(alias string) string {
@@ -565,25 +538,6 @@ func timestamp(raw json.RawMessage) *time.Time {
 // maxMillis bounds timestamps to year 9999 so bad input cannot overflow.
 const maxMillis = 253402300799999
 
-func compact(raw json.RawMessage) string {
-	var out bytes.Buffer
-	if json.Compact(&out, raw) != nil {
-		return string(raw)
-	}
-	return out.String()
-}
-
-func truncate(text string) string {
-	if len(text) <= maxToolText {
-		return text
-	}
-	cut := maxToolText
-	for cut > 0 && !utf8.RuneStart(text[cut]) {
-		cut--
-	}
-	return fmt.Sprintf("%s\n[truncated %d bytes]", text[:cut], len(text)-cut)
-}
-
 // tokens maps Kimi usage onto the event contract. inputOther excludes cached
 // tokens, so cache reads and cache writes go to cache and the three counts
 // add up to every token the request processed.
@@ -597,11 +551,4 @@ func tokens(u usage) transcript.Tokens {
 		CacheRead:  cacheRead,
 		CacheWrite: cacheWrite,
 	}
-}
-
-func optional(value string) *string {
-	if value == "" {
-		return nil
-	}
-	return &value
 }

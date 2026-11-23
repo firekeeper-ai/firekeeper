@@ -17,15 +17,11 @@ import (
 	"sort"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/firekeeper-ai/firekeeper/internal/session"
 	"github.com/firekeeper-ai/firekeeper/internal/transcript"
 	"github.com/firekeeper-ai/firekeeper/internal/transcript/reader"
 )
-
-// maxToolText is the longest tool output kept in Event.Text.
-const maxToolText = 64 << 10
 
 func init() {
 	reader.Register(transcript.ProviderCodex, &Source{})
@@ -113,12 +109,12 @@ func (s *Source) Read(path string, fromOffset int64) ([]transcript.Event, int64,
 	}
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, fromOffset, fmt.Errorf("codex: open rollout: %w", cause(err))
+		return nil, fromOffset, fmt.Errorf("codex: open rollout: %w", transcript.ErrorCause(err))
 	}
 	defer file.Close()
 	info, err := file.Stat()
 	if err != nil {
-		return nil, fromOffset, fmt.Errorf("codex: stat rollout: %w", cause(err))
+		return nil, fromOffset, fmt.Errorf("codex: stat rollout: %w", transcript.ErrorCause(err))
 	}
 	if fromOffset > info.Size() {
 		return nil, fromOffset, fmt.Errorf("codex: offset %d is past end of rollout (%d bytes); file was truncated or rotated", fromOffset, info.Size())
@@ -144,22 +140,12 @@ func (s *Source) Read(path string, fromOffset int64) ([]transcript.Event, int64,
 			if errors.Is(err, io.EOF) {
 				return events, offset, nil
 			}
-			return events, offset, fmt.Errorf("codex: read rollout: %w", cause(err))
+			return events, offset, fmt.Errorf("codex: read rollout: %w", transcript.ErrorCause(err))
 		}
 		offset += int64(len(line))
 		events = append(events, p.parse(bytes.TrimRight(line, "\r\n")))
 		p.seq++
 	}
-}
-
-// cause drops the path from filesystem errors so messages stay free of
-// machine-specific locations.
-func cause(err error) error {
-	var pathErr *os.PathError
-	if errors.As(err, &pathErr) {
-		return pathErr.Err
-	}
-	return err
 }
 
 func sessionIDFromPath(path string) string {
@@ -279,11 +265,11 @@ func (p *parser) parse(line []byte) transcript.Event {
 
 	switch rec.Type {
 	case "turn_context":
-		event.Model = optional(p.model)
+		event.Model = transcript.OptionalString(p.model)
 	case "event_msg":
 		if body.Type == "token_count" && body.Info != nil && body.Info.Last != nil {
 			event.Tokens = tokens(*body.Info.Last)
-			event.Model = optional(p.model)
+			event.Model = transcript.OptionalString(p.model)
 		}
 	case "response_item":
 		p.responseItem(&event, body)
@@ -299,7 +285,7 @@ func (p *parser) responseItem(event *transcript.Event, body payload) {
 			event.Role = transcript.RoleUser
 		case "assistant":
 			event.Role = transcript.RoleAssistant
-			event.Model = optional(p.model)
+			event.Model = transcript.OptionalString(p.model)
 		case "developer", "system":
 			event.Role = transcript.RoleSystem
 		default:
@@ -312,15 +298,15 @@ func (p *parser) responseItem(event *transcript.Event, body payload) {
 		event.Text = joinText(body.Summary)
 	case isToolCall(body.Type):
 		event.Role = transcript.RoleToolCall
-		event.ToolName = optional(body.Name)
+		event.ToolName = transcript.OptionalString(body.Name)
 		event.Text = body.Arguments
 		if body.Type == "custom_tool_call" {
 			event.Text = body.Input
 		}
 	case isToolOutput(body.Type):
 		event.Role = transcript.RoleToolResult
-		event.ToolName = optional(p.toolNames[body.CallID])
-		event.Text = truncate(outputText(body.Output))
+		event.ToolName = transcript.OptionalString(p.toolNames[body.CallID])
+		event.Text = transcript.TruncateToolText(outputText(body.Output))
 	}
 }
 
@@ -349,17 +335,6 @@ func outputText(raw json.RawMessage) string {
 	return joinText(raw)
 }
 
-func truncate(text string) string {
-	if len(text) <= maxToolText {
-		return text
-	}
-	cut := maxToolText
-	for cut > 0 && !utf8.RuneStart(text[cut]) {
-		cut--
-	}
-	return fmt.Sprintf("%s\n[truncated %d bytes]", text[:cut], len(text)-cut)
-}
-
 // tokens maps OpenAI usage onto the event contract. Codex input_tokens
 // includes cached tokens, so input here is the uncached remainder and the
 // three counts add up to the reported total.
@@ -373,11 +348,4 @@ func tokens(u usage) transcript.Tokens {
 		CacheRead:  cached,
 		CacheWrite: cacheWrite,
 	}
-}
-
-func optional(value string) *string {
-	if value == "" {
-		return nil
-	}
-	return &value
 }

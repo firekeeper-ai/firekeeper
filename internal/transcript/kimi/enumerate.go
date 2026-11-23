@@ -9,7 +9,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/firekeeper-ai/firekeeper/internal/session"
@@ -59,7 +58,6 @@ func (s *Source) Enumerate(ctx context.Context, opts reader.EnumerateOptions) ([
 		}
 		byID[id] = candidate{path: path, mtime: info.ModTime()}
 	}
-	clean := func(value string) string { return strings.TrimSpace(session.SanitizeProcessCommand(value)) }
 	var metas []session.Meta
 	bad := 0
 	for id, c := range byID {
@@ -75,8 +73,8 @@ func (s *Source) Enumerate(ctx context.Context, opts reader.EnumerateOptions) ([
 		}
 		state, stateErr := readState(filepath.Join(filepath.Dir(filepath.Dir(filepath.Dir(c.path))), "state.json"))
 		if stateErr == nil {
-			meta.CWD = clean(state.WorkDir)
-			meta.Title = clean(state.Title)
+			meta.CWD = session.SanitizeField(state.WorkDir)
+			meta.Title = session.SanitizeField(state.Title)
 			if !state.CreatedAt.IsZero() {
 				started := state.CreatedAt
 				meta.StartedAt = &started
@@ -98,9 +96,9 @@ func (s *Source) Enumerate(ctx context.Context, opts reader.EnumerateOptions) ([
 			bad++
 			continue
 		}
-		meta.Model = clean(head.model)
+		meta.Model = session.SanitizeField(head.model)
 		if meta.CWD == "" {
-			meta.CWD = clean(head.cwd)
+			meta.CWD = session.SanitizeField(head.cwd)
 			meta.Project = reader.ProjectName(meta.CWD)
 		}
 		if meta.StartedAt == nil {

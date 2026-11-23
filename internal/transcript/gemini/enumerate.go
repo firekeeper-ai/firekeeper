@@ -55,7 +55,6 @@ func (s *Source) Enumerate(ctx context.Context, opts reader.EnumerateOptions) ([
 		}
 	}
 
-	clean := func(value string) string { return strings.TrimSpace(session.SanitizeProcessCommand(value)) }
 	byID := map[string]session.Meta{}
 	mtimes := map[string]time.Time{}
 	bad := 0
@@ -87,11 +86,11 @@ func (s *Source) Enumerate(ctx context.Context, opts reader.EnumerateOptions) ([
 			State:       session.SessionStateEnded,
 			RolloutPath: c.path,
 			Source:      session.GeminiSource,
-			Model:       clean(t.Model),
-			Title:       clean(t.Summary),
+			Model:       session.SanitizeField(t.Model),
+			Title:       session.SanitizeField(t.Summary),
 		}
 		meta.Name = meta.Title
-		meta.CWD = clean(session.GeminiProjectRoot(c.runtimeDir, filepath.Dir(filepath.Dir(c.path)), t.ProjectHash))
+		meta.CWD = session.SanitizeField(session.GeminiProjectRoot(c.runtimeDir, filepath.Dir(filepath.Dir(c.path)), t.ProjectHash))
 		meta.Project = reader.ProjectName(meta.CWD)
 		if !t.StartedAt.IsZero() {
 			started := t.StartedAt

@@ -209,3 +209,10 @@ func NormalizeTTY(value string) string { return standalone().normalizeTTY(value)
 func SanitizeProcessCommand(command string) string {
 	return standalone().sanitizeProcessCommand(command)
 }
+
+// SanitizeField is value made safe to show and store as one metadata field,
+// such as a title, branch, or working directory: control characters become
+// spaces (see SanitizeProcessCommand) and surrounding space is trimmed.
+func SanitizeField(value string) string {
+	return strings.TrimSpace(SanitizeProcessCommand(value))
+}
