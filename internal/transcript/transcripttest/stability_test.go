@@ -172,3 +172,32 @@ func TestWriteLinePrefix(t *testing.T) {
 		})
 	}
 }
+
+func TestCheckTokens(t *testing.T) {
+	ok := []transcript.Event{
+		{Seq: 0},
+		{Seq: 1, Tokens: transcript.Tokens{Input: 1, Output: 2, Cache: 10, CacheRead: 6, CacheWrite: 4}},
+		{Seq: 2, Tokens: transcript.Tokens{Cache: 5, CacheRead: 5}},
+	}
+	if err := CheckTokens(ok); err != nil {
+		t.Fatalf("CheckTokens(valid) = %v", err)
+	}
+	for name, tokens := range map[string]transcript.Tokens{
+		"split only":        {CacheRead: 6, CacheWrite: 4},
+		"combined only":     {Cache: 10},
+		"split disagrees":   {Cache: 3, CacheRead: 6, CacheWrite: 4},
+		"negative input":    {Input: -1},
+		"negative split":    {Cache: 0, CacheRead: 5, CacheWrite: -5},
+		"negative combined": {Cache: -2, CacheRead: -1, CacheWrite: -1},
+	} {
+		t.Run(name, func(t *testing.T) {
+			err := CheckTokens([]transcript.Event{{Seq: 0}, {Seq: 7, Tokens: tokens, Text: "synthetic-private-value"}})
+			if err == nil || !strings.Contains(err.Error(), "seq 7") {
+				t.Fatalf("CheckTokens(%+v) = %v; want an error naming seq 7", tokens, err)
+			}
+			if strings.Contains(err.Error(), "synthetic-private-value") {
+				t.Fatal("failure message disclosed event contents")
+			}
+		})
+	}
+}

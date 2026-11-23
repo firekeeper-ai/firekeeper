@@ -98,14 +98,16 @@ type Tokens struct {
 	Total      int64 `json:"total"`
 }
 
-// Add sums one event's tokens into t.
+// Add sums one event's tokens into t. Cache and Total come from
+// transcript.CacheTokens and transcript.TotalTokens, so the window counts
+// tokens the way every other report does; negative counts count as zero.
 func (t *Tokens) Add(e transcript.Tokens) {
-	t.Input += e.Input
-	t.Output += e.Output
-	t.Cache += e.Cache
-	t.CacheRead += e.CacheRead
-	t.CacheWrite += e.CacheWrite
-	t.Total += e.Input + e.Output + e.Cache
+	t.Input += max(e.Input, 0)
+	t.Output += max(e.Output, 0)
+	t.Cache += transcript.CacheTokens(e)
+	t.CacheRead += max(e.CacheRead, 0)
+	t.CacheWrite += max(e.CacheWrite, 0)
+	t.Total += transcript.TotalTokens(e)
 }
 
 // Session is one session's share of the window.
@@ -323,7 +325,7 @@ func (a *accumulator) session(meta session.Meta, events []transcript.Event) {
 			buckets[i].Tokens.Add(e.Tokens)
 			activity[i].Tokens.Add(e.Tokens)
 		}
-		if e.Tokens.Input+e.Tokens.Output+e.Tokens.Cache > 0 {
+		if transcript.TotalTokens(e.Tokens) > 0 {
 			model := "unknown"
 			if e.Model != nil && *e.Model != "" {
 				model = *e.Model

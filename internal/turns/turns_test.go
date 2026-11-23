@@ -187,20 +187,3 @@ func TestToolErrorsByTool(t *testing.T) {
 		t.Fatalf("turn without errors lists them: %s", data)
 	}
 }
-
-func TestCacheTokensPrefersTheLargerFigure(t *testing.T) {
-	for _, test := range []struct {
-		tokens transcript.Tokens
-		want   int64
-	}{
-		{transcript.Tokens{Cache: 10, CacheRead: 6, CacheWrite: 4}, 10},
-		{transcript.Tokens{Cache: 10}, 10},
-		{transcript.Tokens{CacheRead: 6, CacheWrite: 4}, 10},
-		{transcript.Tokens{Cache: -3, CacheRead: -1}, 0},
-		{transcript.Tokens{}, 0},
-	} {
-		if got := CacheTokens(test.tokens); got != test.want {
-			t.Errorf("CacheTokens(%+v) = %d; want %d", test.tokens, got, test.want)
-		}
-	}
-}
