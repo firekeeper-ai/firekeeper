@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/firekeeper-ai/firekeeper/internal/fsutil"
 	"github.com/firekeeper-ai/firekeeper/pkg/event"
 )
 
@@ -126,7 +127,7 @@ func (d *discoverer) enrichKimiSessions(groups []ProcessGroup) error {
 func (d *discoverer) kimiInfo(state KimiLatestSession) Info {
 	sessionDir := filepath.Dir(state.Path)
 	var rollout string
-	if wire := KimiWirePath(sessionDir); fileExists(wire) {
+	if wire := KimiWirePath(sessionDir); fsutil.FileExists(wire) {
 		rollout = wire
 	}
 	return Info{
@@ -290,8 +291,3 @@ func kimiTime(raw json.RawMessage) time.Time {
 
 // maxKimiMillis bounds timestamps to year 9999 so bad input cannot overflow.
 const maxKimiMillis = 253402300799999
-
-func fileExists(path string) bool {
-	info, err := os.Stat(path)
-	return err == nil && info.Mode().IsRegular()
-}

@@ -24,6 +24,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/firekeeper-ai/firekeeper/internal/fsutil"
+	"github.com/firekeeper-ai/firekeeper/internal/homebrew"
 )
 
 // Environment variables.
@@ -194,14 +197,6 @@ func parse(v string) (n [3]int, pre, ok bool) {
 	return n, pre, true
 }
 
-// IsHomebrew reports whether exe lives in a Homebrew Cellar, resolved or not.
-func IsHomebrew(exe string) bool {
-	if r, err := filepath.EvalSymlinks(exe); err == nil {
-		exe = r
-	}
-	return strings.Contains(exe, "/Cellar/")
-}
-
 // Prompt offers the update on out and reads the answer from in. It returns
 // true when the update ran, so the caller should exit and let the user
 // restart. Enter or any unknown answer means "not now".
@@ -238,7 +233,7 @@ func Install(ctx context.Context, version, exe string, out, errOut io.Writer) er
 	if !tagPattern.MatchString(tag) {
 		return fmt.Errorf("invalid version %q", version)
 	}
-	if IsHomebrew(exe) {
+	if homebrew.Installed(exe) {
 		return installBrew(ctx, strings.TrimPrefix(tag, "v"), out, errOut)
 	}
 	if goos == "windows" {
@@ -390,7 +385,7 @@ func installWindows(ctx context.Context, tag, exe string, out, errOut io.Writer)
 	if err := os.WriteFile(path, []byte(script), 0o600); err != nil {
 		return fmt.Errorf("write install script: %w", err)
 	}
-	shell, err := windowsShell(systemDirectory(), fileExists, exec.LookPath)
+	shell, err := windowsShell(systemDirectory(), fsutil.FileExists, exec.LookPath)
 	if err != nil {
 		return err
 	}
@@ -418,11 +413,6 @@ func windowsShell(systemDir string, exists func(string) bool, lookPath func(stri
 		return "", errors.New("PowerShell not found: neither Windows PowerShell in the system directory nor pwsh on PATH")
 	}
 	return shell, nil
-}
-
-func fileExists(path string) bool {
-	info, err := os.Stat(path)
-	return err == nil && info.Mode().IsRegular()
 }
 
 // windowsInstallEnv is the environment for the installer: parent without

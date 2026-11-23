@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/firekeeper-ai/firekeeper/internal/fsutil"
 )
 
 func TestWindowsShellUsesRealSystemDirectory(t *testing.T) {
@@ -12,7 +14,7 @@ func TestWindowsShellUsesRealSystemDirectory(t *testing.T) {
 	if dir == "" {
 		t.Fatal("GetSystemDirectory returned nothing")
 	}
-	got, err := windowsShell(dir, fileExists, func(string) (string, error) { return "", exec.ErrNotFound })
+	got, err := windowsShell(dir, fsutil.FileExists, func(string) (string, error) { return "", exec.ErrNotFound })
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -18,6 +18,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/firekeeper-ai/firekeeper/internal/homebrew"
 )
 
 // fakeScript is the body of the fake server in test archives. Install runs
@@ -484,23 +486,41 @@ func TestChooseDir(t *testing.T) {
 	if d, fb, _ := ChooseDir(filepath.Join(cellar, "firekeeper"), home); !fb || d != filepath.Join(home, ".local", "bin") {
 		t.Errorf("cellar: %v %v", d, fb)
 	}
+	// Regression: a folder that only has "homebrew" or "linuxbrew" in its
+	// path is the user's, not Homebrew's, so the server may go there.
+	for _, name := range []string{"homebrew", "linuxbrew"} {
+		lookalike := filepath.Join(t.TempDir(), "src", name, "bin")
+		os.MkdirAll(lookalike, 0o755)
+		if d, fb, err := ChooseDir(filepath.Join(lookalike, "firekeeper"), home); err != nil || fb || d != lookalike {
+			t.Errorf("%s look-alike: %v %v %v", name, d, fb, err)
+		}
+	}
 	if _, _, err := ChooseDir("", ""); err == nil {
 		t.Error("no home and no exe accepted")
 	}
 }
 
-func TestIsHomebrewAndOnPath(t *testing.T) {
-	for p, want := range map[string]bool{
-		"/opt/homebrew/bin/firekeeper":                  true,
-		"/usr/local/Cellar/firekeeper/1/bin/firekeeper": true,
-		"/home/linuxbrew/.linuxbrew/bin/firekeeper":     true,
-		"/usr/local/bin/firekeeper":                     false,
-		"/home/me/bin/firekeeper":                       false,
-	} {
-		if IsHomebrew(p) != want {
-			t.Errorf("IsHomebrew(%s) != %v", p, want)
-		}
+// TestChooseDirSkipsEnvPrefix: a firekeeper copied into the bin folder of
+// a custom Homebrew prefix, named by HOMEBREW_PREFIX, does not get the
+// server next to it, so a later brew install can still link it there.
+func TestChooseDirSkipsEnvPrefix(t *testing.T) {
+	home := t.TempDir()
+	prefix := filepath.Join(t.TempDir(), "brew")
+	bin := filepath.Join(prefix, "bin")
+	os.MkdirAll(bin, 0o755)
+	exe := filepath.Join(bin, "firekeeper")
+
+	t.Setenv(homebrew.EnvPrefix, "")
+	if d, fb, err := ChooseDir(exe, home); err != nil || fb || d != bin {
+		t.Errorf("without %s: %v %v %v; want %s", homebrew.EnvPrefix, d, fb, err, bin)
 	}
+	t.Setenv(homebrew.EnvPrefix, prefix)
+	if d, fb, err := ChooseDir(exe, home); err != nil || !fb || d != filepath.Join(home, ".local", "bin") {
+		t.Errorf("with %s: %v %v %v; want the fallback", homebrew.EnvPrefix, d, fb, err)
+	}
+}
+
+func TestOnPath(t *testing.T) {
 	sep := string(os.PathListSeparator)
 	if !OnPath("/a/b/", "/x"+sep+"/a/b"+sep+"/y") || OnPath("/a/c", "/x"+sep+"/a/b") || OnPath("/a", "") {
 		t.Error("OnPath")

@@ -126,15 +126,6 @@ func TestInstallRejectsBadVersion(t *testing.T) {
 	}
 }
 
-func TestIsHomebrew(t *testing.T) {
-	if !IsHomebrew("/opt/homebrew/Cellar/firekeeper/0.2.1/bin/firekeeper") {
-		t.Error("Cellar path not detected")
-	}
-	if IsHomebrew("/home/u/.local/bin/firekeeper") {
-		t.Error("plain path detected as Homebrew")
-	}
-}
-
 func TestAvailableOfflineUsesCache(t *testing.T) {
 	var hits int32
 	srv := release(t, `{"tag_name":"v0.3.0","prerelease":false}`, &hits)

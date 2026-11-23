@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/firekeeper-ai/firekeeper/internal/fsutil"
+	"github.com/firekeeper-ai/firekeeper/internal/homebrew"
 	"github.com/firekeeper-ai/firekeeper/internal/serverinstall"
 	"github.com/firekeeper-ai/firekeeper/internal/update"
 )
@@ -148,7 +149,7 @@ func offerServerUpdate(path string, stderr io.Writer) string {
 		return path
 	}
 
-	if serverinstall.IsHomebrew(real) {
+	if homebrew.Installed(real) {
 		return updateWithBrew(path, stderr)
 	}
 	return updateInPlace(ctx, src, path, real, current, stderr)

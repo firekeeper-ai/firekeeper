@@ -266,8 +266,9 @@ func TestInstallFallsBackToHomeLocalBin(t *testing.T) {
 func TestInstallFallbackNoHintWhenOnPath(t *testing.T) {
 	rel := newFakeRelease(t, "")
 	s := setupInstall(t, rel.srv.URL, "y\n")
-	// Make the exe dir a Homebrew-looking one without brew present.
-	cellar := filepath.Join(t.TempDir(), "homebrew", "bin")
+	// Make the exe dir a Homebrew keg without brew present. A folder only
+	// named "homebrew" is not Homebrew's (see internal/homebrew).
+	cellar := filepath.Join(t.TempDir(), "Cellar", "firekeeper", "1.0", "bin")
 	os.MkdirAll(cellar, 0o755)
 	exe := filepath.Join(cellar, "firekeeper")
 	os.WriteFile(exe, []byte("x"), 0o755)

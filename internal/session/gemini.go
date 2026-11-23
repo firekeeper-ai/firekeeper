@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/firekeeper-ai/firekeeper/internal/fsutil"
 	"github.com/firekeeper-ai/firekeeper/internal/parallel"
 	"github.com/firekeeper-ai/firekeeper/pkg/event"
 )
@@ -329,7 +330,7 @@ func GeminiSessionFiles(projectDir string) []string {
 		if !entry.Type().IsRegular() || !isGeminiSessionFile(name) {
 			continue
 		}
-		if strings.HasSuffix(name, ".json") && fileExists(filepath.Join(chats, name+"l")) {
+		if strings.HasSuffix(name, ".json") && fsutil.FileExists(filepath.Join(chats, name+"l")) {
 			continue
 		}
 		paths = append(paths, filepath.Join(chats, name))
