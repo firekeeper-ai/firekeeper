@@ -610,10 +610,13 @@ never uses `sudo`.
 
 `<dir>` is the directory of the running `firekeeper` (symlinks resolved) if
 that is writable, otherwise `~/.local/bin` (created; a `PATH` hint is printed
-if it is not on your `PATH`). If `firekeeper` lives under a Homebrew prefix
-Firekeeper does not write there. It offers to run `brew install
-firekeeper-ai/tap/firekeeper-server` instead, and downloads directly only if
-`brew` is not installed.
+if it is not on your `PATH`). Firekeeper never writes into a Homebrew
+folder: a Cellar, `/opt/homebrew`, `/home/linuxbrew/.linuxbrew`, or the prefix
+in `HOMEBREW_PREFIX` (set by `brew shellenv`; ignored when it is `/`, `/usr`,
+`/usr/local`, or your home folder, which other software shares). If
+Homebrew installed `firekeeper` (it resolves into a Homebrew Cellar), it
+offers to run `brew install firekeeper-ai/tap/firekeeper-server` instead, and
+downloads directly only if `brew` is not installed.
 
 Release builds of `firekeeper` have the offer switched on, pointing at
 `firekeeper-ai/firekeeper-server-releases`. Builds made with plain `go build`
@@ -651,7 +654,9 @@ until a newer one appears (remembered in `~/.firekeeper/server-update.json`).
 `1` installs the same way as the first install (SHA-256 checked against
 `checksums.txt`, archive layout enforced) over the existing file, or runs
 `brew upgrade` when the server lives in a Homebrew Cellar. It then starts the
-new server.
+new server. If you copied the server directly into a protected Homebrew
+prefix, `serve` reports the newer version and starts the existing server.
+Move the binary outside the prefix to update it in place.
 
 Before it replaces the file, it keeps a copy. After the install it runs the
 new server's `license --json`; if that says `not covered by this build` (the

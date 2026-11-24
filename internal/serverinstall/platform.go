@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/firekeeper-ai/firekeeper/internal/homebrew"
 )
 
 // Platform maps Go's GOOS/GOARCH to the release asset names, or says the
@@ -46,18 +48,6 @@ func ExecutableName(goos string) string {
 	return BinaryName
 }
 
-// IsHomebrew reports whether path lies under a Homebrew prefix. Such a
-// directory belongs to brew, so nothing else writes into it.
-func IsHomebrew(path string) bool {
-	p := filepath.ToSlash(path)
-	for _, m := range []string{"/Cellar/", "/homebrew/", "/linuxbrew/"} {
-		if strings.Contains(p, m) {
-			return true
-		}
-	}
-	return false
-}
-
 // DirWritable reports whether a file can be created in dir.
 func DirWritable(dir string) bool {
 	f, err := os.CreateTemp(dir, ".fk-write-test-*")
@@ -77,7 +67,7 @@ func DirWritable(dir string) bool {
 func ChooseDir(exePath, home string) (dir string, fallback bool, err error) {
 	if exePath != "" {
 		d := filepath.Dir(exePath)
-		if !IsHomebrew(d) && DirWritable(d) {
+		if !homebrew.InPrefix(d) && DirWritable(d) {
 			return d, false, nil
 		}
 	}

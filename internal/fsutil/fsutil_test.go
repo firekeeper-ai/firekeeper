@@ -70,3 +70,24 @@ func TestRenameReplacing(t *testing.T) {
 		t.Fatalf("missing source took %v, want no retries", d)
 	}
 }
+
+func TestFileExists(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "file")
+	if err := os.WriteFile(file, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if !FileExists(file) {
+		t.Error("a regular file does not exist")
+	}
+	for name, path := range map[string]string{
+		"folder":       dir,
+		"missing":      filepath.Join(dir, "missing"),
+		"empty":        "",
+		"below a file": filepath.Join(file, "child"),
+	} {
+		if FileExists(path) {
+			t.Errorf("%s counts as a file", name)
+		}
+	}
+}

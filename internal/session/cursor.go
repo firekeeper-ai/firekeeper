@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/firekeeper-ai/firekeeper/internal/fsutil"
 	"github.com/firekeeper-ai/firekeeper/internal/parallel"
 	"github.com/firekeeper-ai/firekeeper/pkg/event"
 )
@@ -294,7 +295,7 @@ func FindCursorChat(dir, cwd, id string) string {
 		return ""
 	}
 	if cwd != "" {
-		if path := filepath.Join(CursorChatsDir(dir, cwd), id, "store.db"); fileExists(path) {
+		if path := filepath.Join(CursorChatsDir(dir, cwd), id, "store.db"); fsutil.FileExists(path) {
 			return path
 		}
 	}

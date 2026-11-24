@@ -15,6 +15,7 @@ import (
 
 	"golang.org/x/term"
 
+	"github.com/firekeeper-ai/firekeeper/internal/homebrew"
 	"github.com/firekeeper-ai/firekeeper/internal/serverinstall"
 )
 
@@ -90,7 +91,7 @@ func offerInstall(stderr io.Writer) string {
 		}
 	}
 
-	if exe != "" && serverinstall.IsHomebrew(exe) {
+	if exe != "" && homebrew.Installed(exe) {
 		if brew, err := l.LookPath("brew"); err == nil {
 			return offerBrew(brew, stderr)
 		}
