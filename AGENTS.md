@@ -491,7 +491,42 @@ The reporter and daemon keep per-file read offsets in `~/.firekeeper/state.json`
 - Integration tests must not skip in CI. Locally, a test may skip when an optional tool such as `sqlite3` is missing or an opt-in variable such as `FIREKEEPER_MACOS_INTEGRATION` is unset, but when `CI` is set (GitHub Actions sets `CI=true`) the same condition is a test failure with a clear message. Limit platform-specific tests with build constraints (for example `_darwin_test.go` or `_windows_test.go`) instead of runtime skips. Use `testenv.NeedTool` from `internal/testenv` for missing tools and `testenv.InCI` for other conditions.
 - Changes to the report pipeline (discovery, transcript readers, redaction, reporter state and offsets, ingest) are tested against `internal/testenv/fakeapi`, which follows `docs/api.md`. Extend it when the API contract grows.
 
-For user-visible changes, update `README.md` when controls, supported providers, requirements, limitations, or CLI flags change.
+## Documentation
+
+Docs change in the same commit as the behavior they describe. A change is
+not done while any doc still describes the old behavior.
+
+Where each kind of change is documented:
+
+| Change | Update |
+|---|---|
+| Keyboard shortcut, mouse action, tab, or view | `internal/tui/help.go` (the `?` overlay), "Terminal dashboard" in `docs/reference.md`, `docs/landing/docs/keyboard/`, README controls |
+| Subcommand, flag, env var, exit code, or `--json` field | Usage text in `internal/cli`, `docs/reference.md`, README if it lists it |
+| Config key or default | "Configuration" in `docs/reference.md` |
+| Provider added, or provider data location or limitation | "Supported providers" and "How session discovery works" in `docs/reference.md`, README provider list |
+| What is read, uploaded, redacted, or sent over the network | `PRIVACY.md`, "What is uploaded and what is not caught" in `docs/reference.md` |
+| HTTP request, response, or error | `docs/api.md`, `docs/event.schema.json` for `pkg/event`, and `internal/testenv/fakeapi` |
+| Install, uninstall, platform support, or release layout | `docs/install.md`, "Release layout contract" in `docs/reference.md` |
+| Usage numbers, stats, or insights | `docs/landing/docs/usage/`, "Local usage insights" in `docs/reference.md` |
+| New error a user can hit | `docs/landing/docs/troubleshooting/` when the fix is not in the message |
+| Package, file, or rule named in this file | `AGENTS.md` (code map and rules) |
+
+Before handoff:
+
+1. Find every doc that mentions what you changed, not only the ones in the
+   table: `git grep -n -i '<old flag, key, or name>' -- '*.md' docs/`. Fix
+   each stale mention, and delete text about removed behavior rather than
+   leaving it.
+2. Check examples you touched against the real program: run the command or
+   `--help`, and copy the actual output, flag names, and defaults.
+3. In the handoff or PR description, list the docs you updated, or say
+   "No doc changes:" and give the reason (for example, an internal refactor
+   with no visible effect). Leaving it out is not allowed.
+
+Keep each fact in one place. The website guides in `docs/landing/docs/`
+link to `docs/reference.md` instead of copying it (see `docs/README.md`).
+Describe current behavior in present tense, not changelog notes like "now
+supports".
 
 ## No code duplication
 
@@ -520,3 +555,4 @@ For user-visible changes, update `README.md` when controls, supported providers,
 - Do not overwrite user edits in dirty worktree.
 - Do not add generated binaries, database copies, provider logs, account metadata, or secrets.
 - Explain remaining platform/provider limitations plainly during handoff.
+- Update docs as part of the change, not afterwards (see "Documentation").
