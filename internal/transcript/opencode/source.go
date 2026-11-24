@@ -17,7 +17,6 @@ import (
 	"os/exec"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/firekeeper-ai/firekeeper/internal/session"
 	"github.com/firekeeper-ai/firekeeper/internal/sqlitejson"
@@ -26,8 +25,6 @@ import (
 )
 
 const (
-	// maxToolText is the longest tool output kept in Event.Text.
-	maxToolText = 64 << 10
 	// pageRows bounds the rows one sqlite3 call returns.
 	pageRows = 500
 	// queryTimeout bounds one sqlite3 call.
@@ -113,7 +110,7 @@ func (s *Source) open(ctx context.Context, db string) (bool, error) {
 		if errors.Is(err, os.ErrNotExist) {
 			return false, nil
 		}
-		return false, fmt.Errorf("opencode: stat database: %w", cause(err))
+		return false, fmt.Errorf("opencode: stat database: %w", transcript.ErrorCause(err))
 	}
 	var rows []struct {
 		Tables int `json:"tables"`
@@ -159,7 +156,7 @@ func (s *Source) Read(path string, fromOffset int64) ([]transcript.Event, int64,
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
 	if _, err := os.Stat(db); err != nil {
-		return nil, fromOffset, fmt.Errorf("opencode: stat database: %w", cause(err))
+		return nil, fromOffset, fmt.Errorf("opencode: stat database: %w", transcript.ErrorCause(err))
 	}
 	var idle []struct {
 		Seq int64 `json:"seq"`
@@ -211,7 +208,7 @@ func (s *Source) Stat(path string) (reader.Info, error) {
 		return reader.Info{}, errors.New("opencode: not an OpenCode transcript path")
 	}
 	if _, err := os.Stat(db); err != nil {
-		return reader.Info{}, fmt.Errorf("opencode: stat database: %w", cause(err))
+		return reader.Info{}, fmt.Errorf("opencode: stat database: %w", transcript.ErrorCause(err))
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
@@ -283,7 +280,7 @@ func (s *Source) query(ctx context.Context, db, query string, rows any) error {
 			// sqlite3's message can quote the query, so it is not shown.
 			return fmt.Errorf("opencode: query database: sqlite3 exited with status %d", exit.ExitCode())
 		}
-		return fmt.Errorf("opencode: query database: %w", cause(err))
+		return fmt.Errorf("opencode: query database: %w", transcript.ErrorCause(err))
 	}
 	if len(bytes.TrimSpace(output)) == 0 {
 		return nil
@@ -298,20 +295,6 @@ func (s *Source) query(ctx context.Context, db, query string, rows any) error {
 // session.ValidOpenCodeSessionID accepts, which hold no quotes.
 func quote(id string) string {
 	return "'" + strings.ReplaceAll(id, "'", "''") + "'"
-}
-
-// cause drops the path from filesystem errors so messages stay free of
-// machine-specific locations.
-func cause(err error) error {
-	var pathErr *os.PathError
-	if errors.As(err, &pathErr) {
-		return pathErr.Err
-	}
-	var execErr *exec.Error
-	if errors.As(err, &execErr) {
-		return execErr.Err
-	}
-	return err
 }
 
 // message holds the fields of a session_message data object the parser
@@ -408,31 +391,31 @@ func parse(sessionID string, r row, msg message, decoded bool) transcript.Event 
 	switch r.Type {
 	case "user":
 		event.Role = transcript.RoleUser
-		event.Text = stringValue(msg.Text)
+		event.Text, _ = transcript.JSONString(msg.Text)
 	case "synthetic", "system", "skill":
 		// Context OpenCode adds on the user's behalf.
 		event.Role = transcript.RoleSystem
-		event.Text = stringValue(msg.Text)
+		event.Text, _ = transcript.JSONString(msg.Text)
 	case "shell":
 		// A command the user ran with !, and its output.
 		event.Role = transcript.RoleToolResult
-		event.ToolName = optional("shell")
+		event.ToolName = transcript.OptionalString("shell")
 		text := "$ " + msg.Command
 		if msg.Output != nil && msg.Output.Output != "" {
 			text += "\n" + msg.Output.Output
 		}
-		event.Text = truncate(text)
+		event.Text = transcript.TruncateToolText(text)
 	case "assistant":
 		assistant(&event, msg)
 	case "compaction":
-		event.Model = optional(session.OpenCodeModel(msg.Model))
+		event.Model = transcript.OptionalString(session.OpenCodeModel(msg.Model))
 		event.Tokens = tokens(msg.Tokens)
 		if msg.Status == "completed" {
 			event.Role = transcript.RoleSystem
 			event.Text = msg.Summary
 		}
 	case "model-switched":
-		event.Model = optional(session.OpenCodeModel(msg.Model))
+		event.Model = transcript.OptionalString(session.OpenCodeModel(msg.Model))
 	}
 	return event
 }
@@ -442,7 +425,7 @@ func parse(sessionID string, r row, msg message, decoded bool) transcript.Event 
 // calls reads as the calls and their results; reasoning alone stays meta,
 // like Codex and Claude Code reasoning.
 func assistant(event *transcript.Event, msg message) {
-	event.Model = optional(session.OpenCodeModel(msg.Model))
+	event.Model = transcript.OptionalString(session.OpenCodeModel(msg.Model))
 	event.Tokens = tokens(msg.Tokens)
 	var texts, reasoning, tools []string
 	for _, p := range msg.Content {
@@ -457,7 +440,7 @@ func assistant(event *transcript.Event, msg message) {
 			}
 		case "tool":
 			if event.ToolName == nil {
-				event.ToolName = optional(p.Name)
+				event.ToolName = transcript.OptionalString(p.Name)
 			}
 			tools = append(tools, toolText(p))
 		}
@@ -468,7 +451,7 @@ func assistant(event *transcript.Event, msg message) {
 		event.Text = strings.Join(texts, "\n")
 	case len(tools) > 0:
 		event.Role = transcript.RoleToolCall
-		event.Text = truncate(strings.Join(tools, "\n"))
+		event.Text = transcript.TruncateToolText(strings.Join(tools, "\n"))
 	default:
 		event.Text = strings.Join(reasoning, "\n")
 	}
@@ -478,7 +461,7 @@ func assistant(event *transcript.Event, msg message) {
 // File output stays in Raw.
 func toolText(p part) string {
 	lines := []string{}
-	if input := compact(p.State.Input); input != "" {
+	if input := transcript.JSONText(p.State.Input); input != "" {
 		lines = append(lines, input)
 	}
 	for _, c := range p.State.Content {
@@ -518,47 +501,6 @@ func rawRecord(r row, decoded bool) json.RawMessage {
 	return raw
 }
 
-func stringValue(raw json.RawMessage) string {
-	var text string
-	if len(raw) == 0 || json.Unmarshal(raw, &text) != nil {
-		return ""
-	}
-	return text
-}
-
-func compact(raw json.RawMessage) string {
-	if len(raw) == 0 || string(raw) == "null" {
-		return ""
-	}
-	if text, ok := stringOK(raw); ok {
-		return text // input still streaming arrives as a string
-	}
-	var out bytes.Buffer
-	if json.Compact(&out, raw) != nil {
-		return string(raw)
-	}
-	return out.String()
-}
-
-func stringOK(raw json.RawMessage) (string, bool) {
-	var text string
-	if raw[0] != '"' || json.Unmarshal(raw, &text) != nil {
-		return "", false
-	}
-	return text, true
-}
-
-func truncate(text string) string {
-	if len(text) <= maxToolText {
-		return text
-	}
-	cut := maxToolText
-	for cut > 0 && !utf8.RuneStart(text[cut]) {
-		cut--
-	}
-	return fmt.Sprintf("%s\n[truncated %d bytes]", text[:cut], len(text)-cut)
-}
-
 // tokens maps OpenCode usage onto the event contract. OpenCode counts input
 // without cached tokens and reasoning apart from output, so reasoning is
 // added to output and cache reads and writes go to cache.
@@ -576,11 +518,4 @@ func tokens(u *tokenUsage) transcript.Tokens {
 		CacheRead:  cacheRead,
 		CacheWrite: cacheWrite,
 	}
-}
-
-func optional(value string) *string {
-	if value == "" {
-		return nil
-	}
-	return &value
 }

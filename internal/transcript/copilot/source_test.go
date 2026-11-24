@@ -239,7 +239,7 @@ func TestReadBadOffsets(t *testing.T) {
 }
 
 func TestToolOutputTruncated(t *testing.T) {
-	big := strings.Repeat("é", maxToolText) // two bytes per rune
+	big := strings.Repeat("é", transcript.MaxToolText) // two bytes per rune
 	line, _ := json.Marshal(map[string]any{
 		"type":      "tool.execution_complete",
 		"timestamp": "2026-01-02T03:04:05.000Z",
@@ -255,7 +255,7 @@ func TestToolOutputTruncated(t *testing.T) {
 	}
 	text := events[0].Text
 	kept, marker, ok := strings.Cut(text, "\n[truncated ")
-	if !ok || len(kept) != maxToolText || marker != "65536 bytes]" {
+	if !ok || len(kept) != transcript.MaxToolText || marker != "65536 bytes]" {
 		t.Fatalf("kept %d bytes, marker %q", len(kept), marker)
 	}
 	if !strings.Contains(string(events[0].Raw), big) {

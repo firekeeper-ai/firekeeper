@@ -193,7 +193,7 @@ func TestReadErrors(t *testing.T) {
 }
 
 func TestReadTruncatesLongToolOutput(t *testing.T) {
-	long := strings.Repeat("é", maxToolText)
+	long := strings.Repeat("é", transcript.MaxToolText)
 	line, _ := json.Marshal(map[string]any{"role": "user", "message": map[string]any{"content": []any{
 		map[string]any{"type": "tool_result", "tool_use_id": "t", "content": long},
 	}}})
@@ -205,7 +205,7 @@ func TestReadTruncatesLongToolOutput(t *testing.T) {
 	if err != nil || len(events) != 1 {
 		t.Fatalf("got %d events, %v", len(events), err)
 	}
-	if text := events[0].Text; len(text) > maxToolText+64 || !strings.Contains(text, "[truncated ") {
+	if text := events[0].Text; len(text) > transcript.MaxToolText+64 || !strings.Contains(text, "[truncated ") {
 		t.Fatalf("tool output not truncated: %d bytes", len(text))
 	}
 	if !strings.Contains(string(events[0].Raw), long) {

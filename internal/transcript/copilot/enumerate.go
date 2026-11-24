@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/firekeeper-ai/firekeeper/internal/session"
@@ -59,11 +58,11 @@ func (s *Source) Enumerate(ctx context.Context, opts reader.EnumerateOptions) ([
 		meta := session.Meta{ID: id, Provider: transcript.ProviderCopilot, State: session.SessionStateEnded, RolloutPath: path}
 		gitRoot := ""
 		if ws, err := session.ReadCopilotWorkspace(filepath.Join(filepath.Dir(path), "workspace.yaml")); err == nil {
-			meta.CWD = clean(session.FirstNonEmpty(ws.CWD, ws.GitRoot))
-			gitRoot = clean(ws.GitRoot)
-			meta.Branch = clean(ws.Branch)
-			meta.Title = clean(ws.Name)
-			meta.Repository = clean(ws.Repository)
+			meta.CWD = session.SanitizeField(session.FirstNonEmpty(ws.CWD, ws.GitRoot))
+			gitRoot = session.SanitizeField(ws.GitRoot)
+			meta.Branch = session.SanitizeField(ws.Branch)
+			meta.Title = session.SanitizeField(ws.Name)
+			meta.Repository = session.SanitizeField(ws.Repository)
 			meta.StartedAt = optionalTime(ws.CreatedAt)
 			meta.LastActivityAt = optionalTime(ws.UpdatedAt)
 		}
@@ -81,10 +80,10 @@ func (s *Source) Enumerate(ctx context.Context, opts reader.EnumerateOptions) ([
 			bad++
 			continue
 		}
-		meta.CWD = session.FirstNonEmpty(meta.CWD, clean(h.cwd))
-		gitRoot = session.FirstNonEmpty(gitRoot, clean(h.gitRoot))
-		meta.Branch = session.FirstNonEmpty(meta.Branch, clean(h.branch))
-		meta.Model = clean(h.model)
+		meta.CWD = session.FirstNonEmpty(meta.CWD, session.SanitizeField(h.cwd))
+		gitRoot = session.FirstNonEmpty(gitRoot, session.SanitizeField(h.gitRoot))
+		meta.Branch = session.FirstNonEmpty(meta.Branch, session.SanitizeField(h.branch))
+		meta.Model = session.SanitizeField(h.model)
 		if meta.StartedAt == nil {
 			meta.StartedAt = optionalTime(h.started)
 		}
@@ -115,10 +114,6 @@ func finish(meta session.Meta, gitRoot string) session.Meta {
 		meta.UpdatedAt = *meta.LastActivityAt
 	}
 	return meta
-}
-
-func clean(value string) string {
-	return strings.TrimSpace(session.SanitizeProcessCommand(value))
 }
 
 func optionalTime(t time.Time) *time.Time {

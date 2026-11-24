@@ -16,15 +16,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/firekeeper-ai/firekeeper/internal/session"
 	"github.com/firekeeper-ai/firekeeper/internal/transcript"
 	"github.com/firekeeper-ai/firekeeper/internal/transcript/reader"
 )
-
-// maxToolText is the longest tool output kept in Event.Text.
-const maxToolText = 64 << 10
 
 // Cursor CLI wraps the typed prompt in these tags, after any context it adds.
 const (
@@ -91,12 +87,12 @@ func (s *Source) Read(path string, fromOffset int64) ([]transcript.Event, int64,
 	}
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, fromOffset, fmt.Errorf("cursor: open transcript: %w", cause(err))
+		return nil, fromOffset, fmt.Errorf("cursor: open transcript: %w", transcript.ErrorCause(err))
 	}
 	defer file.Close()
 	info, err := file.Stat()
 	if err != nil {
-		return nil, fromOffset, fmt.Errorf("cursor: stat transcript: %w", cause(err))
+		return nil, fromOffset, fmt.Errorf("cursor: stat transcript: %w", transcript.ErrorCause(err))
 	}
 	if fromOffset > info.Size() {
 		return nil, fromOffset, fmt.Errorf("cursor: offset %d is past end of transcript (%d bytes); file was truncated or rotated", fromOffset, info.Size())
@@ -122,22 +118,12 @@ func (s *Source) Read(path string, fromOffset int64) ([]transcript.Event, int64,
 			if errors.Is(err, io.EOF) {
 				return events, offset, nil
 			}
-			return events, offset, fmt.Errorf("cursor: read transcript: %w", cause(err))
+			return events, offset, fmt.Errorf("cursor: read transcript: %w", transcript.ErrorCause(err))
 		}
 		offset += int64(len(line))
 		events = append(events, p.parse(bytes.TrimRight(line, "\r\n")))
 		p.seq++
 	}
-}
-
-// cause drops the path from filesystem errors so messages stay free of
-// machine-specific locations.
-func cause(err error) error {
-	var pathErr *os.PathError
-	if errors.As(err, &pathErr) {
-		return pathErr.Err
-	}
-	return err
 }
 
 // sessionIDFromPath returns the uuid file name of a transcript, or "".
@@ -218,7 +204,7 @@ func (p *parser) track(rec record) {
 	if !strings.EqualFold(rec.Role, "assistant") || rec.Message == nil {
 		return
 	}
-	for _, b := range blocks(rec.Message.Content) {
+	for _, b := range transcript.JSONArray[block](rec.Message.Content) {
 		if b.kind() == "tool_use" && b.ID != "" {
 			p.toolNames[b.ID] = b.toolName()
 		}
@@ -244,7 +230,7 @@ func (p *parser) parse(line []byte) transcript.Event {
 		return event
 	}
 	p.track(rec)
-	event.Model = optional(rec.Model)
+	event.Model = transcript.OptionalString(rec.Model)
 
 	switch strings.ToLower(rec.Role) {
 	case "user", "human":
@@ -267,7 +253,7 @@ func (p *parser) user(event *transcript.Event, rec record) {
 	if rec.Message == nil {
 		return
 	}
-	content := blocks(rec.Message.Content)
+	content := transcript.JSONArray[block](rec.Message.Content)
 	if content == nil {
 		event.Role = transcript.RoleUser
 		event.Text = userQuery(messageText(rec.Message))
@@ -282,7 +268,7 @@ func (p *parser) user(event *transcript.Event, rec record) {
 			}
 		case "tool_result":
 			if event.ToolName == nil {
-				event.ToolName = optional(session.FirstNonEmpty(b.toolName(), p.toolNames[b.ToolUseID]))
+				event.ToolName = transcript.OptionalString(session.FirstNonEmpty(b.toolName(), p.toolNames[b.ToolUseID]))
 			}
 			if text := resultText(b); text != "" {
 				results = append(results, text)
@@ -291,7 +277,7 @@ func (p *parser) user(event *transcript.Event, rec record) {
 	}
 	if hasKind(content, "tool_result") {
 		event.Role = transcript.RoleToolResult
-		event.Text = truncate(strings.Join(append(results, texts...), "\n"))
+		event.Text = transcript.TruncateToolText(strings.Join(append(results, texts...), "\n"))
 		return
 	}
 	event.Role = transcript.RoleUser
@@ -302,7 +288,7 @@ func (p *parser) assistant(event *transcript.Event, rec record) {
 	if rec.Message == nil {
 		return
 	}
-	content := blocks(rec.Message.Content)
+	content := transcript.JSONArray[block](rec.Message.Content)
 	if content == nil {
 		if text := messageText(rec.Message); text != "" {
 			event.Role = transcript.RoleAssistant
@@ -323,10 +309,10 @@ func (p *parser) assistant(event *transcript.Event, rec record) {
 			}
 		case "tool_use":
 			if event.ToolName == nil {
-				event.ToolName = optional(b.toolName())
+				event.ToolName = transcript.OptionalString(b.toolName())
 			}
 			if len(b.Input) > 0 {
-				inputs = append(inputs, compact(b.Input))
+				inputs = append(inputs, transcript.CompactJSON(b.Input))
 			}
 		default:
 			// Unknown blocks with visible text still read as the reply.
@@ -362,18 +348,6 @@ func userQuery(text string) string {
 	return strings.TrimSpace(inner)
 }
 
-// blocks decodes a content array. It returns nil when content is not one.
-func blocks(raw json.RawMessage) []block {
-	var content []block
-	if len(raw) == 0 || raw[0] != '[' || json.Unmarshal(raw, &content) != nil {
-		return nil
-	}
-	if content == nil {
-		content = []block{}
-	}
-	return content
-}
-
 func hasKind(content []block, kind string) bool {
 	for _, b := range content {
 		if b.kind() == kind {
@@ -388,18 +362,10 @@ func messageText(m *message) string {
 	if m == nil {
 		return ""
 	}
-	if text, ok := stringContent(m.Content); ok {
+	if text, ok := transcript.JSONString(m.Content); ok {
 		return text
 	}
 	return m.Text
-}
-
-func stringContent(raw json.RawMessage) (string, bool) {
-	var text string
-	if len(raw) == 0 || json.Unmarshal(raw, &text) != nil {
-		return "", false
-	}
-	return text, true
 }
 
 // resultText reads a tool result's content or output, each either a string
@@ -407,11 +373,11 @@ func stringContent(raw json.RawMessage) (string, bool) {
 // Raw.
 func resultText(b block) string {
 	for _, raw := range []json.RawMessage{b.Content, b.Output} {
-		if text, ok := stringContent(raw); ok {
+		if text, ok := transcript.JSONString(raw); ok {
 			return text
 		}
 		var texts []string
-		for _, inner := range blocks(raw) {
+		for _, inner := range transcript.JSONArray[block](raw) {
 			if inner.kind() == "text" && inner.Text != "" {
 				texts = append(texts, inner.Text)
 			}
@@ -421,30 +387,4 @@ func resultText(b block) string {
 		}
 	}
 	return ""
-}
-
-func compact(raw json.RawMessage) string {
-	var out bytes.Buffer
-	if json.Compact(&out, raw) != nil {
-		return string(raw)
-	}
-	return out.String()
-}
-
-func truncate(text string) string {
-	if len(text) <= maxToolText {
-		return text
-	}
-	cut := maxToolText
-	for cut > 0 && !utf8.RuneStart(text[cut]) {
-		cut--
-	}
-	return fmt.Sprintf("%s\n[truncated %d bytes]", text[:cut], len(text)-cut)
-}
-
-func optional(value string) *string {
-	if value == "" {
-		return nil
-	}
-	return &value
 }

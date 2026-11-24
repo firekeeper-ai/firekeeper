@@ -286,12 +286,12 @@ func TestReadMalformed(t *testing.T) {
 }
 
 func TestTruncateLongToolOutput(t *testing.T) {
-	long := strings.Repeat("é", maxToolText)
+	long := strings.Repeat("é", transcript.MaxToolText)
 	line, _ := json.Marshal(map[string]any{"id": "u1", "type": "user", "content": []any{map[string]any{
 		"functionResponse": map[string]any{"id": "c1", "name": "read_file", "response": map[string]any{"output": long}},
 	}}})
 	e := newParser(false).parse(line)
-	if !strings.HasSuffix(e.Text, "[truncated 65536 bytes]") || len(e.Text) > maxToolText+64 {
+	if !strings.HasSuffix(e.Text, "[truncated 65536 bytes]") || len(e.Text) > transcript.MaxToolText+64 {
 		t.Fatalf("tool output not truncated: %d bytes", len(e.Text))
 	}
 	if !strings.Contains(string(e.Raw), long) {

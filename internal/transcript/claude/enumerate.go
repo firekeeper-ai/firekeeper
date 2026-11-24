@@ -104,7 +104,6 @@ func readSessionHead(ctx context.Context, path string) (session.Meta, error) {
 	scanner.Buffer(make([]byte, 4096), reader.HeadBytes)
 	var meta session.Meta
 	decoded := false
-	clean := func(value string) string { return strings.TrimSpace(session.SanitizeProcessCommand(value)) }
 	for scanner.Scan() {
 		if err := ctx.Err(); err != nil {
 			return meta, err
@@ -121,10 +120,10 @@ func readSessionHead(ctx context.Context, path string) (session.Meta, error) {
 			continue
 		}
 		decoded = true
-		meta.CWD = session.FirstNonEmpty(meta.CWD, clean(r.CWD))
-		meta.Branch = session.FirstNonEmpty(meta.Branch, clean(r.Branch))
+		meta.CWD = session.FirstNonEmpty(meta.CWD, session.SanitizeField(r.CWD))
+		meta.Branch = session.FirstNonEmpty(meta.Branch, session.SanitizeField(r.Branch))
 		if r.Message != nil && r.Message.Model != syntheticModel {
-			meta.Model = session.FirstNonEmpty(meta.Model, clean(r.Message.Model))
+			meta.Model = session.FirstNonEmpty(meta.Model, session.SanitizeField(r.Message.Model))
 		}
 		if meta.StartedAt == nil {
 			if ts, err := time.Parse(time.RFC3339Nano, r.Timestamp); err == nil {
@@ -138,7 +137,7 @@ func readSessionHead(ctx context.Context, path string) (session.Meta, error) {
 	if !decoded {
 		return meta, errors.New("no decodable record")
 	}
-	meta.Title = clean(tailTitle(f))
+	meta.Title = session.SanitizeField(tailTitle(f))
 	return meta, nil
 }
 
