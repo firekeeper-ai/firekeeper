@@ -221,21 +221,12 @@ func (d *discoverer) kimiHome() (string, error) {
 	if d.opts.KimiHome != "" {
 		return d.opts.KimiHome, nil
 	}
-	if home := os.Getenv("KIMI_CODE_HOME"); home != "" {
-		return home, nil
-	}
-	if home := os.Getenv("KIMI_SHARE_DIR"); home != "" {
-		return home, nil
-	}
-	home, err := d.home()
-	if err != nil {
-		return "", fmt.Errorf("find home directory: %w", err)
-	}
-	return filepath.Join(home, ".kimi-code"), nil
+	return d.dirs().Dir(event.ProviderKimi)
 }
 
-// KimiHome returns Kimi Code's data directory, honoring KIMI_CODE_HOME and then
-// KIMI_SHARE_DIR (default ~/.kimi-code).
+// KimiHome returns Kimi Code's data directory, honoring KIMI_CODE_HOME
+// (default ~/.kimi-code). KIMI_SHARE_DIR belongs to the older kimi-cli and is
+// not read.
 func KimiHome() (string, error) { return standalone().kimiHome() }
 
 // KimiWirePath returns the main agent's wire log inside a Kimi Code session

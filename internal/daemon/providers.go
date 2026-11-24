@@ -1,53 +1,55 @@
 package daemon
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
-	"strings"
 
+	"github.com/firekeeper-ai/firekeeper/internal/providerdir"
 	"github.com/firekeeper-ai/firekeeper/internal/transcript"
 )
 
 // DetectProviders finds supported transcript providers without reading their
-// data or launching their CLIs. An existing provider home or executable on PATH
-// is sufficient; providers without transcript readers are deliberately omitted.
-func DetectProviders(home string, getenv func(string) string, lookPath func(string) (string, error)) []transcript.Provider {
+// data or launching their CLIs. An existing provider data folder (see
+// providerdir), configured OpenCode database, or executable on PATH is
+// sufficient. A relative folder override that prevents resolution skips that
+// provider. Its error names only the variable.
+func DetectProviders(home string, getenv func(string) string, lookPath func(string) (string, error)) (providers []transcript.Provider, skipped []error) {
 	if getenv == nil {
 		getenv = os.Getenv
 	}
 	if lookPath == nil {
 		lookPath = exec.LookPath
 	}
-	var providers []transcript.Provider
-	// The provider's directory is $env/sub, or home/directory when env is
-	// unset.
+	dirs := providerdir.Lookup{Getenv: getenv, Home: func() (string, error) { return home, nil }}
 	for _, candidate := range []struct {
-		provider                     transcript.Provider
-		env, sub, directory, command string
+		provider transcript.Provider
+		command  string
 	}{
-		{transcript.ProviderCodex, "CODEX_HOME", "", ".codex", "codex"},
-		{transcript.ProviderCopilot, "COPILOT_HOME", "", ".copilot", "copilot"},
-		{transcript.ProviderKimi, "KIMI_CODE_HOME", "", ".kimi-code", "kimi"},
-		{transcript.ProviderClaude, "CLAUDE_CONFIG_DIR", "", ".claude", "claude"},
-		{transcript.ProviderOpenCode, "XDG_DATA_HOME", "opencode", filepath.Join(".local", "share", "opencode"), "opencode"},
-		{transcript.ProviderGemini, "GEMINI_CLI_HOME", ".gemini", ".gemini", "gemini"},
-		{transcript.ProviderCursor, "CURSOR_CONFIG_DIR", "", ".cursor", "cursor-agent"},
+		{transcript.ProviderCodex, "codex"},
+		{transcript.ProviderCopilot, "copilot"},
+		{transcript.ProviderKimi, "kimi"},
+		{transcript.ProviderClaude, "claude"},
+		{transcript.ProviderOpenCode, "opencode"},
+		{transcript.ProviderGemini, "gemini"},
+		{transcript.ProviderCursor, "cursor-agent"},
 	} {
-		directory := strings.TrimSpace(getenv(candidate.env))
-		if directory == "" {
-			directory = filepath.Join(home, candidate.directory)
-		} else {
-			directory = filepath.Join(directory, candidate.sub)
-		}
-		info, err := os.Stat(directory)
-		if err == nil && info.IsDir() {
-			providers = append(providers, candidate.provider)
+		path, kind, err := dirs.DataPath(candidate.provider)
+		if errors.Is(err, providerdir.ErrRelativeOverride) {
+			skipped = append(skipped, fmt.Errorf("%s: %w", candidate.provider, err))
 			continue
+		}
+		if err == nil && path != "" {
+			info, err := os.Stat(path)
+			if err == nil && info.Mode().Type() == kind {
+				providers = append(providers, candidate.provider)
+				continue
+			}
 		}
 		if _, err := lookPath(candidate.command); err == nil {
 			providers = append(providers, candidate.provider)
 		}
 	}
-	return providers
+	return providers, skipped
 }

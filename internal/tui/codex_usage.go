@@ -18,6 +18,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/firekeeper-ai/firekeeper/internal/claudelimits"
+	"github.com/firekeeper-ai/firekeeper/internal/providerdir"
 	"github.com/firekeeper-ai/firekeeper/internal/sqlitejson"
 	"github.com/firekeeper-ai/firekeeper/internal/window"
 	"github.com/firekeeper-ai/firekeeper/pkg/event"
@@ -507,13 +508,9 @@ type codexDailyModelUsageBucket struct {
 }
 
 func readCodexDailyModelUsage(now time.Time, days int) ([]codexDailyModelUsage, error) {
-	codexHome := strings.TrimSpace(os.Getenv("CODEX_HOME"))
-	if codexHome == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return nil, fmt.Errorf("find Codex home: %w", err)
-		}
-		codexHome = filepath.Join(home, ".codex")
+	codexHome, err := providerdir.Lookup{}.Dir(event.ProviderCodex)
+	if err != nil {
+		return nil, fmt.Errorf("find Codex home: %w", err)
 	}
 	root := filepath.Join(codexHome, "sessions")
 	if _, err := os.Stat(root); os.IsNotExist(err) {
@@ -524,7 +521,7 @@ func readCodexDailyModelUsage(now time.Time, days int) ([]codexDailyModelUsage, 
 
 	usage := make(map[string]map[string]int64)
 	cutoff := startOfDay(now).AddDate(0, 0, -(max(days, 1) - 1))
-	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+	err = filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return nil
 		}

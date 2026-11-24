@@ -102,7 +102,7 @@ func TestBackfillAll(t *testing.T) {
 			cfg, confirmed := stubBackfill(t, tt.input, tt.interactive)
 			previous := detectBackfillProviders
 			want := []transcript.Provider{transcript.ProviderCodex, transcript.ProviderCopilot, transcript.ProviderClaude}
-			detectBackfillProviders = func() ([]transcript.Provider, error) { return want, nil }
+			detectBackfillProviders = func(io.Writer) ([]transcript.Provider, error) { return want, nil }
 			t.Cleanup(func() { detectBackfillProviders = previous })
 			var stdout, stderr bytes.Buffer
 			if code := runBackfill(tt.args, &stdout, &stderr); code != tt.wantCode || *confirmed != tt.wantUpload {
@@ -122,7 +122,7 @@ func TestBackfillAllDetectionStops(t *testing.T) {
 	for _, detectionErr := range []error{nil, errors.New("detection failed")} {
 		stubBackfill(t, "", false)
 		previous := detectBackfillProviders
-		detectBackfillProviders = func() ([]transcript.Provider, error) { return nil, detectionErr }
+		detectBackfillProviders = func(io.Writer) ([]transcript.Provider, error) { return nil, detectionErr }
 		previousRun := backfillRun
 		called := false
 		backfillRun = func(context.Context, reporter.BackfillConfig) (reporter.BackfillResult, error) {

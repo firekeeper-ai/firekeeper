@@ -32,6 +32,9 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/firekeeper-ai/firekeeper/internal/providerdir"
+	"github.com/firekeeper-ai/firekeeper/pkg/event"
 )
 
 // UsageURL is the endpoint Claude Code's /usage view reads.
@@ -39,7 +42,6 @@ const UsageURL = "https://api.anthropic.com/api/oauth/usage"
 
 const (
 	envOAuthToken = "CLAUDE_CODE_OAUTH_TOKEN"
-	envConfigDir  = "CLAUDE_CONFIG_DIR"
 
 	keychainService = "Claude Code-credentials"
 	betaHeader      = "oauth-2025-04-20"
@@ -93,6 +95,14 @@ type Client struct {
 	// Keychain returns the Keychain item's secret, or an error when absent.
 	Keychain func() ([]byte, error)
 	Now      func() time.Time
+}
+
+// home is Home, or the user's home folder.
+func (c Client) home() (string, error) {
+	if c.Home != "" {
+		return c.Home, nil
+	}
+	return os.UserHomeDir()
 }
 
 func (c Client) getenv(key string) string {
@@ -153,17 +163,12 @@ func (c Client) findToken() (token, error) {
 			}
 		}
 	}
-	dir := strings.TrimSpace(c.getenv(envConfigDir))
-	if dir == "" {
-		home := c.Home
-		if home == "" {
-			h, err := os.UserHomeDir()
-			if err != nil {
-				return token{}, ErrNoToken
-			}
-			home = h
-		}
-		dir = filepath.Join(home, ".claude")
+	dir, err := providerdir.Lookup{Getenv: c.getenv, Home: c.home}.Dir(event.ProviderClaude)
+	if errors.Is(err, providerdir.ErrRelativeOverride) {
+		return token{}, err
+	}
+	if err != nil {
+		return token{}, ErrNoToken
 	}
 	data, err := os.ReadFile(filepath.Join(dir, ".credentials.json"))
 	if err != nil {

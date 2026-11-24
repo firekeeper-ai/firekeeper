@@ -2,6 +2,7 @@ package session
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/firekeeper-ai/firekeeper/internal/providerdir"
 	"github.com/firekeeper-ai/firekeeper/internal/testenv"
 )
 
@@ -50,19 +52,30 @@ func TestOpenCodeDatabase(t *testing.T) {
 	data := filepath.Join(home, "xdg")
 	for name, c := range map[string]struct {
 		xdg, db, want string
+		wantErr       error
 	}{
-		"default":          {"", "", filepath.Join(home, ".local", "share", "opencode", "opencode.db")},
-		"xdg":              {data, "", filepath.Join(data, "opencode", "opencode.db")},
-		"relative xdg":     {"relative", "", filepath.Join(home, ".local", "share", "opencode", "opencode.db")},
-		"absolute db":      {data, filepath.Join(home, "elsewhere", "oc.db"), filepath.Join(home, "elsewhere", "oc.db")},
-		"relative db":      {data, "dev.db", filepath.Join(data, "opencode", "dev.db")},
-		"in-memory db":     {"", ":memory:", ""},
-		"whitespace value": {"", "  ", filepath.Join(home, ".local", "share", "opencode", "opencode.db")},
+		"default":      {xdg: "", db: "", want: filepath.Join(home, ".local", "share", "opencode", "opencode.db")},
+		"xdg":          {xdg: data, db: "", want: filepath.Join(data, "opencode", "opencode.db")},
+		"absolute db":  {xdg: data, db: filepath.Join(home, "elsewhere", "oc.db"), want: filepath.Join(home, "elsewhere", "oc.db")},
+		"relative db":  {xdg: data, db: "dev.db", want: filepath.Join(data, "opencode", "dev.db")},
+		"in-memory db": {xdg: "", db: ":memory:", want: ""},
+		// OpenCode uses the value as given, so a blank name is a (strange)
+		// file under its data folder, not the default.
+		"whitespace db": {xdg: "", db: "  ", want: filepath.Join(home, ".local", "share", "opencode", "  ")},
+		// OpenCode would resolve a relative XDG_DATA_HOME against its own
+		// working directory, which Firekeeper does not know.
+		"relative xdg": {xdg: "relative", db: "", wantErr: providerdir.ErrRelativeOverride},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("XDG_DATA_HOME", c.xdg)
 			t.Setenv("OPENCODE_DB", c.db)
 			got, err := OpenCodeDatabase(home)
+			if c.wantErr != nil {
+				if !errors.Is(err, c.wantErr) || got != "" {
+					t.Fatalf("OpenCodeDatabase = %q, %v; want %v", got, err, c.wantErr)
+				}
+				return
+			}
 			if err != nil || got != c.want {
 				t.Errorf("OpenCodeDatabase = %q, %v; want %q", got, err, c.want)
 			}

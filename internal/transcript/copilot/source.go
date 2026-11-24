@@ -19,6 +19,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/firekeeper-ai/firekeeper/internal/providerdir"
 	"github.com/firekeeper-ai/firekeeper/internal/session"
 	"github.com/firekeeper-ai/firekeeper/internal/transcript"
 	"github.com/firekeeper-ai/firekeeper/internal/transcript/reader"
@@ -81,17 +82,19 @@ func (s *Source) copilotHome() (string, error) {
 	if s.CopilotHome != "" {
 		return s.CopilotHome, nil
 	}
-	if env := strings.TrimSpace(os.Getenv("COPILOT_HOME")); env != "" {
-		return env, nil
+	dir, err := providerdir.Lookup{Home: s.home}.Dir(transcript.ProviderCopilot)
+	if err != nil {
+		return "", fmt.Errorf("copilot: %w", err)
 	}
-	home := s.Home
-	if home == "" {
-		var err error
-		if home, err = os.UserHomeDir(); err != nil {
-			return "", errors.New("copilot: find home directory")
-		}
+	return dir, nil
+}
+
+// home is Home, or the user's home folder.
+func (s *Source) home() (string, error) {
+	if s.Home != "" {
+		return s.Home, nil
 	}
-	return filepath.Join(home, ".copilot"), nil
+	return os.UserHomeDir()
 }
 
 // Read parses complete lines from fromOffset onward. Offsets are byte

@@ -14,6 +14,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/firekeeper-ai/firekeeper/internal/providerdir"
 )
 
 var credNow = time.Date(2026, 10, 31, 12, 0, 0, 0, time.UTC)
@@ -158,7 +160,7 @@ func TestCredentialsHonorClaudeConfigDir(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, ".credentials.json"), []byte(loginJSON(testToken, time.Time{})), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	h.env[envConfigDir] = dir
+	h.env[providerdir.EnvClaude] = dir
 	creds, err := h.load("linux", nil)
 	if err != nil || creds.token != testToken || creds.OrgUUID != testOrg {
 		t.Fatalf("err = %v; CLAUDE_CONFIG_DIR's credentials and ~/.claude.json's org must be used", err)

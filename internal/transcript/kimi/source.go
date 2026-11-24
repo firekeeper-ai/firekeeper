@@ -36,8 +36,8 @@ func init() {
 }
 
 // Source implements reader.Source for Kimi Code transcripts.
-// The zero value reads KIMI_CODE_HOME, then KIMI_SHARE_DIR, falling back to
-// ~/.kimi-code, as discovery does.
+// The zero value reads KIMI_CODE_HOME, falling back to ~/.kimi-code, as
+// discovery does.
 type Source struct {
 	// Home overrides Kimi Code's data directory when set.
 	Home string

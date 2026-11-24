@@ -29,12 +29,22 @@ var daemonRun = daemon.Run
 var newService = daemon.NewService
 
 // detectDaemonProviders is replaced in tests to avoid inspecting user data.
-var detectDaemonProviders = func() ([]transcript.Provider, error) {
+var detectDaemonProviders = func(stderr io.Writer) ([]transcript.Provider, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, errors.New("find home directory")
 	}
-	return daemon.DetectProviders(home, nil, nil), nil
+	return detectProviders("firekeeper daemon install", home, stderr), nil
+}
+
+// detectProviders is daemon.DetectProviders, printing each provider it
+// skipped for an unusable data folder override.
+func detectProviders(name, home string, stderr io.Writer) []transcript.Provider {
+	providers, skipped := daemon.DetectProviders(home, nil, nil)
+	for _, err := range skipped {
+		fmt.Fprintf(stderr, "%s: skipping provider %v\n", name, err)
+	}
+	return providers
 }
 
 // daemonFlags are the flags the daemon runs with. install takes the same
@@ -70,7 +80,7 @@ func parseDaemonFlags(name string, fs *flag.FlagSet, f *daemonFlags, args []stri
 		return 2, false
 	}
 	if name == "firekeeper daemon install" && c.Sources["providers"] == "default" {
-		providers, err := detectDaemonProviders()
+		providers, err := detectDaemonProviders(stderr)
 		if err != nil {
 			fmt.Fprintf(stderr, "%s: %v\n", name, err)
 			return 2, false

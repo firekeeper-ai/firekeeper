@@ -185,16 +185,7 @@ func (d *discoverer) geminiDirs() ([]string, error) {
 	if d.opts.GeminiDir != "" {
 		return []string{d.opts.GeminiDir}, nil
 	}
-	home := strings.TrimSpace(os.Getenv("GEMINI_CLI_HOME"))
-	if home == "" {
-		var err error
-		if home, err = d.home(); err != nil {
-			return nil, fmt.Errorf("find home directory: %w", err)
-		}
-	}
-	// Under the macOS seatbelt sandbox Gemini CLI keeps its runtime state in
-	// ~/.cache/.gemini instead.
-	return []string{filepath.Join(home, ".gemini"), filepath.Join(home, ".cache", ".gemini")}, nil
+	return d.dirs().GeminiDirs()
 }
 
 // GeminiDirs returns the directories Gemini CLI keeps session state in:

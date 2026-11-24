@@ -158,14 +158,7 @@ func (d *discoverer) cursorDir() (string, error) {
 	if d.opts.CursorDir != "" {
 		return d.opts.CursorDir, nil
 	}
-	if dir := strings.TrimSpace(os.Getenv("CURSOR_CONFIG_DIR")); dir != "" {
-		return dir, nil
-	}
-	home, err := d.home()
-	if err != nil {
-		return "", fmt.Errorf("find home directory: %w", err)
-	}
-	return filepath.Join(home, ".cursor"), nil
+	return d.dirs().Dir(event.ProviderCursor)
 }
 
 // CursorDir returns the directory Cursor CLI keeps chats and transcripts in,

@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/firekeeper-ai/firekeeper/internal/config"
+	"github.com/firekeeper-ai/firekeeper/internal/providerdir"
 	"github.com/firekeeper-ai/firekeeper/internal/reporter"
 	"github.com/firekeeper-ai/firekeeper/internal/transcript"
 )
@@ -36,6 +37,22 @@ func (p *providerList) Set(value string) error {
 	}
 	*p = append(*p, provider)
 	return nil
+}
+
+// usableProviders drops each provider whose data folder override is not an
+// absolute path, printing its error, which names the variable only. ok is
+// false when providers were given and none is usable: the command then exits
+// non-zero. Other providers run as usual.
+func usableProviders(name string, providers []transcript.Provider, stderr io.Writer) (usable []transcript.Provider, ok bool) {
+	var dirs providerdir.Lookup
+	for _, p := range providers {
+		if err := dirs.Check(p); err != nil {
+			fmt.Fprintf(stderr, "%s: skipping provider %s: %v\n", name, p, err)
+			continue
+		}
+		usable = append(usable, p)
+	}
+	return usable, len(providers) == 0 || len(usable) > 0
 }
 
 // liveOnlyFlag registers --live-only, shared by report and daemon.
@@ -74,6 +91,10 @@ func runReport(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	applyReporterConfig(&cfg, c)
+	var ok bool
+	if cfg.Providers, ok = usableProviders("firekeeper report", cfg.Providers, stderr); !ok {
+		return 1
+	}
 	if len(cfg.Providers) == 0 && !cfg.DryRun {
 		fmt.Fprintln(stderr, "firekeeper report: no --provider given; uploading nothing. Showing what would be uploaded.")
 	}
