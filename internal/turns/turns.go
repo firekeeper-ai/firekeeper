@@ -53,8 +53,6 @@ func Parse(events []transcript.Event) []Turn {
 		if event.Role == transcript.RoleUser {
 			if current != nil {
 				finish(current)
-				contextTokens += current.Tokens.Input + current.Tokens.CacheRead + current.Tokens.CacheWrite
-				current.ContextTokens = contextTokens
 				out = append(out, *current)
 			}
 			current = &Turn{
@@ -75,9 +73,10 @@ func Parse(events []transcript.Event) []Turn {
 		current.Tokens.Output += nonnegative(event.Tokens.Output)
 		current.Tokens.CacheRead += nonnegative(event.Tokens.CacheRead)
 		current.Tokens.CacheWrite += nonnegative(event.Tokens.CacheWrite)
-		if prompt := nonnegative(event.Tokens.Input) + transcript.CacheTokens(event.Tokens); prompt > current.PeakContextTokens {
-			current.PeakContextTokens = prompt
-		}
+		prompt := nonnegative(event.Tokens.Input) + transcript.CacheTokens(event.Tokens)
+		contextTokens += prompt
+		current.ContextTokens = contextTokens
+		current.PeakContextTokens = max(current.PeakContextTokens, prompt)
 		if event.Model != nil && *event.Model != "" {
 			current.Model = *event.Model
 		}
@@ -100,8 +99,6 @@ func Parse(events []transcript.Event) []Turn {
 	}
 	if current != nil {
 		finish(current)
-		contextTokens += current.Tokens.Input + current.Tokens.CacheRead + current.Tokens.CacheWrite
-		current.ContextTokens = contextTokens
 		out = append(out, *current)
 	}
 	return out

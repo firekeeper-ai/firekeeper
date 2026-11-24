@@ -145,8 +145,10 @@ func TestPeakContextTokens(t *testing.T) {
 			t.Errorf("turn %d peak = %d; want %d", i, got[i].PeakContextTokens, want)
 		}
 	}
-	if got[0].ContextTokens <= got[0].PeakContextTokens {
-		t.Errorf("running sum %d should exceed the peak %d for a multi-call turn", got[0].ContextTokens, got[0].PeakContextTokens)
+	for i, want := range []int64{60_960, 90_965, 90_965} {
+		if got[i].ContextTokens != want {
+			t.Errorf("turn %d cumulative context = %d; want %d", i, got[i].ContextTokens, want)
+		}
 	}
 	data, err := json.Marshal(got[0])
 	if err != nil || !strings.Contains(string(data), `"peak_context_tokens":20450`) {
