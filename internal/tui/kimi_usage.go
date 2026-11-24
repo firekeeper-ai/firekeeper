@@ -24,6 +24,7 @@ type kimiUsageSummary struct {
 }
 
 type kimiDailyUsage struct {
+	Parts     tokenBreakdown
 	StartDate string
 	Tokens    int64
 }
@@ -93,7 +94,7 @@ func fetchKimiUsage() (kimiUsageSnapshot, error) {
 
 	snapshot := kimiUsageSnapshot{}
 	models := make(map[string]int64)
-	daily := make(map[string]int64)
+	daily := make(map[string]tokenBreakdown)
 	sessions := make(map[string]*kimiHistoricalSession)
 	err = filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -147,7 +148,7 @@ func fetchKimiUsage() (kimiUsageSnapshot, error) {
 			models[event.Model] += tokens
 			if event.Time > 0 {
 				day := time.UnixMilli(event.Time).Format("2006-01-02")
-				daily[day] += tokens
+				daily[day] = sumTokenParts(daily[day], tokenBreakdown{Input: event.Usage.InputOther, Output: event.Usage.Output, CacheRead: event.Usage.InputCacheRead, CacheWrite: event.Usage.InputCacheCreation})
 			}
 		}
 		return nil
@@ -162,8 +163,8 @@ func fetchKimiUsage() (kimiUsageSnapshot, error) {
 		snapshot.History = append(snapshot.History, *session)
 	}
 	sort.Slice(snapshot.History, func(i, j int) bool { return snapshot.History[i].UpdatedAt.After(snapshot.History[j].UpdatedAt) })
-	for day, tokens := range daily {
-		snapshot.Daily = append(snapshot.Daily, kimiDailyUsage{StartDate: day, Tokens: tokens})
+	for day, parts := range daily {
+		snapshot.Daily = append(snapshot.Daily, kimiDailyUsage{StartDate: day, Tokens: parts.Total(), Parts: parts})
 	}
 	sort.Slice(snapshot.Daily, func(i, j int) bool { return snapshot.Daily[i].StartDate < snapshot.Daily[j].StartDate })
 	for model, tokens := range models {

@@ -68,6 +68,9 @@ func TestFetchCopilotUsageFromLocalStore(t *testing.T) {
 			(2, 'session-1', 'claude-sonnet', 200, 30, 1.0, 'agent', '2026-07-31T10:01:00Z'),
 			(3, 'session-2', 'gpt-5', 50, 10, 0.0, 'compaction', '2026-08-01T10:00:00Z'),
 			(4, 'session-2', 'gpt-5', 400, 40, 1.5, 'user', '2026-08-01T10:01:00Z');
+  ALTER TABLE assistant_usage_events ADD COLUMN cache_read_tokens INTEGER;
+  ALTER TABLE assistant_usage_events ADD COLUMN cache_write_tokens INTEGER;
+  UPDATE assistant_usage_events SET cache_read_tokens=47, cache_write_tokens=9 WHERE id=1;
 	`
 	writeUsageDatabase(t, path, schema)
 	t.Setenv("COPILOT_HOME", home)
@@ -92,6 +95,9 @@ func TestFetchCopilotUsageFromLocalStore(t *testing.T) {
 	}
 	if len(snapshot.Daily) != 2 || len(snapshot.DailyByModel) != 2 || len(snapshot.Models) != 2 {
 		t.Fatalf("daily/daily-model/models = %d/%d/%d", len(snapshot.Daily), len(snapshot.DailyByModel), len(snapshot.Models))
+	}
+	if snapshot.Daily[0].Parts != (tokenBreakdown{Input: 244, Output: 50, CacheRead: 47, CacheWrite: 9}) {
+		t.Fatalf("Copilot parts = %+v", snapshot.Daily[0].Parts)
 	}
 	if snapshot.Models[0].Model != "gpt-5" || snapshot.Models[0].Tokens != 500 {
 		t.Fatalf("top model = %#v", snapshot.Models[0])

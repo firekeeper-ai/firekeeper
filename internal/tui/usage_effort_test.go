@@ -59,7 +59,7 @@ func TestCodexHistoryReadsReasoningEffort(t *testing.T) {
 func TestClaudeUsageLineTracksLatestEffort(t *testing.T) {
 	var session claudeHistoricalSession
 	summary := &claudeUsageSummary{}
-	models, daily, seen := map[string]int64{}, map[string]int64{}, map[string]bool{}
+	models, daily, seen := map[string]int64{}, map[string]tokenBreakdown{}, map[string]bool{}
 	for _, line := range []string{
 		`{"type":"assistant","effort":"medium","message":{"id":"1","model":"m","usage":{"input_tokens":1,"output_tokens":1}}}`,
 		`{"type":"assistant","effort":{"x":1},"message":{"id":"2","model":"m","usage":{"input_tokens":1,"output_tokens":1}}}`,

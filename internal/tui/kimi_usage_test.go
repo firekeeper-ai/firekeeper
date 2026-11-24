@@ -42,6 +42,9 @@ func TestFetchKimiUsageAggregatesLocalWireEvents(t *testing.T) {
 	if snapshot.Summary.InputTokens != 15 || snapshot.Summary.CacheRead != 20 || snapshot.Summary.CacheCreation != 3 || snapshot.Summary.OutputTokens != 9 || snapshot.Summary.LifetimeTokens != 47 {
 		t.Fatalf("summary token totals = %#v", snapshot.Summary)
 	}
+	if len(snapshot.Daily) != 1 || snapshot.Daily[0].Parts != (tokenBreakdown{Input: 15, Output: 9, CacheRead: 20, CacheWrite: 3}) {
+		t.Fatalf("Kimi daily parts = %+v", snapshot.Daily)
+	}
 	if len(snapshot.Models) != 1 || snapshot.Models[0].Model != "kimi-k3" || snapshot.Models[0].Tokens != 47 {
 		t.Fatalf("models = %#v", snapshot.Models)
 	}

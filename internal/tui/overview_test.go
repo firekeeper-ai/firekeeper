@@ -63,9 +63,9 @@ func TestOverviewShowsQuotaMetersResetsAndTokenTotals(t *testing.T) {
 func TestOverviewRecentTokensWindow(t *testing.T) {
 	now := time.Date(2026, 10, 30, 15, 0, 0, 0, time.Local)
 	dates := []string{"2026-10-30", "2026-10-24", "2026-10-23", "2026-11-02"}
-	today, week := overviewRecentTokens(dates, []int64{10, 20, 40, 80}, now)
-	if today != 10 || week != 30 {
-		t.Fatalf("today = %d week = %d, want 10 and 30", today, week)
+	days := overviewRecentTokens(append(dates, "2026-10-24"), []int64{10, 20, 40, 80, 5}, now)
+	if days[0] != 25 || days[6] != 10 || days[1] != 0 {
+		t.Fatalf("days %v", days)
 	}
 }
 
@@ -304,5 +304,55 @@ func TestOverviewWideCardsShareRows(t *testing.T) {
 	lines := strings.Split(ansi.Strip(m.viewOverview(30)), "\n")
 	if !strings.Contains(lines[0], "╭─Codex") || !strings.Contains(lines[0], "╭─Copilot") {
 		t.Fatal("wide layout must pair provider cards")
+	}
+}
+
+func TestWeeklyChartToggleAndLayout(t *testing.T) {
+	withIconMode(t, iconsOff)
+	m := overviewTestModel(time.Now())
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}})
+	m = next.(model)
+	if !m.weeklyCharts {
+		t.Fatal("g did not open charts")
+	}
+	for _, size := range [][2]int{{90, 24}, {43, 24}, {120, 40}, {19, 6}} {
+		m.width = size[0]
+		view := ansi.Strip(m.viewOverview(size[1]))
+		lines := strings.Split(view, "\n")
+		if len(lines) != size[1] {
+			t.Fatalf("height %d", len(lines))
+		}
+		for _, line := range lines {
+			if ansi.StringWidth(line) > m.width {
+				t.Fatal("chart overflow")
+			}
+		}
+		if m.width >= 43 {
+			for _, want := range []string{"Codex", "Claude", "█", "Unsplit", "Today", "2.0K"} {
+				if !strings.Contains(view, want) {
+					t.Fatalf("missing %s:\n%s", want, view)
+				}
+			}
+			if strings.Contains(view, "Copilot") {
+				t.Fatal("quota-only provider graphed")
+			}
+		}
+	}
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if next.(model).weeklyCharts {
+		t.Fatal("Esc did not close charts")
+	}
+}
+
+func TestWeeklyStackColorsFollowTokenCounts(t *testing.T) {
+	now := time.Date(2026, 11, 23, 12, 0, 0, 0, time.UTC)
+	p := overviewProvider{Provider: event.ProviderClaude, Days: []int64{0, 0, 0, 0, 0, 0, 50}, Parts: map[string]tokenBreakdown{now.Format(time.DateOnly): {Input: 10, Output: 10, CacheRead: 10, CacheWrite: 10}}}
+	// Five plot rows, one for each category including the ten unsplit tokens.
+	lines := weeklyTokenCard(p, now, 90, 10)
+	shades := weeklyShades[p.Provider]
+	for i, color := range []string{usageMutedColor, shades[3], shades[2], shades[1], shades[0]} {
+		if !strings.Contains(lines[i+2], usagePaint(strings.Repeat("█", 8), color, false, color)) {
+			t.Fatalf("wrong segment color in row %d", i)
+		}
 	}
 }

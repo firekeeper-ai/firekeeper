@@ -181,7 +181,7 @@ func TestScanCodexRolloutModelUsageTracksTimestampedTokenDeltas(t *testing.T) {
 	rollout := strings.Join([]string{
 		`{"type":"event_msg","payload":{"type":"thread_settings_applied","thread_settings":{"model":"gpt-5.6-sol"}}}`,
 		`{"timestamp":"2026-08-08T10:00:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"total_tokens":100}}}}`,
-		`{"timestamp":"2026-08-08T10:01:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"total_tokens":140}}}}`,
+		`{"timestamp":"2026-08-08T10:01:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"total_tokens":140},"last_token_usage":{"input_tokens":30,"cached_input_tokens":18,"output_tokens":8,"cache_write_input_tokens":2,"total_tokens":40}}}}`,
 		`{"type":"event_msg","payload":{"type":"thread_settings_applied","thread_settings":{"model":"gpt-5.6-codex"}}}`,
 		`{"timestamp":"2026-08-09T10:00:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"total_tokens":200}}}}`,
 	}, "\n")
@@ -191,6 +191,9 @@ func TestScanCodexRolloutModelUsageTracksTimestampedTokenDeltas(t *testing.T) {
 	}
 	got := make(map[string]int64)
 	for _, entry := range usage {
+		if entry.Model == "gpt-5.6-sol" && entry.Parts != (tokenBreakdown{Input: 12, Output: 8, CacheRead: 18, CacheWrite: 2}) {
+			t.Fatalf("Codex parts = %+v", entry.Parts)
+		}
 		got[entry.StartDate+"/"+entry.Model] = entry.Tokens
 	}
 	if got["2026-08-08/gpt-5.6-sol"] != 140 {

@@ -93,6 +93,7 @@ type codexDailyUsage struct {
 }
 
 type codexDailyModelUsage struct {
+	Parts     tokenBreakdown
 	StartDate string
 	Model     string
 	Tokens    int64
@@ -159,6 +160,13 @@ type codexRolloutUsageEvent struct {
 			Model string `json:"model"`
 		} `json:"thread_settings"`
 		Info struct {
+			LastTokenUsage struct {
+				Input  int64 `json:"input_tokens"`
+				Output int64 `json:"output_tokens"`
+				Cached int64 `json:"cached_input_tokens"`
+				Write  int64 `json:"cache_write_input_tokens"`
+				Total  int64 `json:"total_tokens"`
+			} `json:"last_token_usage"`
 			TotalTokenUsage struct {
 				TotalTokens int64 `json:"total_tokens"`
 			} `json:"total_token_usage"`
@@ -522,7 +530,7 @@ func readCodexDailyModelUsage(now time.Time, days int) ([]codexDailyModelUsage, 
 		return nil, fmt.Errorf("read Codex sessions: %w", err)
 	}
 
-	usage := make(map[string]map[string]int64)
+	usage := make(map[string]map[string]codexDailyModelUsage)
 	cutoff := startOfDay(now).AddDate(0, 0, -(max(days, 1) - 1))
 	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -563,9 +571,12 @@ func readCodexDailyModelUsage(now time.Time, days int) ([]codexDailyModelUsage, 
 		}
 		for _, entry := range entries {
 			if usage[entry.StartDate] == nil {
-				usage[entry.StartDate] = make(map[string]int64)
+				usage[entry.StartDate] = make(map[string]codexDailyModelUsage)
 			}
-			usage[entry.StartDate][entry.Model] += entry.Tokens
+			bucket := usage[entry.StartDate][entry.Model]
+			bucket.Tokens += entry.Tokens
+			bucket.Parts = sumTokenParts(bucket.Parts, entry.Parts)
+			usage[entry.StartDate][entry.Model] = bucket
 		}
 		return nil
 	})
@@ -575,9 +586,9 @@ func readCodexDailyModelUsage(now time.Time, days int) ([]codexDailyModelUsage, 
 
 	result := make([]codexDailyModelUsage, 0)
 	for date, models := range usage {
-		for model, tokens := range models {
-			if tokens > 0 {
-				result = append(result, codexDailyModelUsage{StartDate: date, Model: model, Tokens: tokens})
+		for model, bucket := range models {
+			if bucket.Tokens > 0 {
+				result = append(result, codexDailyModelUsage{StartDate: date, Model: model, Tokens: bucket.Tokens, Parts: bucket.Parts})
 			}
 		}
 	}
@@ -592,7 +603,7 @@ func readCodexDailyModelUsage(now time.Time, days int) ([]codexDailyModelUsage, 
 
 func scanCodexRolloutModelUsage(reader io.Reader, now time.Time, days int, skipInitial bool) ([]codexDailyModelUsage, error) {
 	cutoff := startOfDay(now).AddDate(0, 0, -(max(days, 1) - 1))
-	usage := make(map[string]map[string]int64)
+	usage := make(map[string]map[string]codexDailyModelUsage)
 	model := "unknown"
 	var previousTotal int64
 	hasPreviousTotal := false
@@ -643,18 +654,25 @@ func scanCodexRolloutModelUsage(reader io.Reader, now time.Time, days int, skipI
 		}
 		date := localTime.Format("2006-01-02")
 		if usage[date] == nil {
-			usage[date] = make(map[string]int64)
+			usage[date] = make(map[string]codexDailyModelUsage)
 		}
-		usage[date][model] += total
+		bucket := usage[date][model]
+		bucket.Tokens += total
+		last := event.Payload.Info.LastTokenUsage
+		parts := tokenBreakdown{Input: last.Input - last.Cached, Output: last.Output, CacheRead: last.Cached, CacheWrite: last.Write}
+		if last.Total == total && parts.Total() == total && parts.Input >= 0 && parts.Output >= 0 && parts.CacheRead >= 0 && parts.CacheWrite >= 0 {
+			bucket.Parts = sumTokenParts(bucket.Parts, parts)
+		}
+		usage[date][model] = bucket
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
 	result := make([]codexDailyModelUsage, 0)
 	for date, models := range usage {
-		for model, tokens := range models {
-			if tokens > 0 {
-				result = append(result, codexDailyModelUsage{StartDate: date, Model: model, Tokens: tokens})
+		for model, bucket := range models {
+			if bucket.Tokens > 0 {
+				result = append(result, codexDailyModelUsage{StartDate: date, Model: model, Tokens: bucket.Tokens, Parts: bucket.Parts})
 			}
 		}
 	}

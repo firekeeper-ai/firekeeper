@@ -51,7 +51,7 @@ var helpSections = []helpSection{
 		{"Double-click + drag", "Extend the selection by whole words"},
 	}},
 	{"Overview", []helpKey{
-		{"r", "Refresh every provider"},
+		{"g / r", "Toggle weekly token charts / refresh every provider"},
 	}},
 	{"Usage", []helpKey{
 		{"← → / h l", "Switch provider"},

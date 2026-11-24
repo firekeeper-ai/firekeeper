@@ -116,6 +116,7 @@ type terminalSwitchResultMsg struct {
 type model struct {
 	width, height          int
 	activeTab              tab
+	weeklyCharts           bool
 	processGroups          []processGroup
 	processCursor          int
 	processScroll          int
@@ -357,11 +358,18 @@ func (m model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, m.beginUsageRefresh()
 			}
+		case "g":
+			if m.activeTab == overviewTab {
+				m.weeklyCharts = !m.weeklyCharts
+			}
 		case "/":
 			if m.activeTab == usageTab {
 				m.startUsageFilter()
 			}
 		case "esc":
+			if m.activeTab == overviewTab {
+				m.weeklyCharts = false
+			}
 			if m.activeTab == usageTab {
 				m.clearUsageFilter()
 			}

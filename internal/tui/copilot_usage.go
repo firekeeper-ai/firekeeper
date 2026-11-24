@@ -34,6 +34,7 @@ type copilotUsageSummary struct {
 }
 
 type copilotDailyUsage struct {
+	Parts        tokenBreakdown
 	StartDate    string
 	Tokens       int64
 	UserRequests float64
@@ -106,6 +107,8 @@ type copilotUsageRow struct {
 	UserRequests float64 `json:"user_requests"`
 	ModelCalls   int64   `json:"model_calls"`
 	Sessions     int64   `json:"sessions"`
+	CacheRead    int64   `json:"cache_read"`
+	CacheWrite   int64   `json:"cache_write"`
 	InputTokens  int64   `json:"input_tokens"`
 	OutputTokens int64   `json:"output_tokens"`
 }
@@ -207,10 +210,30 @@ func fetchCopilotUsage() (copilotUsageSnapshot, error) {
 	if _, err := os.Stat(path); err != nil {
 		return copilotUsageSnapshot{}, fmt.Errorf("find Copilot session store: %w", err)
 	}
-	query := `
+	schema, err := sqlitejson.Run(context.Background(), "-readonly", "-json", path, "PRAGMA table_info(assistant_usage_events)")
+	if err != nil {
+		return copilotUsageSnapshot{}, fmt.Errorf("read Copilot usage schema: %w", err)
+	}
+	var cols []struct{ Name string }
+	if len(bytes.TrimSpace(schema)) > 0 {
+		if err := json.Unmarshal(schema, &cols); err != nil {
+			return copilotUsageSnapshot{}, fmt.Errorf("decode Copilot usage schema: %w", err)
+		}
+	}
+	cacheRead, cacheWrite := "0", "0"
+	for _, col := range cols {
+		switch col.Name {
+		case "cache_read_tokens":
+			cacheRead = "MAX(COALESCE(cache_read_tokens,0),0)"
+		case "cache_write_tokens":
+			cacheWrite = "MAX(COALESCE(cache_write_tokens,0),0)"
+		}
+	}
+	query := fmt.Sprintf(`
 		WITH usage AS (
 			SELECT
 				COALESCE(model, 'unknown') AS model,
+ %s AS cache_read, %s AS cache_write,
 				COALESCE(input_tokens, 0) AS input_tokens,
 				COALESCE(output_tokens, 0) AS output_tokens,
 				CASE
@@ -231,7 +254,7 @@ func fetchCopilotUsage() (copilotUsageSnapshot, error) {
 				COUNT(*) AS model_calls,
 				(SELECT COUNT(*) FROM sessions) AS sessions,
 				COALESCE(SUM(input_tokens), 0) AS input_tokens,
-				COALESCE(SUM(output_tokens), 0) AS output_tokens
+				COALESCE(SUM(output_tokens), 0) AS output_tokens, 0 AS cache_read, 0 AS cache_write
 			FROM usage
 			UNION ALL
 			SELECT
@@ -245,7 +268,7 @@ func fetchCopilotUsage() (copilotUsageSnapshot, error) {
 				COUNT(*) AS model_calls,
 				0 AS sessions,
 				SUM(input_tokens) AS input_tokens,
-				SUM(output_tokens) AS output_tokens
+				SUM(output_tokens) AS output_tokens, SUM(cache_read), SUM(cache_write)
 			FROM usage
 			GROUP BY substr(created_at, 1, 10)
 			UNION ALL
@@ -260,7 +283,7 @@ func fetchCopilotUsage() (copilotUsageSnapshot, error) {
 				COUNT(*) AS model_calls,
 				0 AS sessions,
 				SUM(input_tokens) AS input_tokens,
-				SUM(output_tokens) AS output_tokens
+				SUM(output_tokens) AS output_tokens, SUM(cache_read), SUM(cache_write)
 			FROM usage
 			GROUP BY substr(created_at, 1, 10), model
 			UNION ALL
@@ -275,7 +298,7 @@ func fetchCopilotUsage() (copilotUsageSnapshot, error) {
 				COUNT(*) AS model_calls,
 				0 AS sessions,
 				SUM(input_tokens) AS input_tokens,
-				SUM(output_tokens) AS output_tokens
+				SUM(output_tokens) AS output_tokens, SUM(cache_read), SUM(cache_write)
 			FROM usage
 			GROUP BY model
 		)
@@ -288,10 +311,10 @@ func fetchCopilotUsage() (copilotUsageSnapshot, error) {
 			model_calls,
 			sessions,
 			input_tokens,
-			output_tokens
+			output_tokens, cache_read, cache_write
 		FROM rows
 		ORDER BY sort_group, sort_label
-	`
+	`, cacheRead, cacheWrite)
 	output, err := sqlitejson.Run(context.Background(), "-readonly", "-json", path, query)
 	if err != nil {
 		return copilotUsageSnapshot{}, fmt.Errorf("read Copilot usage: %w", err)
@@ -425,7 +448,12 @@ func decodeCopilotUsage(output []byte) (copilotUsageSnapshot, error) {
 				UserRequests:   row.UserRequests,
 			}
 		case "daily":
-			snapshot.Daily = append(snapshot.Daily, copilotDailyUsage{
+			parts := tokenBreakdown{Input: row.InputTokens - row.CacheRead - row.CacheWrite, Output: row.OutputTokens, CacheRead: row.CacheRead, CacheWrite: row.CacheWrite}
+			if parts.Input < 0 {
+				parts = tokenBreakdown{}
+			}
+
+			snapshot.Daily = append(snapshot.Daily, copilotDailyUsage{Parts: parts,
 				StartDate:    row.Label,
 				Tokens:       row.Tokens,
 				UserRequests: row.UserRequests,

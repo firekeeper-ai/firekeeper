@@ -76,6 +76,9 @@ func TestFetchClaudeUsageCountsEachMessageOnce(t *testing.T) {
 	var dayTokens int64
 	for _, bucket := range snapshot.Daily {
 		if bucket.StartDate == day {
+			if bucket.Parts != (tokenBreakdown{Input: 11, Output: 7, CacheRead: 100, CacheWrite: 20}) {
+				t.Fatalf("Claude daily parts = %+v", bucket.Parts)
+			}
 			dayTokens = bucket.Tokens
 		}
 	}

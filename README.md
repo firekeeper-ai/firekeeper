@@ -136,7 +136,11 @@ You do **not** need `login`, `serve`, or `daemon install` to use this dashboard.
   its child processes and shows available state, model, directory, Git branch,
   and tokens. Check which session needs attention without visiting every tab.
 - **Understand usage.** Overview summarizes local tokens and available
-  provider limits in cards with agent logos, paired on wide terminals;
+  provider limits in cards with agent logos, paired on wide terminals.
+  Press `g` in Overview for full-screen weekly token charts. Each provider's
+  bars scale to its busiest day. Colored segments show input, output, cache
+  reads and cache writes. Unsplit marks tokens without a reliable breakdown. Daily totals sit below the bars, with today
+  on the right. Press `g` or Esc to return to the summary.
   Usage breaks history down by model and lets you open past
   conversations. Both list only providers with local usage data, so agents
   you don't use stay out of the way. See [what each provider reports](https://firekeeper.ai/docs/usage/).

@@ -35,6 +35,7 @@ type claudeUsageSummary struct {
 }
 
 type claudeDailyUsage struct {
+	Parts     tokenBreakdown
 	StartDate string
 	Tokens    int64
 }
@@ -194,7 +195,7 @@ func fetchClaudeUsage() (claudeUsageSnapshot, error) {
 
 	snapshot := claudeUsageSnapshot{}
 	models := make(map[string]int64)
-	daily := make(map[string]int64)
+	daily := make(map[string]tokenBreakdown)
 	seen := make(map[string]bool)
 	for _, path := range paths {
 		session, ok := readClaudeUsageFile(path, &snapshot.Summary, models, daily, seen)
@@ -208,8 +209,8 @@ func fetchClaudeUsage() (claudeUsageSnapshot, error) {
 	if len(snapshot.History) > claudeUsageHistoryLimit {
 		snapshot.History = snapshot.History[:claudeUsageHistoryLimit]
 	}
-	for day, tokens := range daily {
-		snapshot.Daily = append(snapshot.Daily, claudeDailyUsage{StartDate: day, Tokens: tokens})
+	for day, parts := range daily {
+		snapshot.Daily = append(snapshot.Daily, claudeDailyUsage{StartDate: day, Tokens: parts.Total(), Parts: parts})
 	}
 	sort.Slice(snapshot.Daily, func(i, j int) bool { return snapshot.Daily[i].StartDate < snapshot.Daily[j].StartDate })
 	for model, tokens := range models {
@@ -226,7 +227,7 @@ func fetchClaudeUsage() (claudeUsageSnapshot, error) {
 
 // readClaudeUsageFile adds one transcript's usage to the running totals and
 // returns its session row. A file that cannot be opened is skipped.
-func readClaudeUsageFile(path string, summary *claudeUsageSummary, models, daily map[string]int64, seen map[string]bool) (claudeHistoricalSession, bool) {
+func readClaudeUsageFile(path string, summary *claudeUsageSummary, models map[string]int64, daily map[string]tokenBreakdown, seen map[string]bool) (claudeHistoricalSession, bool) {
 	file, err := os.Open(path)
 	if err != nil {
 		return claudeHistoricalSession{}, false
@@ -260,7 +261,7 @@ func claudeUndercountWarning(path string) string {
 	return session.ClaudeUndercountWarningFor(path)
 }
 
-func trackClaudeUsageLine(line []byte, session *claudeHistoricalSession, summary *claudeUsageSummary, models, daily map[string]int64, seen map[string]bool) {
+func trackClaudeUsageLine(line []byte, session *claudeHistoricalSession, summary *claudeUsageSummary, models map[string]int64, daily map[string]tokenBreakdown, seen map[string]bool) {
 	// Most lines are prompts and tool output; decode only the ones that can
 	// carry usage, a title, or the working directory.
 	if !bytes.Contains(line, []byte(`"usage"`)) && !bytes.Contains(line, []byte(`"aiTitle"`)) && !bytes.Contains(line, []byte(`"agentName"`)) &&
@@ -319,7 +320,8 @@ func trackClaudeUsageLine(line []byte, session *claudeHistoricalSession, summary
 			session.Effort = effort
 		}
 		if ts, err := time.Parse(time.RFC3339Nano, rec.Timestamp); err == nil {
-			daily[ts.Local().Format("2006-01-02")] += tokens
+			day := ts.Local().Format(time.DateOnly)
+			daily[day] = sumTokenParts(daily[day], tokenBreakdown{Input: input, Output: output, CacheRead: cacheRead, CacheWrite: cacheCreation})
 		}
 	}
 }

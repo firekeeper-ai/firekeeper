@@ -43,9 +43,11 @@ type overviewProvider struct {
 	Meters []overviewMeter
 	// Alerts are red lines such as a reached limit.
 	Alerts []string
-	// Tokens are today, last seven days and lifetime; Lifetime < 0 is unknown.
-	Today, Week, Lifetime int64
-	Sessions              int64
+	// Days runs oldest to newest; nil means no daily history is available.
+	Parts    map[string]tokenBreakdown
+	Days     []int64
+	Lifetime int64
+	Sessions int64
 	// Notes are muted lines, such as where to find the quota.
 	Notes []string
 }
@@ -94,16 +96,20 @@ func (m model) codexOverview(now time.Time) overviewProvider {
 			provider.Alerts = append(provider.Alerts, "LIMIT REACHED "+sanitizeProcessCommand(limit.RateLimitReachedType))
 		}
 	}
+	provider.Parts = make(map[string]tokenBreakdown)
 	dates, tokens := []string{}, []int64{}
 	for _, day := range snapshot.Daily {
 		dates, tokens = append(dates, day.StartDate), append(tokens, day.Tokens)
+	}
+	for _, entry := range snapshot.DailyByModel {
+		provider.Parts[entry.StartDate] = sumTokenParts(provider.Parts[entry.StartDate], entry.Parts)
 	}
 	if len(dates) == 0 {
 		for _, entry := range snapshot.DailyByModel {
 			dates, tokens = append(dates, entry.StartDate), append(tokens, entry.Tokens)
 		}
 	}
-	provider.Today, provider.Week = overviewRecentTokens(dates, tokens, now)
+	provider.Days = overviewRecentTokens(dates, tokens, now)
 	if snapshot.Summary.LifetimeTokens != nil {
 		provider.Lifetime = *snapshot.Summary.LifetimeTokens
 	}
@@ -123,11 +129,13 @@ func (m model) copilotOverview(now time.Time) overviewProvider {
 		Sessions: snapshot.Summary.Sessions,
 		Lifetime: snapshot.Summary.LifetimeTokens,
 	}
+	provider.Parts = make(map[string]tokenBreakdown)
 	dates, tokens := []string{}, []int64{}
 	for _, day := range snapshot.Daily {
+		provider.Parts[day.StartDate] = sumTokenParts(provider.Parts[day.StartDate], day.Parts)
 		dates, tokens = append(dates, day.StartDate), append(tokens, day.Tokens)
 	}
-	provider.Today, provider.Week = overviewRecentTokens(dates, tokens, now)
+	provider.Days = overviewRecentTokens(dates, tokens, now)
 	plan := snapshot.Plan
 	if plan.Available && plan.TotalCredits > 0 {
 		meter := overviewMeter{
@@ -153,11 +161,13 @@ func (m model) claudeOverview(now time.Time) overviewProvider {
 		Sessions: snapshot.Summary.Sessions,
 		Lifetime: snapshot.Summary.LifetimeTokens,
 	}
+	provider.Parts = make(map[string]tokenBreakdown)
 	dates, tokens := []string{}, []int64{}
 	for _, day := range snapshot.Daily {
+		provider.Parts[day.StartDate] = sumTokenParts(provider.Parts[day.StartDate], day.Parts)
 		dates, tokens = append(dates, day.StartDate), append(tokens, day.Tokens)
 	}
-	provider.Today, provider.Week = overviewRecentTokens(dates, tokens, now)
+	provider.Days = overviewRecentTokens(dates, tokens, now)
 	for _, window := range claudeLimitWindows(snapshot.Limits) {
 		provider.Meters = append(provider.Meters, overviewMeter{Label: window.Label, Percent: window.UsedPercent, ResetAt: window.ResetsAt})
 	}
@@ -183,31 +193,35 @@ func (m model) kimiOverview(now time.Time) overviewProvider {
 		Sessions: snapshot.Summary.Sessions,
 		Lifetime: snapshot.Summary.LifetimeTokens,
 	}
+	provider.Parts = make(map[string]tokenBreakdown)
 	dates, tokens := []string{}, []int64{}
 	for _, day := range snapshot.Daily {
+		provider.Parts[day.StartDate] = sumTokenParts(provider.Parts[day.StartDate], day.Parts)
 		dates, tokens = append(dates, day.StartDate), append(tokens, day.Tokens)
 	}
-	provider.Today, provider.Week = overviewRecentTokens(dates, tokens, now)
+	provider.Days = overviewRecentTokens(dates, tokens, now)
 	if provider.HasData {
 		provider.Notes = append(provider.Notes, "Quota: Kimi Code /usage")
 	}
 	return provider
 }
 
-// overviewRecentTokens sums tokens dated today and within the last seven days
-// (today included). Dates are local YYYY-MM-DD, as in the daily buckets.
-func overviewRecentTokens(dates []string, tokens []int64, now time.Time) (today, week int64) {
-	todayDate := now.Format("2006-01-02")
-	weekStart := startOfDay(now).AddDate(0, 0, -(overviewWeekDays - 1)).Format("2006-01-02")
-	for index, date := range dates {
-		if date == todayDate {
-			today += tokens[index]
-		}
-		if date >= weekStart && date <= todayDate {
-			week += tokens[index]
+// overviewRecentTokens aligns local calendar dates, including today, across providers.
+func overviewRecentTokens(dates []string, tokens []int64, now time.Time) []int64 {
+	if len(dates) == 0 {
+		return nil
+	}
+	days := make([]int64, overviewWeekDays)
+	slots := make(map[string]int, overviewWeekDays)
+	for i := range days {
+		slots[now.AddDate(0, 0, i-overviewWeekDays+1).Format(time.DateOnly)] = i
+	}
+	for i, date := range dates {
+		if slot, ok := slots[date]; ok {
+			days[slot] += tokens[i]
 		}
 	}
-	return today, week
+	return days
 }
 
 // overviewBar draws a used/total meter of width cells, coloured by how close
@@ -250,9 +264,15 @@ func overviewMeterLine(meter overviewMeter, inner int, now time.Time) string {
 
 // overviewTokenLine is the today / 7 days / lifetime totals row.
 func overviewTokenLine(provider overviewProvider) string {
-	parts := []string{
-		dashPaint("today ", usageMutedColor, false) + dashPaint(formatTokenCount(provider.Today), dashYellow, true),
-		dashPaint("7d ", usageMutedColor, false) + dashPaint(formatTokenCount(provider.Week), dashYellow, true),
+	var parts []string
+	if len(provider.Days) > 0 {
+		var week int64
+		for _, n := range provider.Days {
+			week += n
+		}
+		parts = append(parts,
+			dashPaint("7d ", usageMutedColor, false)+dashPaint(formatTokenCount(week), dashYellow, true),
+			dashPaint("today ", usageMutedColor, false)+dashPaint(formatTokenCount(provider.Days[len(provider.Days)-1]), dashYellow, true))
 	}
 	if provider.Lifetime >= 0 {
 		parts = append(parts, dashPaint("lifetime ", usageMutedColor, false)+dashPaint(formatTokenCount(provider.Lifetime), dashYellow, true))
@@ -281,7 +301,9 @@ func overviewBody(provider overviewProvider, inner int, now time.Time) []string 
 	if len(lines) > 0 {
 		lines = append(lines, "")
 	}
-	lines = append(lines, overviewTokenLine(provider))
+	if totals := overviewTokenLine(provider); totals != "" {
+		lines = append(lines, totals)
+	}
 	for _, note := range provider.Notes {
 		lines = append(lines, usageNote(note))
 	}
@@ -307,6 +329,9 @@ func (m model) viewOverview(contentRows int) string {
 		}
 	}
 
+	if m.weeklyCharts {
+		return weeklyChartsView(shown, now, m.width, contentRows, loading)
+	}
 	var lines []string
 	if len(shown) == 0 {
 		message := "No providers found."
@@ -380,7 +405,11 @@ func (m model) viewOverview(contentRows int) string {
 }
 
 func (m model) overviewFooter() string {
-	return renderFooterKeys([]footerKey{{"r", "refresh"}, {"tab", "switch"}, {"?", "help"}, {"q", "quit"}}, m.width)
+	action := "weekly charts"
+	if m.weeklyCharts {
+		action = "summary"
+	}
+	return renderFooterKeys([]footerKey{{"r", "refresh"}, {"g", action}, {"tab", "switch"}, {"?", "help"}, {"q", "quit"}}, m.width)
 }
 
 // beginOverviewRefresh refreshes every provider that is not already loading.
