@@ -132,6 +132,12 @@ func offerServerUpdate(path string, stderr io.Writer) string {
 		return path
 	}
 
+	brewInstalled := homebrew.Installed(real)
+	if !brewInstalled && homebrew.InPrefix(filepath.Dir(real)) {
+		fmt.Fprintf(stderr, "firekeeper-server %s is available. Move this server outside the Homebrew prefix to update it. Continuing with version %s.\n", latest, current)
+		return path
+	}
+
 	fmt.Fprintf(stderr, "\nfirekeeper-server update available: %s -> %s\n", current, latest)
 	fmt.Fprintln(stderr, "  1) Update now")
 	fmt.Fprintln(stderr, "  2) Not now")
@@ -149,7 +155,7 @@ func offerServerUpdate(path string, stderr io.Writer) string {
 		return path
 	}
 
-	if homebrew.Installed(real) {
+	if brewInstalled {
 		return updateWithBrew(path, stderr)
 	}
 	return updateInPlace(ctx, src, path, real, current, stderr)

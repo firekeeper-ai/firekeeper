@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/firekeeper-ai/firekeeper/internal/homebrew"
 	"github.com/firekeeper-ai/firekeeper/internal/serverinstall"
 )
 
@@ -321,6 +322,27 @@ func TestUpdateReadOnlyDirectoryIsLeftAlone(t *testing.T) {
 	runServe([]string{"--listen", "127.0.0.1:0"}, nil, &stderr)
 	if !strings.Contains(stderr.String(), "not writable") || !strings.Contains(readFile(t, server), "firekeeper-server 0.4.0") {
 		t.Errorf("message:\n%s", stderr.String())
+	}
+}
+
+func TestUpdateHandCopiedServerInHomebrewPrefix(t *testing.T) {
+	rel := newUpdateRelease(t, "v0.5.0", serverScript(t, "0.5.0", ""), false)
+	s, server := setupUpdate(t, rel, "0.4.0", "1\n")
+	t.Setenv(homebrew.EnvPrefix, s.exeDir)
+	original := readFile(t, server)
+
+	var stderr bytes.Buffer
+	if code := runServe(nil, nil, &stderr); code != 0 {
+		t.Fatalf("exit %d\n%s", code, stderr.String())
+	}
+	if *s.hPath != server || readFile(t, server) != original {
+		t.Error("expected to run the original server")
+	}
+	if *rel.requests != 1 || (*rel.paths)[0] != "/latest" {
+		t.Errorf("release requests = %v, want only /latest", *rel.paths)
+	}
+	if !strings.Contains(stderr.String(), "Homebrew prefix") || strings.Contains(stderr.String(), "Update now") {
+		t.Errorf("unexpected update message: %s", stderr.String())
 	}
 }
 
