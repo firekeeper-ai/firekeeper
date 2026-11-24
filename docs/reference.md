@@ -1148,10 +1148,11 @@ now and at login. **Start daemon** starts a stopped service.
 Setup checks status every two seconds while open. After a start request it
 shows **Starting…** until the daemon is observed running, or reports an
 unconfirmed start after 15 seconds. Press **r** for an immediate check. Installation requires a persistent executable (use the installed
-`fk` or `firekeeper` binary). First-run dashboard setup shows status and
-directs you to the explicit setup command for service management.
+`fk` or `firekeeper` binary).
 
-First interactive dashboard launch opens the editor until setup is saved.
+The first interactive dashboard launch opens the same editor as `fk setup`.
+Saving or exiting completes onboarding for that user. Later launches open the
+dashboard directly, and `fk setup` reopens the editor anytime.
 `fk setup --status` prints a read-only summary. Redirected streams, `CI`,
 and `FIREKEEPER_NO_PROMPT` suppress the editor. Set `NO_COLOR=1` to disable color.
 

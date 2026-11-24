@@ -23,7 +23,6 @@ type setupEditor struct {
 	statusPending                               bool
 	statusGeneration                            uint64
 	startDeadline                               time.Time
-	manageDaemon                                bool
 	plan                                        *setupDaemonPlan
 	options, selected                           []transcript.Provider
 	original                                    config.Config
@@ -70,10 +69,6 @@ func (m *setupEditor) activate() tea.Cmd {
 	case m.saveIndex() + 1:
 		return tea.Quit
 	case len(m.options):
-		if m.service.Installed && !m.manageDaemon {
-			m.notice = "Open fk setup to edit daemon settings."
-			return nil
-		}
 		if m.original.Sources["interval"] == "env" {
 			m.notice = "Managed by " + config.EnvInterval
 			return nil
@@ -86,10 +81,6 @@ func (m *setupEditor) activate() tea.Cmd {
 			m.field = m.interval.String()
 		}
 	default:
-		if m.service.Installed && !m.manageDaemon {
-			m.notice = "Open fk setup to edit daemon settings."
-			return nil
-		}
 		if m.original.Sources["providers"] == "env" {
 			m.notice = "Managed by " + config.EnvProviders
 			return nil
@@ -422,16 +413,12 @@ func (m *setupEditor) layout() setupLayout {
 	badge := "  " + m.paint(setupHeading, "● Daemon: ") + m.paint(daemonStatusStyle(m.service, state), state)
 	actions := "  "
 	if !m.service.Running && !m.service.StatusUnavailable && m.startDeadline.IsZero() {
-		if m.manageDaemon {
-			label := "[d Install daemon]"
-			if m.service.Installed {
-				label = "[d Start daemon]"
-			}
-			layout.hits = append(layout.hits, setupHit{2, 2 + len(label), 2, -1})
-			actions += m.paint(setupHeading, label) + "  "
-		} else {
-			actions += "Open fk setup to manage · "
+		label := "[d Install daemon]"
+		if m.service.Installed {
+			label = "[d Start daemon]"
 		}
+		layout.hits = append(layout.hits, setupHit{2, 2 + len(label), 2, -1})
+		actions += m.paint(setupHeading, label) + "  "
 	}
 	x := ansi.StringWidth(actions)
 	refresh := "[r Refresh]"
@@ -464,7 +451,7 @@ func (m *setupEditor) layout() setupLayout {
 	if changed {
 		buttons := "  "
 		saveLabel := " Save settings "
-		if m.manageDaemon && m.service.Installed {
+		if m.service.Installed {
 			switch {
 			case len(m.selected) == 0 && !m.original.TelemetryEnabled:
 				saveLabel = " Save & disable service "

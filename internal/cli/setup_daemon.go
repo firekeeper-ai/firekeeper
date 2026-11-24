@@ -89,7 +89,7 @@ type setupDaemonResult struct {
 }
 
 func (m *setupEditor) daemonAction() tea.Cmd {
-	if !m.manageDaemon || !m.startDeadline.IsZero() || m.service.Running || m.service.StatusUnavailable {
+	if !m.startDeadline.IsZero() || m.service.Running || m.service.StatusUnavailable {
 		return nil
 	}
 	if !m.acceptField() {

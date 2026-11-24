@@ -50,7 +50,7 @@ func firstRunSetup(input io.Reader, out io.Writer) error {
 	if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	return machineSetup(input, out, false)
+	return machineSetup(input, out)
 }
 
 func runSetup(args []string, stdout, stderr io.Writer) int {
@@ -65,14 +65,14 @@ func runSetup(args []string, stdout, stderr io.Writer) int {
 	if !*status && setupInteractive() {
 		input = os.Stdin
 	}
-	if err := machineSetup(input, stdout, true); err != nil {
+	if err := machineSetup(input, stdout); err != nil {
 		fmt.Fprintf(stderr, "%s: %v\n", name, err)
 		return 1
 	}
 	return 0
 }
 
-func machineSetup(input io.Reader, out io.Writer, manageDaemon bool) error {
+func machineSetup(input io.Reader, out io.Writer) error {
 	c, err := loadConfig(configFlags{})
 	if err != nil {
 		return err
@@ -95,14 +95,16 @@ func machineSetup(input io.Reader, out io.Writer, manageDaemon bool) error {
 		}
 		model := newSetupEditor(c, "", v.color)
 		model.serverStatus = serverStatus
-		model.manageDaemon = manageDaemon
 		model.displayPath = displayPath
 		model.configPath = path
 		model.seedService(r)
 		model.setDaemon(r)
 		result, err := openSetupEditor(model, input, out)
-		if err != nil || !result.saved {
+		if err != nil {
 			return err
+		}
+		if !result.saved {
+			return completeSetup(home)
 		}
 		if err := result.savePreferences(); err != nil {
 			return err
@@ -156,9 +158,6 @@ func (m *setupEditor) preferencesChanged() bool {
 }
 
 func (m *setupEditor) savePreferences() error {
-	if m.service.Installed && !m.manageDaemon {
-		return nil
-	}
 	if !m.preferencesChanged() {
 		return nil
 	}

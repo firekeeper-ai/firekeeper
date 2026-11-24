@@ -93,7 +93,9 @@ Linux (amd64 and arm64) is best effort.
    an existing session running. Firekeeper does not install or launch agents.
 2. Open another terminal window, tab, or pane on the same machine, as the same
    user, and run `firekeeper` from any directory.
-3. First interactive launch opens **Machine settings**, showing local CLI features, reporting
+3. First interactive launch opens `firekeeper setup`, then continues to the dashboard.
+   Later launches open the dashboard directly, even if you discarded your edits.
+   Run `firekeeper setup` anytime to revisit **Machine settings**, including local CLI features, reporting
    credentials status, and whether Firekeeper Server is installed. The optional
    server supports dashboard hosting and HTML chat export. Run `fk serve`
    for server setup and launch. Click a provider or

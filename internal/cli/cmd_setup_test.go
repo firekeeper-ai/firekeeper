@@ -44,8 +44,10 @@ func TestFirstRunSetup(t *testing.T) {
 	}
 	previousEditor := openSetupEditor
 	t.Cleanup(func() { openSetupEditor = previousEditor })
+	opens := 0
 	var keys []tea.KeyMsg
 	openSetupEditor = func(m *setupEditor, _ io.Reader, _ io.Writer) (*setupEditor, error) {
+		opens++
 		for _, k := range keys {
 			_, cmd := m.Update(k)
 			if cmd != nil {
@@ -55,22 +57,25 @@ func TestFirstRunSetup(t *testing.T) {
 		return m, nil
 	}
 	key := func(t tea.KeyType) tea.KeyMsg { return tea.KeyMsg{Type: t} }
-	keys = []tea.KeyMsg{key(tea.KeySpace), key(tea.KeyEsc)}
+	keys = []tea.KeyMsg{key(tea.KeySpace), key(tea.KeyEsc), {Type: tea.KeyRunes, Runes: []rune("n")}}
 	if err := firstRunSetup(strings.NewReader(""), &out); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(setupMarker(home)); !errors.Is(err, os.ErrNotExist) {
-		t.Fatal("cancel completed setup")
+	if _, err := os.Stat(setupMarker(home)); err != nil {
+		t.Fatal("discard should finish onboarding", err)
 	}
 	if data, err := os.ReadFile(path); err != nil || string(data) != original {
 		t.Fatal("cancel modified config")
+	}
+	if err := firstRunSetup(strings.NewReader(""), &out); err != nil || opens != 1 {
+		t.Fatal("second launch should skip setup", err)
 	}
 	keys = []tea.KeyMsg{key(tea.KeySpace), key(tea.KeyDown), key(tea.KeyDown), key(tea.KeySpace), key(tea.KeyDown), key(tea.KeySpace)}
 	for i := 0; i < 4; i++ {
 		keys = append(keys, key(tea.KeyDown))
 	}
 	keys = append(keys, key(tea.KeyEnter), tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("1m")}, key(tea.KeyCtrlS))
-	if err := firstRunSetup(strings.NewReader(""), &out); err != nil {
+	if err := machineSetup(strings.NewReader(""), &out); err != nil {
 		t.Fatal(err)
 	}
 	c, err := loadConfig(configFlags{})
@@ -82,7 +87,7 @@ func TestFirstRunSetup(t *testing.T) {
 		t.Fatal("completed setup prompted again")
 	}
 	keys = []tea.KeyMsg{key(tea.KeySpace), key(tea.KeyDown), key(tea.KeyDown), key(tea.KeyDown), key(tea.KeySpace), key(tea.KeyCtrlS)}
-	if err := machineSetup(strings.NewReader(""), &out, true); err != nil {
+	if err := machineSetup(strings.NewReader(""), &out); err != nil {
 		t.Fatal(err)
 	}
 	c, err = loadConfig(configFlags{})
@@ -189,11 +194,9 @@ func TestSetupInstallStartRefresh(t *testing.T) {
 			m.Update(cmd())
 		}
 	}
-	key("d")
 	if m.plan != nil || len(runner.calls) > 0 {
-		t.Fatal("dashboard setup offered installation")
+		t.Fatal("opening setup should not initiate installation")
 	}
-	m.manageDaemon = true
 	key("d")
 	if m.plan == nil || !strings.Contains(m.View(), "codex") || running {
 		t.Fatal("missing install preview")
@@ -225,7 +228,6 @@ func TestSetupObservesDelayedDaemonStart(t *testing.T) {
 		return "LoadState=loaded\nActiveState=active\nSubState=running\n", nil
 	}
 	m := newSetupEditor(config.Config{}, "", false)
-	m.manageDaemon = true
 	if m.Init() == nil {
 		t.Fatal("no initial status timer")
 	}
@@ -279,7 +281,6 @@ func TestSetupSaveMigratesRunningService(t *testing.T) {
 	}
 	runner.calls = nil
 	m := newSetupEditor(c, "", false)
-	m.manageDaemon = true
 	m.configPath = config.DefaultPath(testConfigHome)
 	m.service = inspectSetupDaemon(c)
 	m.seedService(m.service)
@@ -312,7 +313,6 @@ func TestSetupRestartRequiresChanges(t *testing.T) {
 		Providers: []transcript.Provider{transcript.ProviderCodex, transcript.ProviderClaude},
 		Interval:  15 * time.Second,
 	}, "", false)
-	m.manageDaemon = true
 	m.service = daemon.Reporting{Installed: true, Running: true}
 	assertRestart := func(want bool) {
 		t.Helper()
