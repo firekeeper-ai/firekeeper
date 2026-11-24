@@ -34,6 +34,10 @@ func (v setupView) paint(style, text string) string {
 	}
 	return "\x1b[" + style + "m" + text + "\x1b[0m"
 }
+func (v setupView) shortcut(key, action string) string {
+	return v.paint("1", key) + v.paint(setupMuted, " "+action)
+}
+
 func (v setupView) section(title string) {
 	fmt.Fprintln(v, "\n"+v.paint(setupHeading, title))
 }

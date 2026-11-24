@@ -253,7 +253,10 @@ func (m *setupEditor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if key == "up" || key == "shift+tab" {
 				step = -1
 			}
-			count := m.saveIndex() + 2
+			count := m.saveIndex()
+			if m.preferencesChanged() {
+				count += 2
+			}
 			m.focus = (m.focus + step + count) % count
 			m.notice = ""
 			m.reveal()
@@ -298,6 +301,14 @@ type setupLayout struct {
 
 const setupHeaderRows = 4
 
+func (m *setupEditor) visibleRows() int {
+	footer := 2 // status and shortcuts
+	if m.preferencesChanged() {
+		footer++ // save and cancel buttons
+	}
+	return max(1, m.height-setupHeaderRows-footer)
+}
+
 func (m *setupEditor) reveal() {
 	if m.focus > len(m.options) {
 		return
@@ -307,7 +318,7 @@ func (m *setupEditor) reveal() {
 		row += 2
 	}
 	m.scroll = min(m.scroll, row)
-	m.scroll = max(m.scroll, row-max(1, m.height-setupHeaderRows-3)+1)
+	m.scroll = max(m.scroll, row-m.visibleRows()+1)
 }
 
 func setupFit(s string, width int) string {
@@ -367,9 +378,24 @@ func (m *setupEditor) layout() setupLayout {
 	}
 	details := strings.Split(ansi.Wrap(strings.TrimSpace(m.details), detailWidth, ""), "\n")
 	details = append(details, "", m.paint(setupHeading, "Ask your coding agent · p Copy"))
+	inCode := false
 	for _, part := range strings.Split(ansi.Wrap(setupAgentPrompt, detailWidth, ""), "\n") {
+		if m.color {
+			var styled strings.Builder
+			for i, segment := range strings.Split(part, "`") {
+				if i > 0 {
+					inCode = !inCode
+				}
+				style := "4"
+				if inCode {
+					style = "1;4;33"
+				}
+				styled.WriteString(m.paint(style, segment))
+			}
+			part = styled.String()
+		}
 		hits = append(hits, setupHit{detailX, detailX + ansi.StringWidth(part), detailY + len(details), setupPromptHit})
-		details = append(details, m.paint("4", part))
+		details = append(details, part)
 	}
 	if wide {
 		for len(rows) < len(details) {
@@ -388,7 +414,7 @@ func (m *setupEditor) layout() setupLayout {
 			rows = append(rows, "  "+s)
 		}
 	}
-	visible := max(1, m.height-setupHeaderRows-3)
+	visible := m.visibleRows()
 	layout := setupLayout{maxScroll: max(0, len(rows)-visible)}
 	start := min(m.scroll, layout.maxScroll)
 	title := "  " + m.paint(setupAccent, "FIREKEEPER") + "   /   Machine settings"
@@ -435,45 +461,54 @@ func (m *setupEditor) layout() setupLayout {
 		}
 	}
 	layout.lines = append(layout.lines, "  "+m.paint(setupAccent, note))
-	buttons := "  "
-	saveLabel := " Save settings "
-	if !changed {
-		saveLabel = " Exit "
-	} else if m.manageDaemon && m.service.Installed {
-		switch {
-		case len(m.selected) == 0 && !m.original.TelemetryEnabled:
-			saveLabel = " Save & disable service "
-		case m.service.Running && !m.service.Foreground:
-			saveLabel = " Save & restart daemon "
-		default:
-			saveLabel = " Apply settings "
+	if changed {
+		buttons := "  "
+		saveLabel := " Save settings "
+		if m.manageDaemon && m.service.Installed {
+			switch {
+			case len(m.selected) == 0 && !m.original.TelemetryEnabled:
+				saveLabel = " Save & disable service "
+			case m.service.Running && !m.service.Foreground:
+				saveLabel = " Save & restart daemon "
+			default:
+				saveLabel = " Apply settings "
+			}
 		}
-	}
-	for i, label := range []string{saveLabel, " Cancel "} {
-		idx := m.saveIndex() + i
-		x := ansi.StringWidth(buttons)
-		style := "1;7;36"
-		if i == 1 {
-			style = setupMuted
+		for i, label := range []string{saveLabel, " Cancel "} {
+			idx := m.saveIndex() + i
+			x := ansi.StringWidth(buttons)
+			style := "1;7;36"
+			if i == 1 {
+				style = setupMuted
+			}
+			if m.focus == idx {
+				style = "7"
+				label = "›" + label[1:]
+			}
+			buttons += m.paint(style, "["+label+"]") + "  "
+			layout.hits = append(layout.hits, setupHit{x, x + len(label) + 2, len(layout.lines), idx})
 		}
-		if m.focus == idx {
-			style = "7"
-			label = "›" + label[1:]
-		}
-		buttons += m.paint(style, "["+label+"]") + "  "
-		layout.hits = append(layout.hits, setupHit{x, x + len(label) + 2, len(layout.lines), idx})
+		layout.lines = append(layout.lines, buttons)
 	}
-	hint := "↑↓ Move   Space Toggle   Enter Select   s Save   Esc Review"
-	if !changed {
-		hint = "↑↓ Move   Space Toggle   Enter Select   s Exit   Esc Exit"
-	}
+	sep := m.paint(setupMuted, " · ")
+	hint := "  "
 	if m.editing {
-		hint = "Type duration   Enter Apply   Esc Revert"
+		hint += m.paint(setupMuted, "type duration") + sep + m.shortcut("enter", "to apply") + sep + m.shortcut("esc", "to revert")
+	} else {
+		hint += m.shortcut("↑↓", "to move") + sep + m.shortcut("space", "to toggle") + sep + m.shortcut("↵", "to select") + sep
+		if changed {
+			hint += m.shortcut("s", "to save") + sep + m.shortcut("esc", "to review")
+		} else {
+			x := ansi.StringWidth(hint)
+			hint += m.shortcut("s", "to exit")
+			layout.hits = append(layout.hits, setupHit{x, ansi.StringWidth(hint), len(layout.lines), m.saveIndex()})
+			hint += sep + m.shortcut("esc", "to exit")
+		}
 	}
 	if layout.maxScroll > 0 {
-		hint += "   PgUp / PgDn Scroll"
+		hint += sep + m.shortcut("pgup/pgdn", "to scroll")
 	}
-	layout.lines = append(layout.lines, buttons, "  "+m.paint(setupMuted, hint))
+	layout.lines = append(layout.lines, hint)
 	return layout
 }
 
@@ -553,10 +588,10 @@ func (m *setupEditor) saveDialog() setupLayout {
 	row := len(layout.lines)
 	layout.hits = []setupHit{{2, 2 + len(yes), row, 0}, {4 + len(yes), 4 + len(yes) + len(no), row, 1}}
 	layout.lines = append(layout.lines, "  "+m.paint(setupAccent, yes)+"  "+no)
-	hint := "  Esc Back"
+	hint := "  " + m.shortcut("esc", "to go back")
 	if layout.maxScroll > 0 {
-		hint += "   ↑↓ Scroll changes"
+		hint += m.paint(setupMuted, " · ") + m.shortcut("↑↓", "to scroll")
 	}
-	layout.lines = append(layout.lines, m.paint(setupMuted, hint))
+	layout.lines = append(layout.lines, hint)
 	return layout
 }

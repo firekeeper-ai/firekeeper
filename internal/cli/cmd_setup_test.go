@@ -317,7 +317,7 @@ func TestSetupRestartRequiresChanges(t *testing.T) {
 	assertRestart := func(want bool) {
 		t.Helper()
 		view := m.View()
-		if strings.Contains(view, "No changes to save") == want || strings.Contains(view, "[ Exit ]") == want {
+		if strings.Contains(view, "No changes to save") == want || strings.Contains(view, "[ Exit ]") || strings.Contains(view, "[ Cancel ]") != want {
 			t.Fatalf("clean footer visibility should be %t", !want)
 		}
 		if strings.Contains(view, "Save & restart daemon") != want {
