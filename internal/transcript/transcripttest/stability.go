@@ -82,6 +82,10 @@ func checkSeqStability(source reader.Source, c SeqCase, tempDir string) error {
 		}
 	}
 
+	if err := CheckTokens(whole); err != nil {
+		return err
+	}
+
 	again, againEnd, err := source.Read(c.Path, 0)
 	if err != nil {
 		return fmt.Errorf("second whole read: %w", err)
@@ -121,6 +125,23 @@ func checkSeqStability(source reader.Source, c SeqCase, tempDir string) error {
 	}
 	if len(tail) != 0 || tailEnd != end {
 		return fmt.Errorf("read at end offset %d returned %d events and offset %d; want none and the same offset", end, len(tail), tailEnd)
+	}
+	return nil
+}
+
+// CheckTokens checks the token counts a reader emits: none is negative, and
+// Cache is the sum of CacheRead and CacheWrite, so every report that totals
+// tokens (transcript.TotalTokens) counts each cache token once. Failure
+// messages name seqs only.
+func CheckTokens(events []transcript.Event) error {
+	for _, e := range events {
+		t := e.Tokens
+		if t.Input < 0 || t.Output < 0 || t.Cache < 0 || t.CacheRead < 0 || t.CacheWrite < 0 {
+			return fmt.Errorf("seq %d has a negative token count", e.Seq)
+		}
+		if t.Cache != t.CacheRead+t.CacheWrite {
+			return fmt.Errorf("seq %d: cache %d is not cache read %d + cache write %d", e.Seq, t.Cache, t.CacheRead, t.CacheWrite)
+		}
 	}
 	return nil
 }

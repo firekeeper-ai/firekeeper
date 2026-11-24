@@ -16,6 +16,7 @@ import (
 	"github.com/firekeeper-ai/firekeeper/internal/testenv"
 	"github.com/firekeeper-ai/firekeeper/internal/transcript"
 	"github.com/firekeeper-ai/firekeeper/internal/transcript/reader"
+	"github.com/firekeeper-ai/firekeeper/internal/transcript/transcripttest"
 )
 
 const fixtureID = "ses_fixtureA"
@@ -87,6 +88,9 @@ func TestRead(t *testing.T) {
 		t.Errorf("end offset = %d, want 12", end)
 	}
 	check(t, events, expected)
+	if err := transcripttest.CheckTokens(events); err != nil {
+		t.Error(err)
+	}
 	again, againEnd, err := at(db, 20*time.Second).Read(path, end)
 	if err != nil || len(again) != 0 || againEnd != end {
 		t.Errorf("read at unfinished message = %d events, offset %d, %v; want none at %d", len(again), againEnd, err, end)

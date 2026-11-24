@@ -170,7 +170,7 @@ func Build(sessions []Session, since time.Time) Report {
 			if event.Model != nil && *event.Model != "" {
 				model = *event.Model
 			}
-			tokens := eventTokenCount(event.Tokens)
+			tokens := transcript.TotalTokens(event.Tokens)
 			if tokens > 0 {
 				spend[spendKey{project: session.Project, provider: session.Provider, model: model}] += tokens
 				sessionSpend[sessionSpendKey{project: session.Project, provider: session.Provider, sessionID: session.ID}] += tokens
@@ -355,8 +355,4 @@ func peakTurnsPerHour(turns []turns.Turn) int {
 		}
 	}
 	return peak
-}
-
-func eventTokenCount(tokens transcript.Tokens) int64 {
-	return tokens.Input + tokens.Output + turns.CacheTokens(tokens)
 }

@@ -145,8 +145,10 @@ func TestPeakContextTokens(t *testing.T) {
 			t.Errorf("turn %d peak = %d; want %d", i, got[i].PeakContextTokens, want)
 		}
 	}
-	if got[0].ContextTokens <= got[0].PeakContextTokens {
-		t.Errorf("running sum %d should exceed the peak %d for a multi-call turn", got[0].ContextTokens, got[0].PeakContextTokens)
+	for i, want := range []int64{60_960, 90_965, 90_965} {
+		if got[i].ContextTokens != want {
+			t.Errorf("turn %d cumulative context = %d; want %d", i, got[i].ContextTokens, want)
+		}
 	}
 	data, err := json.Marshal(got[0])
 	if err != nil || !strings.Contains(string(data), `"peak_context_tokens":20450`) {
@@ -185,22 +187,5 @@ func TestToolErrorsByTool(t *testing.T) {
 	clean := Parse([]transcript.Event{{Role: transcript.RoleUser}, {Role: transcript.RoleToolResult, ToolName: &edit, Raw: ok}})
 	if data, _ := json.Marshal(clean[0]); strings.Contains(string(data), "tool_errors_by_tool") {
 		t.Fatalf("turn without errors lists them: %s", data)
-	}
-}
-
-func TestCacheTokensPrefersTheLargerFigure(t *testing.T) {
-	for _, test := range []struct {
-		tokens transcript.Tokens
-		want   int64
-	}{
-		{transcript.Tokens{Cache: 10, CacheRead: 6, CacheWrite: 4}, 10},
-		{transcript.Tokens{Cache: 10}, 10},
-		{transcript.Tokens{CacheRead: 6, CacheWrite: 4}, 10},
-		{transcript.Tokens{Cache: -3, CacheRead: -1}, 0},
-		{transcript.Tokens{}, 0},
-	} {
-		if got := CacheTokens(test.tokens); got != test.want {
-			t.Errorf("CacheTokens(%+v) = %d; want %d", test.tokens, got, test.want)
-		}
 	}
 }

@@ -293,3 +293,44 @@ func TestTokensJSONOmitsUnknownSplit(t *testing.T) {
 		t.Fatalf("split tokens lost the split: %s", data)
 	}
 }
+
+// TestBuildCountsSplitOnlyCache is the regression test for a window that
+// summed only the combined Cache figure: an event that reports its cache as
+// a read/write split alone must still count, and land under its model and
+// project, as it does in stats.
+func TestBuildCountsSplitOnlyCache(t *testing.T) {
+	at := now.Add(-time.Hour)
+	model := "m1"
+	splitOnly := transcript.Event{TS: &at, Role: transcript.RoleAssistant, Model: &model,
+		Tokens: transcript.Tokens{CacheRead: 800, CacheWrite: 200}}
+	*shared = fakeSource{
+		metas:  []session.Meta{{ID: "s", CWD: "/nonexistent/app"}},
+		events: map[string][]transcript.Event{"s": {splitOnly}},
+	}
+	report, err := Build(context.Background(), now, Options{Provider: transcript.ProviderClaude})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := Tokens{Cache: 1000, CacheRead: 800, CacheWrite: 200, Total: 1000}
+	if report.Total != want {
+		t.Fatalf("total = %+v; want %+v", report.Total, want)
+	}
+	if len(report.ByModel) != 1 || report.ByModel[0].Tokens != want {
+		t.Fatalf("by model = %+v; want one m1 group of %+v", report.ByModel, want)
+	}
+	if len(report.ByProject) != 1 || report.ByProject[0].Tokens != want {
+		t.Fatalf("by project = %+v; want one app group of %+v", report.ByProject, want)
+	}
+}
+
+func TestTokensAddIgnoresNegativeCounts(t *testing.T) {
+	var got Tokens
+	got.Add(transcript.Tokens{Input: -10, Output: 4, Cache: -3, CacheRead: -1, CacheWrite: 2})
+	want := Tokens{Output: 4, Cache: 2, CacheWrite: 2, Total: 6}
+	if got != want {
+		t.Fatalf("tokens = %+v; want %+v", got, want)
+	}
+	if got.Total != got.Input+got.Output+got.Cache {
+		t.Fatalf("total %d is not input+output+cache of %+v", got.Total, got)
+	}
+}
