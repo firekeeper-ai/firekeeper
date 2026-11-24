@@ -95,7 +95,9 @@ Linux (amd64 and arm64) is best effort.
    user, and run `firekeeper` from any directory.
 3. First interactive launch opens **Machine settings**. Click a provider or
    move with ↑/↓ and press Space to toggle reporting. Select the interval to
-   edit it in place. Press **s** to save or **Esc** to leave without saving.
+   edit it in place. Press **s** to save changes or exit if there are none.
+   Press **Esc** to exit. If edits are pending, review the changes and choose
+   **Yes** to save or **No** to discard them.
    In `fk setup`, the same selection controls manual and background reporting.
    Saving restarts a running login service to apply changes. Daemon status updates automatically at the top. Press
    **d** to review and install or start the login service, or **r** to refresh

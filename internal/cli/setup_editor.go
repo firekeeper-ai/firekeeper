@@ -17,20 +17,20 @@ import (
 
 type setupEditor struct {
 	setupView
-	service                        daemon.Reporting
-	configPath, displayPath, busy  string
-	statusPending                  bool
-	statusGeneration               uint64
-	startDeadline                  time.Time
-	manageDaemon, providersTouched bool
-	plan                           *setupDaemonPlan
-	options, selected              []transcript.Provider
-	original                       config.Config
-	interval                       time.Duration
-	details                        string
-	width, height, focus, scroll   int
-	editing, replace, saved        bool
-	field, notice                  string
+	service                                     daemon.Reporting
+	configPath, displayPath, busy               string
+	statusPending                               bool
+	statusGeneration                            uint64
+	startDeadline                               time.Time
+	manageDaemon                                bool
+	plan                                        *setupDaemonPlan
+	options, selected                           []transcript.Provider
+	original                                    config.Config
+	interval                                    time.Duration
+	details                                     string
+	width, height, focus, scroll, confirmScroll int
+	editing, replace, saved, confirmSave        bool
+	field, notice                               string
 }
 
 func newSetupEditor(c config.Config, details string, color bool) *setupEditor {
@@ -93,7 +93,6 @@ func (m *setupEditor) activate() tea.Cmd {
 			m.notice = "Managed by " + config.EnvProviders
 			return nil
 		}
-		m.providersTouched = true
 		p := m.options[m.focus]
 		if i := slices.Index(m.selected, p); i >= 0 {
 			m.selected = slices.Delete(m.selected, i, i+1)
@@ -125,7 +124,6 @@ func (m *setupEditor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if result.installed != nil {
 			m.original.Providers = slices.Clone(result.installed.providers)
 			m.original.Interval = result.installed.interval
-			m.providersTouched = false
 		}
 		m.busy = ""
 		m.startDeadline = time.Time{}
@@ -146,6 +144,9 @@ func (m *setupEditor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	if m.busy != "" {
 		return m, nil
+	}
+	if m.confirmSave {
+		return m, m.updateSaveDialog(msg)
 	}
 	if m.plan != nil {
 		switch event := msg.(type) {
@@ -213,6 +214,11 @@ func (m *setupEditor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.editing = false
 			m.notice = ""
 		case key == "esc":
+			if m.preferencesChanged() {
+				m.confirmSave = true
+				m.confirmScroll = 0
+				break
+			}
 			return m, tea.Quit
 		case key == "ctrl+s" || (!m.editing && key == "s"):
 			if m.acceptField() {
@@ -397,16 +403,19 @@ func (m *setupEditor) layout() setupLayout {
 	if m.busy != "" {
 		note = m.busy
 	}
-	if note == "" && (!slices.Equal(m.selected, m.original.Providers) || m.interval != m.original.Interval) {
-		note = "Unsaved changes"
-	}
-	if note == "" && layout.maxScroll > 0 {
-		note = "PgUp / PgDn to scroll"
+	changed := m.preferencesChanged()
+	if note == "" {
+		note = "No changes to save"
+		if changed {
+			note = "Unsaved changes"
+		}
 	}
 	layout.lines = append(layout.lines, "  "+m.paint(setupAccent, note))
 	buttons := "  "
 	saveLabel := " Save settings "
-	if m.manageDaemon && m.service.Installed {
+	if !changed {
+		saveLabel = " Exit "
+	} else if m.manageDaemon && m.service.Installed {
 		switch {
 		case len(m.selected) == 0 && !m.original.TelemetryEnabled:
 			saveLabel = " Save & disable service "
@@ -430,9 +439,15 @@ func (m *setupEditor) layout() setupLayout {
 		buttons += m.paint(style, "["+label+"]") + "  "
 		layout.hits = append(layout.hits, setupHit{x, x + len(label) + 2, len(layout.lines), idx})
 	}
-	hint := "↑↓ Move   Space Toggle   Enter Select   s Save   Esc Cancel"
+	hint := "↑↓ Move   Space Toggle   Enter Select   s Save   Esc Review"
+	if !changed {
+		hint = "↑↓ Move   Space Toggle   Enter Select   s Exit   Esc Exit"
+	}
 	if m.editing {
 		hint = "Type duration   Enter Apply   Esc Revert"
+	}
+	if layout.maxScroll > 0 {
+		hint += "   PgUp / PgDn Scroll"
 	}
 	layout.lines = append(layout.lines, buttons, "  "+m.paint(setupMuted, hint))
 	return layout
@@ -440,7 +455,9 @@ func (m *setupEditor) layout() setupLayout {
 
 func (m *setupEditor) View() string {
 	var l setupLayout
-	if m.plan != nil {
+	if m.confirmSave {
+		l = m.saveDialog()
+	} else if m.plan != nil {
 		l = m.daemonDialog()
 	} else {
 		l = m.layout()
@@ -449,4 +466,73 @@ func (m *setupEditor) View() string {
 		l.lines[i] = ansi.Truncate(s, max(1, m.width), "…")
 	}
 	return strings.Join(l.lines[:min(len(l.lines), max(1, m.height))], "\n")
+}
+
+func (m *setupEditor) updateSaveDialog(msg tea.Msg) tea.Cmd {
+	switch event := msg.(type) {
+	case tea.KeyMsg:
+		switch event.String() {
+		case "y", "Y":
+			m.saved = true
+			return tea.Quit
+		case "n", "N", "ctrl+c":
+			return tea.Quit
+		case "esc":
+			m.confirmSave = false
+		case "up":
+			m.confirmScroll = max(0, min(m.confirmScroll, m.saveDialog().maxScroll)-1)
+		case "down":
+			m.confirmScroll = min(m.confirmScroll+1, m.saveDialog().maxScroll)
+		}
+	case tea.MouseMsg:
+		if event.Action == tea.MouseActionPress && event.Button == tea.MouseButtonLeft {
+			for _, hit := range m.saveDialog().hits {
+				if event.Y == hit.y && event.X >= hit.x && event.X < hit.end {
+					m.saved = hit.index == 0
+					return tea.Quit
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (m *setupEditor) saveDialog() setupLayout {
+	var changes []string
+	for _, provider := range m.options {
+		before := slices.Contains(m.original.Providers, provider)
+		after := slices.Contains(m.selected, provider)
+		if before == after {
+			continue
+		}
+		change := "Disabled -> Enabled"
+		if before {
+			change = "Enabled -> Disabled"
+		}
+		changes = append(changes, "- "+session.ToolName(provider)+" "+change)
+	}
+	if m.interval != m.original.Interval {
+		changes = append(changes, fmt.Sprintf("- Reporting interval %s -> %s", m.original.Interval, m.interval))
+	}
+
+	preview := strings.Split(ansi.Wrap(strings.Join(changes, "\n"), max(1, m.width-4), ""), "\n")
+	visible := max(0, m.height-3)
+	layout := setupLayout{
+		lines:     []string{"  " + m.paint(setupHeading, "Do you want to save the changes?")},
+		maxScroll: max(0, len(preview)-visible),
+	}
+	start := min(m.confirmScroll, layout.maxScroll)
+	for _, line := range preview[start:min(start+visible, len(preview))] {
+		layout.lines = append(layout.lines, "  "+line)
+	}
+	const yes, no = "[ Y: Yes ]", "[ N: No ]"
+	row := len(layout.lines)
+	layout.hits = []setupHit{{2, 2 + len(yes), row, 0}, {4 + len(yes), 4 + len(yes) + len(no), row, 1}}
+	layout.lines = append(layout.lines, "  "+m.paint(setupAccent, yes)+"  "+no)
+	hint := "  Esc Back"
+	if layout.maxScroll > 0 {
+		hint += "   ↑↓ Scroll changes"
+	}
+	layout.lines = append(layout.lines, m.paint(setupMuted, hint))
+	return layout
 }

@@ -306,3 +306,68 @@ func TestSetupSaveMigratesRunningService(t *testing.T) {
 		t.Fatal("empty selection left reporting service installed")
 	}
 }
+
+func TestSetupRestartRequiresChanges(t *testing.T) {
+	m := newSetupEditor(config.Config{
+		Providers: []transcript.Provider{transcript.ProviderCodex, transcript.ProviderClaude},
+		Interval:  15 * time.Second,
+	}, "", false)
+	m.manageDaemon = true
+	m.service = daemon.Reporting{Installed: true, Running: true}
+	assertRestart := func(want bool) {
+		t.Helper()
+		view := m.View()
+		if strings.Contains(view, "No changes to save") == want || strings.Contains(view, "[ Exit ]") == want {
+			t.Fatalf("clean footer visibility should be %t", !want)
+		}
+		if strings.Contains(view, "Save & restart daemon") != want {
+			t.Fatalf("restart visibility should be %t", want)
+		}
+	}
+	assertRestart(false)
+	m.Update(tea.KeyMsg{Type: tea.KeySpace})
+	assertRestart(true)
+	m.Update(tea.KeyMsg{Type: tea.KeySpace})
+	assertRestart(false)
+	if err := m.savePreferences(); err != nil {
+		t.Fatalf("saving reverted preferences should skip config and daemon updates: %v", err)
+	}
+	m.focus = len(m.options)
+	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("30s")})
+	assertRestart(true)
+	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	assertRestart(false)
+}
+
+func TestSetupEscapeReviewsChanges(t *testing.T) {
+	for _, key := range []string{"y", "n"} {
+		t.Run(key, func(t *testing.T) {
+			m := newSetupEditor(config.Config{
+				Providers: []transcript.Provider{transcript.ProviderCodex},
+				Interval:  15 * time.Second,
+			}, "", false)
+			esc := tea.KeyMsg{Type: tea.KeyEsc}
+			if _, cmd := m.Update(esc); cmd == nil || m.confirmSave {
+				t.Fatal("unchanged settings should exit directly")
+			}
+			m.Update(tea.KeyMsg{Type: tea.KeySpace})
+			m.interval = 30 * time.Second
+			if _, cmd := m.Update(esc); cmd != nil || !m.confirmSave {
+				t.Fatal("pending changes should open confirmation")
+			}
+			for _, want := range []string{"Do you want to save the changes?", "- Codex Enabled -> Disabled", "- Reporting interval 15s -> 30s"} {
+				if !strings.Contains(m.View(), want) {
+					t.Errorf("missing confirmation text %q", want)
+				}
+			}
+			if _, cmd := m.Update(esc); cmd != nil || m.confirmSave || !m.preferencesChanged() {
+				t.Fatal("Escape from confirmation should return to pending edits")
+			}
+			m.Update(esc)
+			if _, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)}); cmd == nil || m.saved != (key == "y") {
+				t.Fatalf("unexpected confirmation result for %q", key)
+			}
+		})
+	}
+}

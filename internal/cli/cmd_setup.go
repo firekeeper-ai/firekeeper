@@ -107,7 +107,11 @@ func machineSetup(input io.Reader, out io.Writer, manageDaemon bool) error {
 		if err := completeSetup(home); err != nil {
 			return err
 		}
-		fmt.Fprintln(out, "Setup saved.")
+		if result.preferencesChanged() {
+			fmt.Fprintln(out, "Setup saved.")
+		} else {
+			fmt.Fprintln(out, "No changes to save.")
+		}
 		return nil
 	}
 	fmt.Fprintln(v, v.paint(setupAccent, "FIREKEEPER")+"  /  Machine setup")
@@ -129,14 +133,28 @@ func (m *setupEditor) seedService(r daemon.Reporting) {
 }
 
 func (m *setupEditor) preferencesChanged() bool {
-	return !slices.Equal(m.selected, m.original.Providers) || m.interval != m.original.Interval
+	interval := m.interval
+	if m.editing {
+		if draft, err := time.ParseDuration(m.field); err == nil && draft >= daemon.MinInterval {
+			interval = draft
+		}
+	}
+	if interval != m.original.Interval || len(m.selected) != len(m.original.Providers) {
+		return true
+	}
+	for _, provider := range m.selected {
+		if !slices.Contains(m.original.Providers, provider) {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *setupEditor) savePreferences() error {
 	if m.service.Installed && !m.manageDaemon {
 		return nil
 	}
-	if !m.service.Installed && !m.preferencesChanged() && !m.providersTouched {
+	if !m.preferencesChanged() {
 		return nil
 	}
 	if err := saveSetupConfig(m.configPath, m.original, m.selected, m.interval); err != nil {
