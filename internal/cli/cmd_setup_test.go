@@ -145,7 +145,7 @@ func TestSetupProviderSources(t *testing.T) {
 	r := daemon.Reporting{Installed: true, ProvidersPinned: true, Providers: []transcript.Provider{transcript.ProviderCodex}}
 	var out bytes.Buffer
 	v := setupView{Writer: &out}
-	setupDetails(v, c, r, "Stopped · no background uploads", "config.toml")
+	setupDetails(v, c, r, "Stopped · no background uploads", "config.toml", "Not installed")
 	c.Sources = map[string]string{"providers": "default"}
 	editor := newSetupEditor(c, out.String(), false)
 	editor.seedService(r)
@@ -155,7 +155,7 @@ func TestSetupProviderSources(t *testing.T) {
 	out.Reset()
 	r.ProvidersPinned = false
 	r.Providers = nil
-	setupDetails(v, c, r, "Stopped · no background uploads", "config.toml")
+	setupDetails(v, c, r, "Stopped · no background uploads", "config.toml", "Not installed")
 	if strings.Contains(out.String(), "Pinned at install") || !strings.Contains(out.String(), "Reporting defaults: none") {
 		t.Fatal("inherited defaults shown as pinned")
 	}
@@ -369,5 +369,35 @@ func TestSetupEscapeReviewsChanges(t *testing.T) {
 				t.Fatalf("unexpected confirmation result for %q", key)
 			}
 		})
+	}
+}
+
+func TestSetupPromptClickAfterScrolling(t *testing.T) {
+	for _, width := range []int{40, 90} {
+		m := newSetupEditor(config.Config{}, "Details", true)
+		m.width, m.height = width, 18
+		m.scroll = m.layout().maxScroll
+		clicked := 0
+		for _, hit := range m.layout().hits {
+			if hit.index != setupPromptHit {
+				continue
+			}
+			row := strings.Split(m.View(), "\n")[hit.y]
+			if !strings.Contains(row, "\x1b[4m") {
+				t.Fatalf("missing underline at width %d", width)
+			}
+			_, cmd := m.Update(tea.MouseMsg{X: hit.end - 1, Y: hit.y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+			if cmd == nil {
+				t.Fatalf("click missed prompt at width %d", width)
+			}
+			clicked++
+		}
+		if clicked < 2 {
+			t.Fatalf("expected wrapped clickable prompt at width %d", width)
+		}
+		m.Update(setupPromptCopied{})
+		if !strings.Contains(m.View(), "Prompt copied to clipboard.") {
+			t.Fatal("missing copy confirmation")
+		}
 	}
 }

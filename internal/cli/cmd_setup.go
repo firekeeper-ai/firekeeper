@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/firekeeper-ai/firekeeper/internal/config"
 	"github.com/firekeeper-ai/firekeeper/internal/daemon"
@@ -85,6 +86,7 @@ func machineSetup(input io.Reader, out io.Writer, manageDaemon bool) error {
 		return err
 	}
 	r := inspectSetupDaemon(c)
+	serverStatus := setupServerStatus()
 	v := newSetupView(out)
 	if input != nil {
 		displayPath := path
@@ -92,6 +94,7 @@ func machineSetup(input io.Reader, out io.Writer, manageDaemon bool) error {
 			displayPath = filepath.Join("~", rel)
 		}
 		model := newSetupEditor(c, "", v.color)
+		model.serverStatus = serverStatus
 		model.manageDaemon = manageDaemon
 		model.displayPath = displayPath
 		model.configPath = path
@@ -118,7 +121,9 @@ func machineSetup(input io.Reader, out io.Writer, manageDaemon bool) error {
 	v.section("Reporting defaults")
 	v.row("Providers", providerSummary(c.Providers)+" ("+c.Sources["providers"]+")")
 	v.row("Interval", c.Interval.String()+" ("+c.Sources["interval"]+")")
-	setupDetails(v, c, r, daemonState(r), path)
+	setupDetails(v, c, r, daemonState(r), path, serverStatus)
+	v.section("Ask your coding agent")
+	fmt.Fprintln(v, setupAgentPrompt)
 	return nil
 }
 
@@ -212,25 +217,45 @@ func setupEnvironmentFlags(c config.Config, providers []transcript.Provider, int
 	return args
 }
 
-func setupDetails(v setupView, c config.Config, r daemon.Reporting, state, path string) {
-	v.section("Destination")
-	fmt.Fprintln(v, setupDestination(c.Server))
-	credential := "No credential configured"
+func setupServerStatus() string {
+	_, err := resolveServer(defaultLookup)
+	switch {
+	case err == nil:
+		return "Installed"
+	case errors.Is(err, errServerNotFound):
+		return "Not installed"
+	default:
+		return "Unavailable"
+	}
+}
+
+const setupAgentPrompt = "Run `fk stats --since 7d --json`. Which project used the most tokens? Suggest one change to try next week based on the findings."
+
+func setupDetails(v setupView, c config.Config, r daemon.Reporting, state, path, serverStatus string) {
+	v.statusSection("Firekeeper CLI", "Installed", setupGood)
+	fmt.Fprintln(v, "fk · View local agent sessions")
+	serverStyle := setupBad
+	if serverStatus == "Installed" {
+		serverStyle = setupGood
+	}
+	v.statusSection("Firekeeper Server", serverStatus, serverStyle)
+	if serverStatus == "Not installed" {
+		fmt.Fprintln(v, "fk serve · Set up Firekeeper Server")
+	}
+	credential, credentialStyle := "No credential configured", setupBad
 	if c.Token != "" {
-		credential = "Credential configured"
+		credential, credentialStyle = "Credential configured", setupGood
 	}
-	fmt.Fprintln(v, v.paint(setupMuted, credential))
-	v.section("Background daemon")
-	if r.Running {
-		state = v.paint(setupGood, state)
+	v.statusSection("Dashboard reporting", credential, credentialStyle)
+	fmt.Fprintln(v, setupDestination(c.Server))
+	if c.Token == "" {
+		fmt.Fprintln(v, "fk login · Connect this machine")
 	}
-	fmt.Fprintln(v, state)
+	v.statusSection("Background daemon", state, daemonStatusStyle(r, state))
 	if r.Installed {
-		interval := c.Interval
-		if r.IntervalOverride > 0 {
-			interval = r.IntervalOverride
+		if r.IntervalOverride > 0 && r.IntervalOverride != c.Interval {
+			fmt.Fprintln(v, "Service interval override · "+r.IntervalOverride.String())
 		}
-		fmt.Fprintln(v, "Installed service · "+interval.String())
 		if r.ProvidersPinned {
 			fmt.Fprintf(v, "Installed providers: %s\n", providerSummary(r.Providers))
 			fmt.Fprintln(v, v.paint(setupMuted, "Save settings to switch this service to your reporting selection."))
@@ -248,11 +273,14 @@ func setupDetails(v setupView, c config.Config, r daemon.Reporting, state, path 
 		}
 		fmt.Fprintf(v, "Claude cloud · %s with Claude reporting\n", interval)
 	}
-	v.section("Local dashboard")
-	fmt.Fprintln(v, "All providers · 2s discovery")
-	fmt.Fprintf(v, "%q\n", path)
-	v.section("Reporting commands")
-	fmt.Fprintln(v, "fk login [--server URL]\nfk daemon install")
+	v.section("Configuration file")
+	fmt.Fprintln(v, strings.Map(func(r rune) rune {
+		if !unicode.IsPrint(r) {
+			return '�'
+		}
+		return r
+	}, path))
+
 }
 
 func completeSetup(home string) error {

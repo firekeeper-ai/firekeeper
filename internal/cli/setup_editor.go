@@ -9,6 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/firekeeper-ai/firekeeper/internal/clipboard"
 	"github.com/firekeeper-ai/firekeeper/internal/config"
 	"github.com/firekeeper-ai/firekeeper/internal/daemon"
 	"github.com/firekeeper-ai/firekeeper/internal/session"
@@ -18,7 +19,7 @@ import (
 type setupEditor struct {
 	setupView
 	service                                     daemon.Reporting
-	configPath, displayPath, busy               string
+	configPath, displayPath, serverStatus, busy string
 	statusPending                               bool
 	statusGeneration                            uint64
 	startDeadline                               time.Time
@@ -103,8 +104,22 @@ func (m *setupEditor) activate() tea.Cmd {
 	return nil
 }
 
+const setupPromptHit = -3
+
+type setupPromptCopied struct{ err error }
+
+func copySetupPrompt() tea.Msg {
+	return setupPromptCopied{clipboard.Copy(setupAgentPrompt)}
+}
+
 func (m *setupEditor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch event := msg.(type) {
+	case setupPromptCopied:
+		m.notice = "Prompt copied to clipboard."
+		if event.err != nil {
+			m.notice = "Could not copy prompt to clipboard."
+		}
+		return m, nil
 	case setupPollTick:
 		if m.statusPending || m.busy != "" || m.plan != nil {
 			return m, nextSetupPoll()
@@ -187,6 +202,9 @@ func (m *setupEditor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		for _, hit := range m.layout().hits {
 			if msg.Y == hit.y && msg.X >= hit.x && msg.X < hit.end {
+				if hit.index == setupPromptHit {
+					return m, copySetupPrompt
+				}
 				if hit.index == -1 {
 					return m, m.daemonAction()
 				}
@@ -204,6 +222,8 @@ func (m *setupEditor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		key := msg.String()
 		switch {
+		case !m.editing && key == "p":
+			return m, copySetupPrompt
 		case !m.editing && key == "d":
 			return m, m.daemonAction()
 		case !m.editing && key == "r":
@@ -341,9 +361,17 @@ func (m *setupEditor) layout() setupLayout {
 	for _, s := range strings.Split(ansi.Wrap("Reports include redacted transcripts.", content, ""), "\n") {
 		rows = append(rows, line(m.paint(setupMuted, s)))
 	}
-	details := strings.Split(ansi.Wrap(strings.TrimSpace(m.details), max(1, w-4), ""), "\n")
+	detailX, detailY, detailWidth := 2, len(rows)+1, max(1, w-4)
 	if wide {
-		details = strings.Split(ansi.Wrap(strings.TrimSpace(m.details), max(1, w-left-5), ""), "\n")
+		detailX, detailY, detailWidth = left+3, 0, max(1, w-left-5)
+	}
+	details := strings.Split(ansi.Wrap(strings.TrimSpace(m.details), detailWidth, ""), "\n")
+	details = append(details, "", m.paint(setupHeading, "Ask your coding agent · p Copy"))
+	for _, part := range strings.Split(ansi.Wrap(setupAgentPrompt, detailWidth, ""), "\n") {
+		hits = append(hits, setupHit{detailX, detailX + ansi.StringWidth(part), detailY + len(details), setupPromptHit})
+		details = append(details, m.paint("4", part))
+	}
+	if wide {
 		for len(rows) < len(details) {
 			rows = append(rows, "")
 		}
@@ -365,11 +393,7 @@ func (m *setupEditor) layout() setupLayout {
 	start := min(m.scroll, layout.maxScroll)
 	title := "  " + m.paint(setupAccent, "FIREKEEPER") + "   /   Machine settings"
 	state := m.displayDaemonState()
-	style := setupAccent
-	if m.service.Running {
-		style = setupGood
-	}
-	badge := "  " + m.paint(style, "● Daemon: "+state)
+	badge := "  " + m.paint(setupHeading, "● Daemon: ") + m.paint(daemonStatusStyle(m.service, state), state)
 	actions := "  "
 	if !m.service.Running && !m.service.StatusUnavailable && m.startDeadline.IsZero() {
 		if m.manageDaemon {

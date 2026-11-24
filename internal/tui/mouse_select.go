@@ -1,9 +1,7 @@
 package tui
 
 import (
-	"os"
-	"os/exec"
-	"runtime"
+	"github.com/firekeeper-ai/firekeeper/internal/clipboard"
 	"strings"
 	"unicode"
 
@@ -25,37 +23,12 @@ type copyResultMsg struct {
 }
 
 // copyToClipboard writes text to the system clipboard; tests replace it.
-var copyToClipboard = copyText
+var copyToClipboard = clipboard.Copy
 
 func copyCmd(text string) tea.Cmd {
 	return func() tea.Msg {
 		return copyResultMsg{chars: len([]rune(text)), err: copyToClipboard(text)}
 	}
-}
-
-// copyText uses the platform clipboard tool when there is one and otherwise
-// asks the terminal to set the clipboard (OSC 52), which also works over SSH.
-func copyText(text string) error {
-	var candidates [][]string
-	switch runtime.GOOS {
-	case "darwin":
-		candidates = [][]string{{"pbcopy"}}
-	case "linux":
-		candidates = [][]string{{"wl-copy"}, {"xclip", "-selection", "clipboard"}, {"xsel", "--clipboard", "--input"}}
-	}
-	for _, args := range candidates {
-		path, err := exec.LookPath(args[0])
-		if err != nil {
-			continue
-		}
-		command := exec.Command(path, args[1:]...)
-		command.Stdin = strings.NewReader(text)
-		if command.Run() == nil {
-			return nil
-		}
-	}
-	_, err := os.Stdout.WriteString(ansi.SetSystemClipboard(text))
-	return err
 }
 
 func (m *model) clearSelection() {

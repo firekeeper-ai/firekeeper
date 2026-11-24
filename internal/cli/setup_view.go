@@ -25,6 +25,7 @@ const (
 	setupHeading = "1;36"
 	setupMuted   = "2"
 	setupGood    = "32"
+	setupBad     = "31"
 )
 
 func (v setupView) paint(style, text string) string {
@@ -36,6 +37,10 @@ func (v setupView) paint(style, text string) string {
 func (v setupView) section(title string) {
 	fmt.Fprintln(v, "\n"+v.paint(setupHeading, title))
 }
+func (v setupView) statusSection(title, status, style string) {
+	fmt.Fprintln(v, "\n"+v.paint(setupHeading, title+" · ")+v.paint(style, status))
+}
+
 func (v setupView) row(label, value string) {
 	fmt.Fprintf(v, "  %s  %s\n", v.paint(setupMuted, fmt.Sprintf("%-12s", label)), value)
 }

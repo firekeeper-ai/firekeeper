@@ -26,6 +26,16 @@ func inspectSetupDaemon(c config.Config) daemon.Reporting {
 	return svc.Inspect(context.Background(), c.Server, c.Providers)
 }
 
+func daemonStatusStyle(r daemon.Reporting, state string) string {
+	if r.Running || r.Foreground {
+		return setupGood
+	}
+	if state == "Starting…" || r.StatusUnavailable {
+		return setupAccent
+	}
+	return setupBad
+}
+
 func daemonState(r daemon.Reporting) string {
 	switch {
 	case r.Foreground:
@@ -44,7 +54,7 @@ func daemonState(r daemon.Reporting) string {
 func (m *setupEditor) setDaemon(r daemon.Reporting) {
 	m.service = r
 	var b bytes.Buffer
-	setupDetails(setupView{Writer: &b, color: m.color}, m.original, r, m.displayDaemonState(), m.displayPath)
+	setupDetails(setupView{Writer: &b, color: m.color}, m.original, r, m.displayDaemonState(), m.displayPath, m.serverStatus)
 	m.details = b.String()
 }
 
