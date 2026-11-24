@@ -12,10 +12,9 @@ import (
 
 // DetectProviders finds supported transcript providers without reading their
 // data or launching their CLIs. An existing provider data folder (see
-// providerdir) or executable on PATH is sufficient; providers without
-// transcript readers are deliberately omitted. A provider whose folder
-// override is not an absolute path is skipped, and its error, which names
-// the variable only, is returned in skipped.
+// providerdir), configured OpenCode database, or executable on PATH is
+// sufficient. A relative folder override that prevents resolution skips that
+// provider. Its error names only the variable.
 func DetectProviders(home string, getenv func(string) string, lookPath func(string) (string, error)) (providers []transcript.Provider, skipped []error) {
 	if getenv == nil {
 		getenv = os.Getenv
@@ -36,13 +35,14 @@ func DetectProviders(home string, getenv func(string) string, lookPath func(stri
 		{transcript.ProviderGemini, "gemini"},
 		{transcript.ProviderCursor, "cursor-agent"},
 	} {
-		directory, err := dirs.Dir(candidate.provider)
+		path, kind, err := dirs.DataPath(candidate.provider)
 		if errors.Is(err, providerdir.ErrRelativeOverride) {
 			skipped = append(skipped, fmt.Errorf("%s: %w", candidate.provider, err))
 			continue
 		}
-		if err == nil {
-			if info, err := os.Stat(directory); err == nil && info.IsDir() {
+		if err == nil && path != "" {
+			info, err := os.Stat(path)
+			if err == nil && info.Mode().Type() == kind {
 				providers = append(providers, candidate.provider)
 				continue
 			}

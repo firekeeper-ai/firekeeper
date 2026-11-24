@@ -168,7 +168,11 @@ func TestOpenCodeDatabase(t *testing.T) {
 		"in-memory":    {map[string]string{EnvXDGData: "relative", EnvOpenCode: ":memory:"}, "", false},
 		"relative xdg": {map[string]string{EnvXDGData: "relative"}, "", true},
 	} {
-		got, err := lookup("/home", c.env).OpenCodeDatabase()
+		l := lookup("/home", c.env)
+		if err := l.Check(event.ProviderOpenCode); (err != nil) != c.wantErr || (c.wantErr && !errors.Is(err, ErrRelativeOverride)) {
+			t.Errorf("%s: Check = %v; want override error: %v", name, err, c.wantErr)
+		}
+		got, err := l.OpenCodeDatabase()
 		if (err != nil) != c.wantErr || got != c.want || (c.wantErr && !errors.Is(err, ErrRelativeOverride)) {
 			t.Errorf("%s: OpenCodeDatabase = %q, %v; want %q (error %v)", name, got, err, c.want, c.wantErr)
 		}

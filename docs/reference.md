@@ -509,7 +509,8 @@ that provider: the dashboard shows it, the daemon logs it once and keeps
 uploading the other providers, and `report` and `backfill` skip that
 provider and exit non-zero only when no requested provider is left. The one
 exception is `OPENCODE_DB`, which may be a file name relative to OpenCode's
-data folder, as OpenCode itself allows. Kimi Code reads only
+data folder, as OpenCode itself allows. An absolute `OPENCODE_DB` or
+`:memory:` takes precedence over `XDG_DATA_HOME`. Kimi Code reads only
 `KIMI_CODE_HOME`; `KIMI_SHARE_DIR` belongs to the older `kimi-cli` and is
 ignored.
 

@@ -15,6 +15,7 @@ package providerdir
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -109,13 +110,23 @@ func (l Lookup) Dir(p event.Provider) (string, error) {
 	}
 }
 
+// DataPath resolves the location used to detect a provider: its data directory
+// by default, or the database file when OPENCODE_DB is set. An in-memory
+// database has no path. kind is the expected file type (zero for a regular file).
+func (l Lookup) DataPath(p event.Provider) (path string, kind fs.FileMode, err error) {
+	if p == event.ProviderOpenCode && l.getenv(EnvOpenCode) != "" {
+		path, err = l.OpenCodeDatabase()
+		return path, 0, err
+	}
+	path, err = l.Dir(p)
+	return path, fs.ModeDir, err
+}
+
 // Check reports whether provider p's override can be used: nil, or the
 // error (errors.Is ErrRelativeOverride) that makes p unusable. Other failures,
 // such as an unknown home folder, are left to the code that reads the folder.
 func (l Lookup) Check(p event.Provider) error {
-	// OPENCODE_DB may be relative: OpenCode resolves it under its data
-	// folder, whose override Dir checks.
-	if _, err := l.Dir(p); errors.Is(err, ErrRelativeOverride) {
+	if _, _, err := l.DataPath(p); errors.Is(err, ErrRelativeOverride) {
 		return err
 	}
 	return nil

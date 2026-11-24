@@ -96,3 +96,34 @@ func TestDetectProviders(t *testing.T) {
 		})
 	}
 }
+
+func TestDetectOpenCodeDatabaseOverride(t *testing.T) {
+	home := t.TempDir()
+	db := filepath.Join(home, "custom.db")
+	if err := os.WriteFile(db, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, override  string
+		installed, want bool
+	}{
+		{"database", db, false, true},
+		{"missing", filepath.Join(home, "missing.db"), false, false},
+		{"directory", home, false, false},
+		{"in-memory", ":memory:", false, false},
+		{"executable", ":memory:", true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			env := map[string]string{providerdir.EnvOpenCode: tc.override, providerdir.EnvXDGData: "relative"}
+			got, skipped := DetectProviders(home, func(key string) string { return env[key] }, func(command string) (string, error) {
+				if tc.installed && command == "opencode" {
+					return filepath.Join(home, command), nil
+				}
+				return "", os.ErrNotExist
+			})
+			if len(skipped) > 0 || slices.Contains(got, transcript.ProviderOpenCode) != tc.want {
+				t.Errorf("detected %v, skipped %v; want OpenCode detected: %v", got, skipped, tc.want)
+			}
+		})
+	}
+}
