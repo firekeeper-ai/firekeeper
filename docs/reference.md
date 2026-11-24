@@ -1123,7 +1123,7 @@ here needs or uses `sudo`.
 service file. The daemon reads the ingest token from the config file, where
 `firekeeper login` puts it, or from `$FIREKEEPER_TOKEN` when run by hand.
 
-### Configuration
+### Machine settings
 
 Run `fk setup` to open Machine settings. Provider switches and the shared
 reporting interval appear beside the destination and daemon details. In narrow
@@ -1131,10 +1131,19 @@ terminals the details appear below the controls. Scroll with the mouse or
 PgUp/PgDn. Click a control or use ↑/↓ or Tab to move focus. Space toggles
 a provider. Enter edits the interval and applies the typed duration.
 
-Choose Save settings or press Ctrl+S to save. Esc cancels an interval edit
-first, then closes setup and discards unsaved changes. Environment-controlled
-preferences are read-only. The provider selection and interval apply to both
-manual reporting and the installed login service. For an older service with
+The footer offers Save when the provider selection or interval changes.
+Press **s** to save, or **Ctrl+S** to apply a valid interval and save while
+typing. **Esc** cancels the current interval edit first. From the main screen,
+**Esc** exits immediately when settings match their saved values. With pending
+edits, it previews each change. Choose **Yes** to save and exit, **No** to
+discard and exit, or **Esc** to return to editing.
+
+Under **Ask your coding agent**, click any line of the underlined prompt or
+press **p** to copy it. A footer message confirms the copy. Paste it into
+your agent to review local usage with `fk stats --since 7d --json`.
+
+Environment-controlled preferences are read-only. The provider selection applies
+to manual and background reporting. The interval controls the daemon. For an older service with
 startup overrides, setup uses the saved config selection if present, otherwise
 it preselects the installed providers. Save migrates the service to the shared
 settings. A running service restarts. A stopped service picks them up on its
@@ -1155,6 +1164,8 @@ Saving or exiting completes onboarding for that user. Later launches open the
 dashboard directly, and `fk setup` reopens the editor anytime.
 `fk setup --status` prints a read-only summary. Redirected streams, `CI`,
 and `FIREKEEPER_NO_PROMPT` suppress the editor. Set `NO_COLOR=1` to disable color.
+
+### Configuration
 
 `report`, `backfill`, `daemon`, `login`, `whoami`, `logout`,
 `setup`, and `config show` read `~/.firekeeper/config.toml`, or the file

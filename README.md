@@ -93,22 +93,18 @@ Linux (amd64 and arm64) is best effort.
    an existing session running. Firekeeper does not install or launch agents.
 2. Open another terminal window, tab, or pane on the same machine, as the same
    user, and run `firekeeper` from any directory.
-3. First interactive launch opens `firekeeper setup`, then continues to the dashboard.
-   Later launches open the dashboard directly, even if you discarded your edits.
-   Run `firekeeper setup` anytime to revisit **Machine settings**, including local CLI features, reporting
-   credentials status, and whether Firekeeper Server is installed. The optional
-   server supports dashboard hosting and HTML chat export. Run `fk serve`
-   for server setup and launch. Click a provider or
-   move with ↑/↓ and press Space to toggle reporting. Select the interval to
-   edit it in place. Press **s** to save changes or exit if there are none.
-   Press **Esc** to exit. If edits are pending, review the changes and choose
-   **Yes** to save or **No** to discard them.
-   In `fk setup`, the same selection controls manual and background reporting.
-   Saving restarts a running login service to apply changes. Daemon status updates automatically at the top. Press
-   **d** to review and install or start the login service, or **r** to refresh
-   its status. Use `fk setup --status` for a text summary.
+3. On your first interactive launch, **Machine settings** shows which Firekeeper
+   components are installed and where this machine is configured to report.
+   Press **Esc** to continue to the local dashboard with your current settings.
+   If you edited anything, review the changes and choose **Yes** to save or
+   **No** to discard. Later launches go straight to the dashboard.
 4. The **Processes** view should show your running agents within a couple of
    seconds. Select a row to see its project, state, model (with the reasoning effort for Codex, Claude Code and Copilot CLI, when the session records one), and available tokens. The Usage tab's session panel shows the effort too.
+
+Reopen Machine settings with `firekeeper setup`, or use `fk setup --status`
+for a text summary. In setup, press **p** or click the underlined prompt to
+copy a seven-day usage review request for your coding agent.
+See [Machine settings](docs/reference.md#machine-settings) for reporting and service controls.
 
 | Key | What to do |
 | --- | --- |

@@ -66,7 +66,8 @@
     <p>Open your project and start a supported agent using your normal command, for example <code>claude</code> or <code>codex</code>. If one is already running on this machine, leave it running. Use the same operating-system user for Firekeeper and the agent.</p>
     <p>In a second terminal window, tab, or pane, run:</p>
     <pre><code>firekeeper</code></pre>
-    <p>Firekeeper opens on <strong>Processes</strong>. Within a couple of seconds, you should see the agent's runtime, project, and the session details it can read. Firekeeper can run from any directory; it does not have to be inside the agent's project.</p>
+    <p>On first interactive launch, Firekeeper opens <strong>Machine settings</strong>. Press <kbd>Esc</kbd> to continue with the current settings. If you made edits, choose whether to save them. Later launches open <strong>Processes</strong> directly. Run <code>firekeeper setup</code> anytime to revisit settings.</p>
+    <p>Within a couple of seconds, you should see the agent's runtime, project, and the session details it can read. Firekeeper can run from any directory; it does not have to be inside the agent's project.</p>
     <div class="callout"><p><strong>No setup service required.</strong> You do not need <code>login</code>, <code>serve</code>, or <code>daemon install</code> for this workflow. Your agent keeps its normal launch command and sign-in.</p></div>
     <!-- TODO(#115, open question 1): confirm the tap and install-script URL after the org move; the commands above already use firekeeper-ai. -->
     <p>An empty list does not mean installation failed: Processes shows running agents, not all saved conversations. If your running agent is missing, follow <a href="/docs/troubleshooting/#missing-session">the missing-session checklist</a>. For agents inside WSL, install and run the Linux build of Firekeeper inside WSL too.</p>
