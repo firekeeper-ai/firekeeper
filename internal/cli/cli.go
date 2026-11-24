@@ -30,6 +30,7 @@ var subcommands = []subcommand{
 	{"login", "link this machine to a dashboard server (--server URL)", runLogin},
 	{"logout", "revoke and remove this machine's stored token", runLogout},
 	{"whoami", "print the server, account and machine the stored token belongs to", runWhoami},
+	{"setup", "review machine setup and configure transcript reporting (--status for read-only)", runSetup},
 	{"config", "print the merged reporting configuration (show)", runConfig},
 	{"daemon", "upload continuously (--provider required); install, uninstall, status, logs", runDaemon},
 	{"otel-listen", "experimental: record local Claude Code OTLP usage on 127.0.0.1", runOtelListen},

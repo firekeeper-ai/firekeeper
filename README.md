@@ -93,8 +93,18 @@ Linux (amd64 and arm64) is best effort.
    an existing session running. Firekeeper does not install or launch agents.
 2. Open another terminal window, tab, or pane on the same machine, as the same
    user, and run `firekeeper` from any directory.
-3. The **Processes** view should show your running agents within a couple of
+3. On your first interactive launch, **Machine settings** shows which Firekeeper
+   components are installed and where this machine is configured to report.
+   Press **Esc** to continue to the local dashboard with your current settings.
+   If you edited anything, review the changes and choose **Yes** to save or
+   **No** to discard. Later launches go straight to the dashboard.
+4. The **Processes** view should show your running agents within a couple of
    seconds. Select a row to see its project, state, model (with the reasoning effort for Codex, Claude Code and Copilot CLI, when the session records one), and available tokens. The Usage tab's session panel shows the effort too.
+
+Reopen Machine settings with `firekeeper setup`, or use `fk setup --status`
+for a text summary. In setup, press **p** or click the underlined prompt to
+copy a seven-day usage review request for your coding agent.
+See [Machine settings](docs/reference.md#machine-settings) for reporting and service controls.
 
 | Key | What to do |
 | --- | --- |

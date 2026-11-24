@@ -23,9 +23,7 @@ func launchdPlist(s *Service) []byte {
 	<key>ProgramArguments</key>
 	<array>
 `)
-	for _, arg := range s.programArgs() {
-		b.WriteString("\t\t<string>" + xmlEscape(arg) + "</string>\n")
-	}
+	b.WriteString(plistArgLines(s.programArgs()))
 	b.WriteString("\t</array>\n")
 	if keys := s.envKeys(); len(keys) > 0 {
 		b.WriteString("\t<key>EnvironmentVariables</key>\n\t<dict>\n")
@@ -68,12 +66,7 @@ Documentation=https://github.com/firekeeper-ai/firekeeper
 [Service]
 Type=simple
 `)
-	args := s.programArgs()
-	quoted := make([]string, len(args))
-	for i, arg := range args {
-		quoted[i] = systemdQuote(arg, true)
-	}
-	b.WriteString("ExecStart=" + strings.Join(quoted, " ") + "\n")
+	b.WriteString(systemdExecLine(s.programArgs()))
 	for _, key := range s.envKeys() {
 		b.WriteString("Environment=" + systemdQuote(key+"="+s.Env[key], false) + "\n")
 	}
@@ -85,6 +78,22 @@ TimeoutStopSec=60
 WantedBy=default.target
 `)
 	return b.Bytes()
+}
+
+func plistArgLines(args []string) string {
+	var b strings.Builder
+	for _, arg := range args {
+		b.WriteString("\t\t<string>" + xmlEscape(arg) + "</string>\n")
+	}
+	return b.String()
+}
+
+func systemdExecLine(args []string) string {
+	quoted := make([]string, len(args))
+	for i, arg := range args {
+		quoted[i] = systemdQuote(arg, true)
+	}
+	return "ExecStart=" + strings.Join(quoted, " ") + "\n"
 }
 
 func (s *Service) programArgs() []string {

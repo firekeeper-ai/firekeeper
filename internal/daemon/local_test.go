@@ -7,7 +7,9 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/firekeeper-ai/firekeeper/internal/reporter"
 	"github.com/firekeeper-ai/firekeeper/internal/transcript"
@@ -94,7 +96,7 @@ func TestInspect(t *testing.T) {
 	t.Run("not installed uses config", func(t *testing.T) {
 		svc, _, _ := testService(t, "linux")
 		r := svc.Inspect(ctx, "https://dash.example.com", codex)
-		if r.Installed || r.Running || r.Server != "https://dash.example.com" || !slices.Equal(r.Providers, codex) {
+		if r.ProvidersPinned || r.Installed || r.Running || r.Server != "https://dash.example.com" || !slices.Equal(r.Providers, codex) {
 			t.Fatalf("Inspect = %+v", r)
 		}
 	})
@@ -108,12 +110,12 @@ func TestInspect(t *testing.T) {
 
 	t.Run("installed service flags win", func(t *testing.T) {
 		svc, runner, _ := testService(t, "linux")
-		svc.Args = []string{"--quiet", "--server", "http://127.0.0.1:8080", "--provider", "claude", "--provider", "copilot"}
+		svc.Args = []string{"--quiet", "--interval=3m", "--server", "http://127.0.0.1:8080", "--provider", "claude", "--provider", "copilot"}
 		writeServiceFile(t, svc)
 		runner.reply(systemdShow, reply{out: "LoadState=loaded\nActiveState=active\nSubState=running\nMainPID=42\n"})
 		r := svc.Inspect(ctx, "https://dash.example.com", codex)
 		want := []transcript.Provider{transcript.ProviderClaude, transcript.ProviderCopilot}
-		if !r.Installed || !r.Running || r.Foreground || r.Server != "http://127.0.0.1:8080" || !slices.Equal(r.Providers, want) {
+		if !r.ProvidersPinned || r.IntervalOverride != 3*time.Minute || !r.Installed || !r.Running || r.Foreground || r.Server != "http://127.0.0.1:8080" || !slices.Equal(r.Providers, want) {
 			t.Fatalf("Inspect = %+v", r)
 		}
 	})
@@ -162,4 +164,38 @@ func TestInspect(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestApplyPreferencesPreservesService(t *testing.T) {
+	for _, platform := range []string{"darwin", "linux", "windows"} {
+		t.Run(platform, func(t *testing.T) {
+			svc, runner, _ := testService(t, platform)
+			if platform == "windows" {
+				svc.Executable = `C:\Program Files\firekeeper.exe`
+			}
+			svc.Args = []string{"--quiet", "--server", "https://example.org", "--provider=claude", "--interval", "1m", "--provider", "codex", "--live-only=true"}
+			data, err := svc.File()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if platform == "windows" {
+				data = encodeUTF16(data)
+			}
+			if err := writeFileAtomic(svc.Path(), data, 0644); err != nil {
+				t.Fatal(err)
+			}
+			if err := svc.ApplyPreferences(context.Background(), false, nil); err != nil {
+				t.Fatal(err)
+			}
+			got, err := svc.InstalledArgs()
+			if err != nil || !slices.Equal(got, []string{"--quiet", "--server", "https://example.org", "--live-only=true"}) {
+				t.Fatalf("args %v, err %v", got, err)
+			}
+			for _, line := range runner.calls {
+				if strings.Contains(line, "bootstrap") || strings.Contains(line, "restart") || strings.Contains(line, "/Run") {
+					t.Fatal("started stopped service")
+				}
+			}
+		})
+	}
 }

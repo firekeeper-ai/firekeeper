@@ -21,8 +21,9 @@ it. This prompt is the only place the Software downloads a binary. It appears
 only in an interactive terminal, and nothing is fetched unless you answer
 yes. The download is a plain file request to the release host (a GitHub
 repository), which sees your IP address like any web server; no session data,
-identifiers or other information are sent. Plain `firekeeper` uploads nothing
-and starts no daemon.
+identifiers or other information are sent. Opening the terminal dashboard or Machine settings does not enable uploads.
+Choosing and confirming **Install daemon** in setup starts background reporting
+to the displayed destination for the selected providers.
 
 ## 1. The Firekeeper software
 
@@ -47,7 +48,9 @@ described in section 1.3.
   to import Claude Code on the web sessions (section 1.3).
   Sessions in repositories containing a `.firekeeper-ignore` file, or matching
   `exclude` in the config, are never read.
-- **Writes**, under `~/.firekeeper/`: `config.toml` (server address and, after
+- **Writes**, under `~/.firekeeper/`: `setup-complete` (an empty file that
+  records dismissal or completion of interactive setup), `config.toml`
+  (reporting preferences, server address and, after
   `firekeeper login`, an access token, stored with mode `0600`), `machine-id`
   (a random identifier for this machine), `state.json` (how far each
   transcript has been uploaded), and the daemon's lock and log files. The log

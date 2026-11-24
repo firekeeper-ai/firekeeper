@@ -153,7 +153,11 @@ func isKey(line, key string) bool {
 }
 
 func setKey(lines []string, key, value string) []string {
-	line := fmt.Sprintf("%s = %q", key, value)
+	return setLiteral(lines, key, fmt.Sprintf("%q", value))
+}
+
+func setLiteral(lines []string, key, literal string) []string {
+	line := key + " = " + literal
 	end := topLevelEnd(lines)
 	for i := 0; i < end; i++ {
 		if isKey(lines[i], key) {

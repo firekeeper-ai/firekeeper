@@ -31,6 +31,7 @@ func main() {
 	if offerUpdate() {
 		return
 	}
+	cli.FirstRunSetup(os.Stdout, os.Stderr)
 	p := tea.NewProgram(tui.NewModel(), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "firekeeper TUI failed: %v\n", err)

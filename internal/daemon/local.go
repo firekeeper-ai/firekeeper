@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/firekeeper-ai/firekeeper/internal/config"
 	"github.com/firekeeper-ai/firekeeper/internal/reporter"
@@ -19,6 +20,12 @@ import (
 // asking it: whether it is installed and running, where it sends sessions,
 // and which providers it uploads. Every field is best effort.
 type Reporting struct {
+	// IntervalOverride is the reporting interval pinned by the service flags.
+	IntervalOverride time.Duration
+	// ProvidersPinned reports whether the installed service specifies --provider.
+	ProvidersPinned bool
+	// StatusUnavailable means the service manager could not be queried.
+	StatusUnavailable bool
 	// Installed reports whether the service definition file exists.
 	Installed bool
 	// Running reports whether the service is running or a daemon holds
@@ -44,10 +51,14 @@ func (s *Service) Inspect(ctx context.Context, configServer string, configProvid
 	r := Reporting{Server: configServer, Providers: configProviders}
 	if args, err := s.InstalledArgs(); err == nil {
 		r.Installed = true
+		if v := flagValues(args, "interval"); len(v) > 0 {
+			r.IntervalOverride, _ = time.ParseDuration(v[len(v)-1])
+		}
 		if v := flagValues(args, "server"); len(v) > 0 {
 			r.Server = v[len(v)-1]
 		}
 		if v := flagValues(args, "provider"); len(v) > 0 {
+			r.ProvidersPinned = true
 			// The service file can be edited or stale: show only providers
 			// that still parse, the way the daemon would read them.
 			r.Providers = r.Providers[:0:0]
@@ -62,10 +73,12 @@ func (s *Service) Inspect(ctx context.Context, configServer string, configProvid
 		if st, err := s.Status(ctx); err == nil {
 			r.Running = st.Running
 			r.Installed = r.Installed || st.Installed
+		} else {
+			r.StatusUnavailable = true
 		}
 	}
 	if !r.Running && lockOwnerAlive(filepath.Join(s.DataDir(), "daemon.lock")) {
-		r.Running, r.Foreground = true, true
+		r.Running, r.Foreground = true, !r.StatusUnavailable
 	}
 	if r.Server == "" {
 		r.Server = reporter.DefaultServer
@@ -87,6 +100,15 @@ func (s *Service) InstalledArgs() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	args, err := s.serviceCommand(data)
+	if err != nil {
+		return nil, err
+	}
+	return args[2:], nil
+}
+
+func (s *Service) serviceCommand(data []byte) ([]string, error) {
+	var err error
 	var args []string
 	switch s.GOOS {
 	case "darwin":
@@ -102,7 +124,7 @@ func (s *Service) InstalledArgs() ([]string, error) {
 	if len(args) < 2 || args[1] != "daemon" {
 		return nil, errors.New("the service definition does not run firekeeper daemon")
 	}
-	return args[2:], nil
+	return args, nil
 }
 
 // plistProgramArgs reads the ProgramArguments array of a LaunchAgent plist.

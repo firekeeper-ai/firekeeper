@@ -49,7 +49,11 @@ firekeeper
 ```
 
 Run it from any directory on the same machine and as the same user as your
-agents. The **Processes** view should populate within a couple of seconds.
+agents. On first interactive launch, Machine settings opens. Press Esc to
+continue with the current settings. Later launches open the dashboard directly.
+Run `firekeeper setup` anytime to revisit settings.
+
+The **Processes** view should populate within a couple of seconds.
 Use Up/Down to select, `c` to read a conversation, Esc to return, and `?`
 for help. Quitting with `q` from a main view leaves your agents running.
 See [First run](../README.md#first-run) or the
